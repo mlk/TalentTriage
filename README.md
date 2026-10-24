@@ -1,5 +1,7 @@
 # TalentTriage 🎯
 
+[![CI](https://github.com/mlk/TalentTriage/actions/workflows/ci.yml/badge.svg)](https://github.com/mlk/TalentTriage/actions/workflows/ci.yml)
+
 > **A resource-efficient, local-first recruiter email triage engine built in Kotlin for macOS.**
 
 **TalentTriage** automatically checks your Gmail inbox, filters out recruiter noise using local heuristic rules and lightweight LLM classification, extracts attached Job Descriptions (PDF/Word), and performs deep criteria analysis (Pay, JD relevance, Days in Office) using AirLLM or local Ollama instances.
