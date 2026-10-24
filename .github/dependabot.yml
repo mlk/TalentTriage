@@ -10,10 +10,18 @@ updates:
     commit-message:
       prefix: "ci"
 
-  # Keeps the version catalog (gradle/libs.versions.toml) up to date.
+  # Keeps the version catalog (gradle/libs.versions.toml) up to date. Minor and
+  # patch bumps arrive as a single PR, major bumps stay separate.
   - package-ecosystem: gradle
     directory: /
     schedule:
       interval: weekly
     commit-message:
       prefix: "build"
+    groups:
+      gradle-minor:
+        patterns:
+          - "*"
+        update-types:
+          - minor
+          - patch

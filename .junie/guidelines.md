@@ -20,7 +20,7 @@ You are reviewing a pull request for `TalentTriage`, a local-first recruiter ema
 * **Immutability & state** — `val` over `var`; `data class` for value objects; no mutable collections shared between layers.
 * **Serialization** — `@Serializable` models stay in the infrastructure layer, with `kotlinx.serialization` used for the Ollama/Gmail JSON payloads.
 * **Layering** — `domain` must not depend on `infrastructure` or `cli`; `application` orchestrates, `infrastructure` talks to the outside world.
-* **Magic values** — magic numbers/strings are extracted into named constants (detekt flags them).
+* **Magic values** — magic numbers/strings are extracted into named constants.
 
 ## Review Format
 

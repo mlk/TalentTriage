@@ -63,6 +63,11 @@ milestones (epics):
    diff. Answer them with a short "superseded" reply once the newer run has
    covered the same point; do not implement them twice.
 
+7. **Dependabot PRs are the exception** to rules 1–3 and 6: they use the
+   `dependabot/...` branch naming, carry no `Closes #<n>`, and are reviewed by
+   CI only — the Junie review job skips them (no `JUNIE_API_KEY`, no diff
+   context worth paying for).
+
 ## Tooling
 
 Everything is driven by the Gradle wrapper — never call a system `gradle`.
