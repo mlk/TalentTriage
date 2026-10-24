@@ -16,12 +16,12 @@ concurrency:
 jobs:
   review:
     name: Junie Code Review
-    # Secrets are not exposed to fork or Dependabot PRs — skip instead of failing red.
+    # Secrets are not exposed to fork and Dependabot PRs — skip instead of failing red.
     # Draft PRs are skipped as well: a review of a work in progress is wasted credits.
     if: >-
       !github.event.pull_request.draft &&
       github.event.pull_request.head.repo.full_name == github.repository &&
-      github.actor != 'dependabot[bot]'
+      github.event.pull_request.user.login != 'dependabot[bot]'
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
