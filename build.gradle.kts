@@ -5,11 +5,17 @@ plugins {
     alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.detekt)
     alias(libs.plugins.ktlint)
+    application
     jacoco
 }
 
 group = "uk.me.michael-lloyd-lee"
 version = "0.1.0"
+
+application {
+    applicationName = "recruiter-cli"
+    mainClass.set("uk.me.michaellloydlee.recruiter.cli.RecruiterCliKt")
+}
 
 kotlin {
     jvmToolchain(17)
@@ -21,6 +27,7 @@ kotlin {
 
 dependencies {
     implementation(platform(libs.ktor.bom))
+    implementation(libs.clikt)
     implementation(libs.ktor.client.cio)
     implementation(libs.ktor.client.content.negotiation)
     implementation(libs.ktor.serialization.kotlinx.json)

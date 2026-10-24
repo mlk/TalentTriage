@@ -1,4 +1,5 @@
 [versions]
+clikt = "5.1.0"
 detekt = "1.23.8"
 jacoco = "0.8.15"
 junit = "5.14.4"
@@ -13,6 +14,7 @@ ktlintPlugin = "14.2.0"
 # version of the tool itself (jacoco { toolVersion = ... }), and Dependabot
 # updates it through this reference.
 jacoco-agent = { module = "org.jacoco:org.jacoco.agent", version.ref = "jacoco" }
+clikt = { module = "com.github.ajalt.clikt:clikt", version.ref = "clikt" }
 junit-bom = { module = "org.junit:junit-bom", version.ref = "junit" }
 junit-platform-launcher = { module = "org.junit.platform:junit-platform-launcher" }
 kotlin-test = { module = "org.jetbrains.kotlin:kotlin-test", version.ref = "kotlin" }
