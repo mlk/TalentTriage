@@ -28,5 +28,6 @@ updates:
         # A Kotlin minor bump is the riskiest one - `allWarningsAsErrors` fails
         # on new deprecations and detekt 1.23.x only understands language
         # version 2.2 - so it gets its own PR.
-        exclude:
-          - package-name: "org.jetbrains.kotlin*"
+        exclude-patterns:
+          - "org.jetbrains.kotlin:*"
+          - "org.jetbrains.kotlin.*"

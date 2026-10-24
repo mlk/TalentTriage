@@ -186,7 +186,9 @@ artifacts.
 * CI must not pull models, run Ollama, or reach the network beyond Maven
   Central, the Gradle Plugin Portal, the Gradle distribution download
   (`services.gradle.org`, cached by `setup-gradle`) and the GitHub Actions
-  cache. The `review` job additionally calls the Junie API.
+  cache. The `review` job additionally calls the Junie API. The allow-list is
+  not exhaustive: `setup-java` downloads a Temurin JDK and every `uses:` step
+  downloads its action tarball.
 * Never commit model weights, PDFs/`.docx` fixtures larger than a few KB, or
   anything from `~/Library/LaunchAgents`.
 * Tests use tiny in-memory fixtures; a real model run is a manual step.
