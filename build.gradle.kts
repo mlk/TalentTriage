@@ -63,7 +63,7 @@ tasks.withType<Detekt>().configureEach {
 }
 
 jacoco {
-    toolVersion = "0.8.15"
+    toolVersion = libs.versions.jacoco.get()
 }
 
 tasks.named<JacocoReport>("jacocoTestReport") {

@@ -1,0 +1,32 @@
+version: 2
+updates:
+  # Keeps the workflow action references up to date (the first-party actions
+  # are pinned to a major tag, so this picks up the next major).
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: "ci"
+
+  # Keeps the version catalog (gradle/libs.versions.toml) up to date. Minor and
+  # patch bumps arrive as a single PR, major bumps stay separate.
+  - package-ecosystem: gradle
+    directory: /
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: "build"
+    groups:
+      gradle-minor:
+        patterns:
+          - "*"
+        update-types:
+          - minor
+          - patch
+        # A Kotlin minor bump is the riskiest one - `allWarningsAsErrors` fails
+        # on new deprecations and detekt 1.23.x only understands language
+        # version 2.2 - so it gets its own PR.
+        exclude-patterns:
+          - "org.jetbrains.kotlin:*"
+          - "org.jetbrains.kotlin.*"
