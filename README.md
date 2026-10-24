@@ -125,6 +125,43 @@ flowchart TD
    ./gradlew jacocoTestReport
    ```
 
+4. **Build the executable** (`build/install/recruiter-cli/bin/recruiter-cli`):
+   ```bash
+   ./gradlew installDist
+   ```
+
+---
+
+## ⌨️ Command Line Interface
+
+The executable is `recruiter-cli`. Every operation is a subcommand:
+
+```bash
+# build/install/recruiter-cli/bin/recruiter-cli process-inbox
+```
+
+or, without installing the distribution:
+
+```bash
+./gradlew run --args="process-inbox"
+```
+
+`process-inbox` runs one inbox triage pass and writes **structured** log output — one JSON
+object per line — to standard output:
+
+```json
+{"timestamp":"2026-10-24T07:57:23.916683Z","level":"INFO","event":"process-inbox.started","message":"Inbox triage run started","attributes":{"trigger":"cli"}}
+{"timestamp":"2026-10-24T07:57:23.926923Z","level":"INFO","event":"process-inbox.completed","message":"Inbox triage run completed"}
+```
+
+The command exits with status code `0` when the run succeeded and `1` when the command line
+could not be parsed. The pipeline stages behind the run (fetching the mail, screening it,
+extracting the attachments, evaluating them) are delivered by their own stories.
+
+> **Note:** on JDK 24 and newer, Clikt's terminal detection prints a `native-access` warning
+> to standard error. Standard output stays clean JSON; add `--enable-native-access=ALL-UNNAMED`
+> to the JVM arguments to silence it.
+
 ---
 
 ## 🧪 Quality Standards & Testing
@@ -139,6 +176,7 @@ This repository enforces strict code quality gates via Gradle tasks:
 | `./gradlew detekt` | Runs static analysis (zero warnings allowed) |
 | `./gradlew jacocoTestReport` | Writes the JaCoCo HTML/XML report and **fails the build** below 80% line coverage |
 | `./gradlew check` | Runs all of the above as a single gate |
+| `./gradlew installDist` | Builds the `recruiter-cli` executable in `build/install/recruiter-cli/bin` |
 
 Configuration lives in:
 
@@ -152,10 +190,10 @@ Configuration lives in:
 
 ```
 src/main/kotlin/uk/me/michaellloydlee/recruiter/
-├── application/   # Use cases / orchestration
-├── cli/           # Command line entry point
-├── domain/        # Pure domain model, no infrastructure dependencies
-└── infrastructure/# Gmail, Ollama, PDF/Word adapters
+├── application/       # Use cases / orchestration
+├── cli/               # Command line entry point (Clikt commands)
+├── domain/            # Pure domain model, no infrastructure dependencies
+└── infrastructure/    # Gmail, Ollama, PDF/Word adapters, logging
 ```
 
 > **Note:** the package namespace drops the hyphens of the `uk.me.michael-lloyd-lee` domain because hyphens are not legal in Kotlin package names.

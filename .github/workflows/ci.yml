@@ -38,6 +38,11 @@ jobs:
       - name: Quality gates (tests, ktlint, detekt, coverage report + 80% verification)
         run: ./gradlew check jacocoTestReport --continue
 
+      - name: Verify the CLI entry point
+        run: |
+          ./gradlew installDist
+          build/install/recruiter-cli/bin/recruiter-cli process-inbox
+
       - name: Upload test reports
         if: always()
         uses: actions/upload-artifact@v7
