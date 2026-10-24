@@ -10,7 +10,7 @@ permissions:
   issues: write
 
 concurrency:
-  group: code-review-${{ github.event.pull_request.number || github.ref }}
+  group: code-review-${{ github.event.pull_request.number }}
   cancel-in-progress: true
 
 jobs:
