@@ -37,10 +37,15 @@ milestones (epics):
 5. Do not reformat or restructure unrelated code — keep diffs focused on the ticket.
 6. **Answer the automated review.** Every PR gets a `review` job (JetBrains
    Junie, see `.junie/guidelines.md`). After opening the PR, wait for it to
-   finish (`gh pr checks <pr> --watch`), read the comment
-   (`gh pr view <pr> --json comments`) and deal with **every** suggestion:
+   finish (`gh pr checks <pr> --watch`), then read the summary comment **and**
+   the inline review comments, and deal with **every** suggestion:
 
-   * implement it (commit on the same branch, push again),
+   * read the summary comment with `gh pr view <pr> --json comments`,
+   * read the inline review comments with
+     `gh api repos/{owner}/{repo}/pulls/<pr>/comments` (`gh pr view` does not
+     return them), and reply to one with
+     `gh api repos/{owner}/{repo}/pulls/<pr>/comments/<id>/replies -f body=...`,
+   * then implement it (commit on the same branch, push again),
    * ignore it — then say why in a reply to the comment,
    * or, when it is valid but out of scope for this ticket, file a new issue
      (`gh issue create`) or extend an existing one and reference that issue in
@@ -160,7 +165,9 @@ The maintainer may be on a **metered connection** — never download large
 artifacts.
 
 * CI must not pull models, run Ollama, or reach the network beyond Maven
-  Central and the GitHub Actions cache.
+  Central, the Gradle Plugin Portal, the Gradle distribution download
+  (`services.gradle.org`, cached by `setup-gradle`) and the GitHub Actions
+  cache. The `review` job additionally calls the Junie API.
 * Never commit model weights, PDFs/`.docx` fixtures larger than a few KB, or
   anything from `~/Library/LaunchAgents`.
 * Tests use tiny in-memory fixtures; a real model run is a manual step.

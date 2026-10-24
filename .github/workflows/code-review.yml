@@ -10,9 +10,15 @@ permissions:
   pull-requests: write
   issues: write
 
+concurrency:
+  group: code-review-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   review:
     name: Junie Code Review
+    # Secrets are not exposed to fork or Dependabot PRs — skip instead of failing red.
+    if: github.event_name == 'workflow_dispatch' || (github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'dependabot[bot]')
     runs-on: ubuntu-latest
     timeout-minutes: 15
 

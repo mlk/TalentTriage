@@ -8,7 +8,7 @@ on:
 
 concurrency:
   group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read
@@ -36,6 +36,7 @@ jobs:
         run: ./gradlew check
 
       - name: Coverage report (minimum 80% line coverage)
+        if: ${{ !cancelled() }}
         run: ./gradlew jacocoTestReport
 
       - name: Upload test reports

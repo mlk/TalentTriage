@@ -1,7 +1,6 @@
 # TalentTriage 🎯
 
 [![CI](https://github.com/mlk/TalentTriage/actions/workflows/ci.yml/badge.svg)](https://github.com/mlk/TalentTriage/actions/workflows/ci.yml)
-[![Code Review](https://github.com/mlk/TalentTriage/actions/workflows/code-review.yml/badge.svg)](https://github.com/mlk/TalentTriage/actions/workflows/code-review.yml)
 
 > **A resource-efficient, local-first recruiter email triage engine built in Kotlin for macOS.**
 
