@@ -1,6 +1,7 @@
 package uk.me.michaellloydlee.recruiter.cli
 
-import com.github.ajalt.clikt.core.main
+import com.github.ajalt.clikt.command.main
+import kotlinx.coroutines.runBlocking
 import uk.me.michaellloydlee.recruiter.infrastructure.logging.StructuredLogger
 
 /**
@@ -8,6 +9,7 @@ import uk.me.michaellloydlee.recruiter.infrastructure.logging.StructuredLogger
  *
  * @param args command line arguments, the first one selects the subcommand.
  */
-fun main(args: Array<String>) {
-    TriageCli(StructuredLogger(System.out)).main(args)
-}
+fun main(args: Array<String>) =
+    runBlocking {
+        TriageCli(StructuredLogger(System.out)).main(args)
+    }

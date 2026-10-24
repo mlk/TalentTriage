@@ -1,11 +1,13 @@
 [versions]
 clikt = "5.1.0"
+coroutines = "1.11.0"
 detekt = "1.23.8"
 jacoco = "0.8.15"
 junit = "6.1.3"
 kotlin = "2.4.21"
 kotlinxSerialization = "1.12.0"
 ktor = "3.6.0"
+slf4j = "2.0.20"
 ktlint = "1.8.0"
 ktlintPlugin = "14.2.0"
 
@@ -18,11 +20,17 @@ clikt = { module = "com.github.ajalt.clikt:clikt", version.ref = "clikt" }
 junit-bom = { module = "org.junit:junit-bom", version.ref = "junit" }
 junit-platform-launcher = { module = "org.junit.platform:junit-platform-launcher" }
 kotlin-test = { module = "org.jetbrains.kotlin:kotlin-test", version.ref = "kotlin" }
+kotlinx-coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "coroutines" }
+kotlinx-coroutines-test = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-test", version.ref = "coroutines" }
 kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "kotlinxSerialization" }
 ktor-bom = { module = "io.ktor:ktor-bom", version.ref = "ktor" }
 ktor-client-cio = { module = "io.ktor:ktor-client-cio" }
 ktor-client-content-negotiation = { module = "io.ktor:ktor-client-content-negotiation" }
+ktor-client-mock = { module = "io.ktor:ktor-client-mock" }
 ktor-serialization-kotlinx-json = { module = "io.ktor:ktor-serialization-kotlinx-json" }
+# The application logs through its own structured logger, the Ktor engine
+# must not print anything on its own.
+slf4j-nop = { module = "org.slf4j:slf4j-nop", version.ref = "slf4j" }
 
 [plugins]
 detekt = { id = "io.gitlab.arturbosch.detekt", version.ref = "detekt" }

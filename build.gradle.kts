@@ -28,13 +28,18 @@ kotlin {
 dependencies {
     implementation(platform(libs.ktor.bom))
     implementation(libs.clikt)
+    implementation(libs.kotlinx.coroutines.core)
     implementation(libs.ktor.client.cio)
     implementation(libs.ktor.client.content.negotiation)
     implementation(libs.ktor.serialization.kotlinx.json)
     implementation(libs.kotlinx.serialization.json)
 
+    runtimeOnly(libs.slf4j.nop)
+
     testImplementation(platform(libs.junit.bom))
     testImplementation(libs.kotlin.test)
+    testImplementation(libs.kotlinx.coroutines.test)
+    testImplementation(libs.ktor.client.mock)
     testRuntimeOnly(libs.junit.platform.launcher)
 }
 

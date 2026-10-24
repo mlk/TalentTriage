@@ -1,6 +1,6 @@
 package uk.me.michaellloydlee.recruiter.cli
 
-import com.github.ajalt.clikt.core.CliktCommand
+import com.github.ajalt.clikt.command.SuspendingCliktCommand
 import com.github.ajalt.clikt.core.Context
 import uk.me.michaellloydlee.recruiter.infrastructure.logging.StructuredLogger
 
@@ -16,8 +16,8 @@ import uk.me.michaellloydlee.recruiter.infrastructure.logging.StructuredLogger
  */
 class ProcessInboxCommand(
     private val logger: StructuredLogger,
-) : CliktCommand(name = COMMAND_NAME) {
-    override fun run() {
+) : SuspendingCliktCommand(name = COMMAND_NAME) {
+    override suspend fun run() {
         logger.info(
             event = "$COMMAND_NAME.started",
             message = "Inbox triage run started",
