@@ -21,27 +21,25 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up JDK 17
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: "17"
 
       - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v4
+        uses: gradle/actions/setup-gradle@v6
 
-      - name: Quality gates (tests, ktlint, detekt, coverage verification)
-        run: ./gradlew check
-
-      - name: Coverage report (minimum 80% line coverage)
-        if: ${{ !cancelled() }}
-        run: ./gradlew jacocoTestReport
+      # `--continue` keeps the coverage report generation alive when the 80%
+      # gate fails, so the uploaded report shows the uncovered lines.
+      - name: Quality gates (tests, ktlint, detekt, coverage report + 80% verification)
+        run: ./gradlew check jacocoTestReport --continue
 
       - name: Upload test reports
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: test-reports
           path: build/reports/tests/test
@@ -49,7 +47,7 @@ jobs:
 
       - name: Upload coverage report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: jacoco-report
           path: build/reports/jacoco/test

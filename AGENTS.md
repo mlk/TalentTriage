@@ -36,9 +36,12 @@ milestones (epics):
 4. CI must be green before the PR is considered done.
 5. Do not reformat or restructure unrelated code — keep diffs focused on the ticket.
 6. **Answer the automated review.** Every PR gets a `review` job (JetBrains
-   Junie, see `.junie/guidelines.md`). After opening the PR, wait for it to
-   finish (`gh pr checks <pr> --watch`), then read the summary comment **and**
-   the inline review comments, and deal with **every** suggestion:
+   Junie, see `.junie/guidelines.md`); the job is skipped for fork and
+   Dependabot PRs, which have no `JUNIE_API_KEY`, and it can be re-run by hand
+   with `workflow_dispatch` on the *Code Review* workflow. After opening the
+   PR, wait for it to finish (`gh pr checks <pr> --watch`), then read the
+   summary comment **and** the inline review comments, and deal with **every**
+   suggestion:
 
    * read the summary comment with `gh pr view <pr> --json comments`,
    * read the inline review comments with
@@ -53,6 +56,11 @@ milestones (epics):
 
    A PR is not done before the reviewer has been answered. Do not leave a
    suggestion unaddressed and unmentioned.
+
+   Every push starts a new review run, and `use_single_comment` only collapses
+   the *summary* comment — the inline comments of the previous run stay on the
+   diff. Answer them with a short "superseded" reply once the newer run has
+   covered the same point; do not implement them twice.
 
 ## Tooling
 
