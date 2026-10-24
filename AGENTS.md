@@ -37,10 +37,11 @@ milestones (epics):
 5. Do not reformat or restructure unrelated code — keep diffs focused on the ticket.
 6. **Answer the automated review.** Every PR gets a `review` job (JetBrains
    Junie, see `.junie/guidelines.md`); the job is skipped for fork and
-   Dependabot PRs, which have no `JUNIE_API_KEY`, and it can be re-run by hand
-   with `workflow_dispatch` on the *Code Review* workflow. After opening the
-   PR, wait for it to finish (`gh pr checks <pr> --watch`), then read the
-   summary comment **and** the inline review comments, and deal with **every**
+   Dependabot PRs, which have no `JUNIE_API_KEY`. A failed review is re-run
+   with *Re-run jobs* in the Actions UI (or `gh run rerun <run-id>`), which
+   replays the original pull request payload. After opening the PR, wait for
+   the review to finish (`gh pr checks <pr> --watch`), then read the summary
+   comment **and** the inline review comments, and deal with **every**
    suggestion:
 
    * read the summary comment with `gh pr view <pr> --json comments`,
@@ -102,6 +103,11 @@ dependencies there, never with a hardcoded version in `build.gradle.kts`.
   not cosmetic: detekt 1.23.x embeds a Kotlin compiler that cannot analyse on
   JDK 24+, and it crashes with a bare `26.0.1` error when the daemon runs on a
   newer JDK. Keep the daemon criteria file in sync with the toolchain version.
+* **JDK 17 has to be installed locally.** There is no toolchain resolver
+  (`foojay`) in `settings.gradle.kts` and no `toolchainUrl.*` entry in the
+  daemon criteria, so Gradle cannot download it: without a local JDK 17 the
+  build fails before the first task runs. CI is unaffected — `setup-java`
+  installs Temurin 17.
 * **The package namespace is `uk.me.michaellloydlee.recruiter`, not
   `uk.me.michael-lloyd-lee.recruiter`.** Hyphens are illegal in Kotlin package
   names — `package uk.me.michael-lloyd-lee.recruiter` is a syntax error. The

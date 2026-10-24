@@ -32,8 +32,9 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v6
 
-      # `--continue` keeps the coverage report generation alive when the 80%
-      # gate fails, so the uploaded report shows the uncovered lines.
+      # `--continue` keeps the independent gates running after one fails
+      # (detekt is scheduled first), so a lint finding does not hide the test
+      # and coverage reports uploaded below.
       - name: Quality gates (tests, ktlint, detekt, coverage report + 80% verification)
         run: ./gradlew check jacocoTestReport --continue
 
@@ -44,6 +45,7 @@ jobs:
           name: test-reports
           path: build/reports/tests/test
           if-no-files-found: ignore
+          retention-days: 14
 
       - name: Upload coverage report
         if: always()
@@ -52,3 +54,4 @@ jobs:
           name: jacoco-report
           path: build/reports/jacoco/test
           if-no-files-found: ignore
+          retention-days: 14
