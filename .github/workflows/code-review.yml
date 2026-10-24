@@ -1,0 +1,36 @@
+name: Code Review
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+jobs:
+  review:
+    name: Junie Code Review
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Run Junie review
+        uses: JetBrains/junie-github-action@v1
+        with:
+          junie_api_key: ${{ secrets.JUNIE_API_KEY }}
+          # Update the same comment on subsequent Junie runs instead of adding new comments
+          use_single_comment: true
+          # Custom review prompt — see .junie/guidelines.md for detailed instructions
+          prompt: |
+            Review this pull request. Before reviewing, read AGENTS.md to understand the
+            project's architecture, conventions, quality gates, and environment quirks.
+            Follow the review guidelines in .junie/guidelines.md.
+          model: "opus"
