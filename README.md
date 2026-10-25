@@ -80,7 +80,7 @@ flowchart TD
 * **Zero-Idle Memory Footprint:** Executes completely as a CLI command and terminates, returning 100% of VRAM/RAM back to macOS.
 * **Dual-Tier LLM Architecture:** Uses a fast, small model via Ollama for initial screening and routes qualified emails to an AirLLM Python wrapper (or large quantized Ollama model) for deep evaluation.
 * **Stateless Gmail Tracking:** Uses nested Gmail labels (`Recruiters/FilteredOut`, `Recruiters/WorthFollowUp`, `Recruiters/NeedsPayCheck`, `Recruiters/Trash`) as state flags.
-* **Document Parsing Engine:** Automatically extracts plain text/Markdown from attached `.pdf` and `.docx` job descriptions using Apache PDFBox and Apache POI.
+* **Document Parsing Engine:** Automatically extracts plain text/Markdown from attached `.pdf` and `.docx` job descriptions using Apache PDFBox and Apache POI. A broken attachment is reported, it never stops the run.
 * **OpenAI/Ollama Compatibility:** Leverages native Ollama REST API JSON formats across all endpoints.
 
 ---
@@ -281,6 +281,7 @@ src/main/kotlin/uk/me/michaellloydlee/recruiter/
 └── infrastructure/    # Gmail, Ollama, PDF/Word adapters, logging
     ├── gmail/         # OAuth2 credentials, token store, Gmail REST client, label state
     ├── logging/       # Structured (JSON lines) logger
+    ├── parser/        # Text extraction of the attached documents (PDFBox)
     └── serialization/ # Shared kotlinx.serialization helpers
 ```
 
