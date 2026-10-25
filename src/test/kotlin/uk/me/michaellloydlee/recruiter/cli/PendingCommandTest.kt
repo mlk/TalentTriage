@@ -91,6 +91,20 @@ class PendingCommandTest {
         }
 
     @Test
+    fun failsOnAnInvalidWindow() =
+        runTest {
+            val sink = StringBuilder()
+
+            val result =
+                cli(sink).test(
+                    "pending --since 3y --credentials ${credentialsFile()} " +
+                        "--token ${tokenFile()}",
+                )
+
+            assertEquals(1, result.statusCode)
+        }
+
+    @Test
     fun failsWhenTheCredentialsAreMissing() =
         runTest {
             val sink = StringBuilder()

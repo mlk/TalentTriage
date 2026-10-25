@@ -6,8 +6,10 @@ import io.ktor.client.engine.mock.respond
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.content.TextContent
 import kotlinx.coroutines.test.runTest
+import uk.me.michaellloydlee.recruiter.domain.gmail.MessageWindow
 import uk.me.michaellloydlee.recruiter.domain.gmail.RecruiterLabel
 import java.time.Clock
+import java.time.Duration
 import java.time.Instant
 import java.time.ZoneOffset
 import kotlin.test.Test
@@ -51,12 +53,33 @@ class GmailMessagesApiTest {
             api(engine).listUnprocessed()
 
             val request = engine.requestHistory.single()
-            assertEquals(RecruiterLabel.UNPROCESSED_QUERY, request.url.parameters["q"])
+            assertEquals(
+                "${RecruiterLabel.UNPROCESSED_QUERY} after:${NOW.minusSeconds(86400).epochSecond}",
+                request.url.parameters["q"],
+            )
             assertEquals("100", request.url.parameters["maxResults"])
             assertEquals("/v1/users/me/messages", request.url.encodedPath)
             assertTrue(
                 request.url.toString().startsWith("https://gmail.example/v1/users/me/messages?"),
                 "unexpected url: ${request.url}",
+            )
+        }
+
+    @Test
+    fun looksOnlyAtTheMessagesOfTheWindow() =
+        runTest {
+            val engine =
+                MockEngine {
+                    respond(content = EMPTY_MESSAGE_LIST, status = HttpStatusCode.OK)
+                }
+
+            api(engine).listUnprocessed(MessageWindow(Duration.ofHours(6)))
+
+            assertEquals(
+                "${RecruiterLabel.UNPROCESSED_QUERY} after:${NOW.minusSeconds(6 * 3600).epochSecond}",
+                engine.requestHistory
+                    .single()
+                    .url.parameters["q"],
             )
         }
 
@@ -173,7 +196,7 @@ class GmailMessagesApiTest {
                     ),
                 baseUrl = "https://gmail.example/v1",
             )
-        return GmailMessagesApi(client)
+        return GmailMessagesApi(client, clock = Clock.fixed(NOW, ZoneOffset.UTC))
     }
 
     private fun token(accessToken: String): OAuth2Token =
@@ -184,6 +207,8 @@ class GmailMessagesApiTest {
         )
 
     companion object {
+        private const val EMPTY_MESSAGE_LIST = "{\"messages\":[]}"
+
         private val NOW: Instant = Instant.parse("2026-10-24T08:00:00Z")
     }
 }

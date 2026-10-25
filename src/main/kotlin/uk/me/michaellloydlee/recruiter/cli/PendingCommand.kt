@@ -6,6 +6,7 @@ import com.github.ajalt.clikt.parameters.options.default
 import com.github.ajalt.clikt.parameters.options.option
 import com.github.ajalt.clikt.parameters.types.int
 import io.ktor.client.HttpClient
+import uk.me.michaellloydlee.recruiter.domain.gmail.MessageWindow
 import uk.me.michaellloydlee.recruiter.infrastructure.gmail.FileOAuth2TokenStore
 import uk.me.michaellloydlee.recruiter.infrastructure.gmail.GmailApiException
 import uk.me.michaellloydlee.recruiter.infrastructure.gmail.GmailAuthenticationException
@@ -44,6 +45,12 @@ class PendingCommand(
             help = "The file the OAuth2 token is stored in",
         ).default(AuthenticateCommand.DEFAULT_TOKEN_FILE)
 
+    private val since: String by
+        option(
+            "--since",
+            help = "How far back the messages are looked for, for example 24h or 7d",
+        ).default(DEFAULT_SINCE)
+
     private val limit: Int by
         option(
             "--limit",
@@ -65,9 +72,10 @@ class PendingCommand(
                     tokenStore = FileOAuth2TokenStore(Path.of(tokenFile)),
                     httpClient = client,
                 )
+            val window = window()
             val summaries =
                 try {
-                    services.messages.listUnprocessed()
+                    services.messages.listUnprocessed(window)
                 } catch (error: GmailApiException) {
                     throw CommandFailedException(error.message.orEmpty(), error)
                 }
@@ -92,6 +100,13 @@ class PendingCommand(
         }
     }
 
+    private fun window(): MessageWindow =
+        try {
+            MessageWindow(parseDuration(since))
+        } catch (error: IllegalArgumentException) {
+            throw CommandFailedException(error.message.orEmpty(), error)
+        }
+
     override fun help(context: Context): String = "List the inbox messages that were not processed yet."
 
     companion object {
@@ -100,5 +115,8 @@ class PendingCommand(
 
         /** The number of messages the command shows by default. */
         const val DEFAULT_LIMIT: Int = 20
+
+        /** The window the messages are looked for in by default. */
+        const val DEFAULT_SINCE: String = "24h"
     }
 }

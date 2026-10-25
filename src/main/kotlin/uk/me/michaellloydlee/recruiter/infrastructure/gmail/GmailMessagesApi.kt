@@ -2,37 +2,48 @@ package uk.me.michaellloydlee.recruiter.infrastructure.gmail
 
 import uk.me.michaellloydlee.recruiter.domain.gmail.EmailMessage
 import uk.me.michaellloydlee.recruiter.domain.gmail.EmailSummary
+import uk.me.michaellloydlee.recruiter.domain.gmail.MessageWindow
 import uk.me.michaellloydlee.recruiter.domain.gmail.RecruiterLabel
 import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
+import java.time.Clock
+import java.time.Instant
 
 /**
  * The message endpoints of the Gmail REST API.
  *
  * @param api the authenticated client of the API.
+ * @param clock source of the current time, it decides how far back the
+ *   messages are looked for.
  */
 class GmailMessagesApi(
     private val api: GmailApiClient,
+    private val clock: Clock = Clock.systemUTC(),
 ) {
     /**
      * Lists the messages of the inbox that were not processed yet.
      *
-     * The messages are the ones without a state label, the search of the
-     * domain describes them. All pages are fetched.
+     * The messages are the ones without a state label that arrived inside the
+     * window, the search of the domain describes them. All pages are fetched.
      *
-     * @param query the search that selects the messages.
+     * @param window how far back the messages are looked for.
      * @param maxResults the number of messages per page.
      * @return the summaries of the matching messages, the content is fetched
      *   with [getMessage].
      */
     suspend fun listUnprocessed(
-        query: String = RecruiterLabel.UNPROCESSED_QUERY,
+        window: MessageWindow = MessageWindow.LAST_DAY,
         maxResults: Int = DEFAULT_MAX_RESULTS,
     ): List<EmailSummary> {
+        val since = clock.instant().minus(window.duration)
         val summaries = mutableListOf<EmailSummary>()
         var pageToken: String? = null
         do {
-            val page = api.get(messagesUrl(query, maxResults, pageToken), GmailListMessagesResource.serializer())
+            val page =
+                api.get(
+                    messagesUrl(since, maxResults, pageToken),
+                    GmailListMessagesResource.serializer(),
+                )
             summaries.addAll(page.messages.map { EmailSummary(id = it.id, threadId = it.threadId) })
             pageToken = page.nextPageToken
         } while (pageToken != null)
@@ -70,13 +81,13 @@ class GmailMessagesApi(
     }
 
     private fun messagesUrl(
-        query: String,
+        since: Instant,
         maxResults: Int,
         pageToken: String?,
     ): String {
         val parameters =
             buildList {
-                add("q" to query)
+                add("q" to "${RecruiterLabel.UNPROCESSED_QUERY} after:${since.epochSecond}")
                 add("maxResults" to maxResults.toString())
                 if (pageToken != null) {
                     add("pageToken" to pageToken)
