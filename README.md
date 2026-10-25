@@ -105,7 +105,7 @@ flowchart TD
 * JDK 17+ (the Gradle daemon is pinned to JDK 17 via `gradle/gradle-daemon-jvm.properties`)
 * [Ollama](https://ollama.ai/) installed and running locally on `http://localhost:11434` _(required from the Ollama client story onwards)_
 * Python 3.10+ if using the optional AirLLM FastAPI wrapper on `http://localhost:8000` _(optional)_
-* Google Cloud OAuth2 credentials (`credentials.json`) for Gmail REST API access _(required from the Gmail story onwards)_
+* Google Cloud OAuth2 credentials (`credentials.json`) for Gmail REST API access — see [Gmail authentication](#-gmail-authentication)
 
 ### Installation & Build
 
@@ -138,6 +138,7 @@ The executable is `recruiter-cli`. Every operation is a subcommand:
 
 ```bash
 # build/install/recruiter-cli/bin/recruiter-cli process-inbox
+# build/install/recruiter-cli/bin/recruiter-cli authenticate
 ```
 
 or, without installing the distribution:
@@ -161,6 +162,51 @@ extracting the attachments, evaluating them) are delivered by their own stories.
 > **Note:** on JDK 24 and newer, Clikt's terminal detection prints a `native-access` warning
 > to standard error. Standard output stays clean JSON; add `--enable-native-access=ALL-UNNAMED`
 > to the JVM arguments to silence it.
+
+---
+
+## 🔐 Gmail authentication
+
+The Gmail REST API needs an OAuth2 token. The token is obtained once and refreshed
+automatically afterwards.
+
+1. **Create a Google Cloud project** and enable the Gmail API, then create an *OAuth client
+   ID* of the type *Desktop app*. Download the credentials and save them as
+   `credentials.json` in the working directory:
+
+   ```json
+   {
+     "installed": {
+       "client_id": "…apps.googleusercontent.com",
+       "client_secret": "…",
+       "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+       "token_uri": "https://oauth2.googleapis.com/token",
+       "redirect_uris": ["http://localhost"]
+     }
+   }
+   ```
+
+   Both the `installed`/`web` format of Google and the flat format above are accepted.
+
+2. **Authorise the application:**
+
+   ```bash
+   recruiter-cli authenticate
+   ```
+
+   The command prints the URL of the Google authorisation page. Open it in a browser, allow
+   the application to access the mailbox and copy the authorisation code from the address bar
+   of the redirect. The redirect itself fails to connect — that is expected, the code in the
+   address bar is what matters.
+
+3. **Exchange the code for a token:**
+
+   ```bash
+   recruiter-cli authenticate <code>
+   ```
+
+   The token is written to `token.json` (both files are git-ignored) and the access token is
+   refreshed automatically when it expires.
 
 ---
 
@@ -194,6 +240,9 @@ src/main/kotlin/uk/me/michaellloydlee/recruiter/
 ├── cli/               # Command line entry point (Clikt commands)
 ├── domain/            # Pure domain model, no infrastructure dependencies
 └── infrastructure/    # Gmail, Ollama, PDF/Word adapters, logging
+    ├── gmail/         # OAuth2 credentials, token store, Gmail REST client
+    ├── logging/       # Structured (JSON lines) logger
+    └── serialization/ # Shared kotlinx.serialization helpers
 ```
 
 > **Note:** the package namespace drops the hyphens of the `uk.me.michael-lloyd-lee` domain because hyphens are not legal in Kotlin package names.

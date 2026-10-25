@@ -1,8 +1,10 @@
 package uk.me.michaellloydlee.recruiter.cli
 
-import com.github.ajalt.clikt.core.CliktCommand
+import com.github.ajalt.clikt.command.SuspendingCliktCommand
 import com.github.ajalt.clikt.core.Context
 import com.github.ajalt.clikt.core.subcommands
+import io.ktor.client.HttpClient
+import uk.me.michaellloydlee.recruiter.infrastructure.gmail.GmailHttpClientFactory
 import uk.me.michaellloydlee.recruiter.infrastructure.logging.StructuredLogger
 
 /**
@@ -12,15 +14,20 @@ import uk.me.michaellloydlee.recruiter.infrastructure.logging.StructuredLogger
  * subcommand of its own.
  *
  * @param logger sink for the structured log output of the invoked subcommand.
+ * @param httpClientFactory creates the client used to talk to Google.
  */
 class TriageCli(
     logger: StructuredLogger,
-) : CliktCommand(name = COMMAND_NAME) {
+    httpClientFactory: () -> HttpClient = { GmailHttpClientFactory.create() },
+) : SuspendingCliktCommand(name = COMMAND_NAME) {
     init {
-        subcommands(ProcessInboxCommand(logger))
+        subcommands(
+            AuthenticateCommand(logger, httpClientFactory),
+            ProcessInboxCommand(logger),
+        )
     }
 
-    override fun run() {
+    override suspend fun run() {
         // The root command only groups the subcommands, it has no work of its own.
         // Without a subcommand Clikt prints the help message.
     }
