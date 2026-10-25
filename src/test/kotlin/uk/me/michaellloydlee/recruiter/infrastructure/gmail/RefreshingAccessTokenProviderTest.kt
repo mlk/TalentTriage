@@ -1,5 +1,8 @@
 package uk.me.michaellloydlee.recruiter.infrastructure.gmail
 
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.test.runTest
 import java.time.Clock
 import java.time.Duration
@@ -92,6 +95,20 @@ class RefreshingAccessTokenProviderTest {
             assertEquals(1, refresher.refreshCount)
         }
 
+    @Test
+    fun refreshesOnlyOnceForConcurrentCallers() =
+        runTest {
+            val store = FakeTokenStore(token(NOW.minusSeconds(10)))
+            val refresher = FakeRefresher()
+            val provider = provider(store, refresher)
+
+            val tokens = listOf(async { provider.accessToken() }, async { provider.accessToken() })
+            tokens.awaitAll()
+
+            assertEquals(1, refresher.refreshCount)
+            assertEquals(listOf("refreshed-access-token", "refreshed-access-token"), tokens.map { it.await() })
+        }
+
     private fun provider(
         store: OAuth2TokenStore,
         refresher: OAuth2TokenRefresher,
@@ -130,6 +147,7 @@ class RefreshingAccessTokenProviderTest {
 
         override suspend fun refreshAccessToken(refreshToken: String): OAuth2Token {
             refreshCount++
+            delay(1)
             return OAuth2Token(
                 accessToken = "refreshed-access-token",
                 refreshToken = refreshToken,

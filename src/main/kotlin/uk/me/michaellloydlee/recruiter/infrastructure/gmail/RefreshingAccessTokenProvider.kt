@@ -12,6 +12,10 @@ import java.time.Duration
  * is written back to the store, because the refresh token outlives the access
  * token.
  *
+ * The check whether the token is still valid and the refresh itself happen
+ * under the same lock, so concurrent callers cannot trigger two refreshes for
+ * the same expired token.
+ *
  * @param refresher used to renew the access token.
  * @param tokenStore store the token is read from and written to.
  * @param clock source of the current time.
@@ -27,34 +31,43 @@ class RefreshingAccessTokenProvider(
     private var cached: OAuth2Token? = null
 
     override suspend fun accessToken(): String {
-        val known = cached ?: tokenStore.load()
-        if (known != null && known.isValidAt(clock.instant(), refreshLeeway)) {
-            cached = known
-            return known.accessToken
+        mutex.lock()
+        try {
+            val known = cached ?: tokenStore.load()
+            if (known != null && known.isValidAt(clock.instant(), refreshLeeway)) {
+                cached = known
+                return known.accessToken
+            }
+            return refreshLocked(known).accessToken
+        } finally {
+            mutex.unlock()
         }
-        return refresh()
     }
 
     override suspend fun refresh(): String {
         mutex.lock()
         try {
-            val stored =
-                cached ?: tokenStore.load()
-                    ?: throw GmailAuthenticationException(
-                        "No Gmail token found - run `recruiter-cli authenticate` first",
-                    )
-            val refreshToken =
-                stored.refreshToken
-                    ?: throw GmailAuthenticationException(
-                        "The stored Gmail token has no refresh token - run `recruiter-cli authenticate` again",
-                    )
-            val refreshed = refresher.refreshAccessToken(refreshToken)
-            tokenStore.save(refreshed)
-            cached = refreshed
-            return refreshed.accessToken
+            return refreshLocked(cached ?: tokenStore.load()).accessToken
         } finally {
             mutex.unlock()
         }
+    }
+
+    private suspend fun refreshLocked(stored: OAuth2Token?): OAuth2Token {
+        val token =
+            stored
+                ?: throw GmailAuthenticationException(
+                    "No Gmail token found - run `recruiter-cli authenticate` first",
+                )
+        val refreshToken =
+            token.refreshToken
+                ?: throw GmailAuthenticationException(
+                    "The stored Gmail token has no refresh token - run `recruiter-cli authenticate` again",
+                )
+        val refreshed = refresher.refreshAccessToken(refreshToken)
+        tokenStore.save(refreshed)
+        cached = refreshed
+        return refreshed
     }
 
     companion object {
