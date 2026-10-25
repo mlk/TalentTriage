@@ -56,6 +56,32 @@ class DocxTextExtractorTest {
     }
 
     @Test
+    fun leavesTheHeaderAndTheFooterOut() {
+        val content =
+            TestWordDocuments.docxWithHeaderAndFooter(
+                header = "Company confidential",
+                footer = "Page 1 of 1",
+                body = "Your CV was received.",
+            )
+
+        val result = DocxTextExtractor().extract(content)
+
+        val text = (result as ExtractionResult.Extracted).text
+        assertTrue(text.contains("Your CV was received."))
+        assertTrue(!text.contains("Company confidential"))
+        assertTrue(!text.contains("Page 1 of 1"))
+    }
+
+    @Test
+    fun reportsADocumentWithoutATableAsEmpty() {
+        val content = TestWordDocuments.docxWithTable(emptyList())
+
+        val result = DocxTextExtractor().extract(content)
+
+        assertEquals("", (result as ExtractionResult.Extracted).text)
+    }
+
+    @Test
     fun reportsACorruptDocumentAsAFailure() {
         val result = DocxTextExtractor().extract(TestWordDocuments.brokenDocx())
 

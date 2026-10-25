@@ -1,5 +1,6 @@
 package uk.me.michaellloydlee.recruiter.infrastructure.parser
 
+import org.apache.poi.wp.usermodel.HeaderFooterType
 import org.apache.poi.xwpf.usermodel.XWPFDocument
 import java.io.ByteArrayOutputStream
 
@@ -30,17 +31,45 @@ object TestWordDocuments {
     /**
      * A Word document with a table.
      *
-     * @param rows the rows of the table.
+     * @param rows the rows of the table, an empty list creates a document
+     *   without a table.
      */
     fun docxWithTable(rows: List<List<String>>): ByteArray {
         val document = XWPFDocument()
         try {
-            val table = document.createTable(rows.size, rows.first().size)
-            rows.forEachIndexed { rowIndex, row ->
-                row.forEachIndexed { cellIndex, text ->
-                    table.getRow(rowIndex).getCell(cellIndex).setText(text)
+            if (rows.isNotEmpty()) {
+                val table = document.createTable(rows.size, rows.first().size)
+                rows.forEachIndexed { rowIndex, row ->
+                    row.forEachIndexed { cellIndex, text ->
+                        table.getRow(rowIndex).getCell(cellIndex).setText(text)
+                    }
                 }
             }
+            val bytes = ByteArrayOutputStream()
+            document.write(bytes)
+            return bytes.toByteArray()
+        } finally {
+            document.close()
+        }
+    }
+
+    /**
+     * A Word document with a header, a footer and a body.
+     *
+     * @param header the text of the header.
+     * @param footer the text of the footer.
+     * @param body the text of the body.
+     */
+    fun docxWithHeaderAndFooter(
+        header: String,
+        footer: String,
+        body: String,
+    ): ByteArray {
+        val document = XWPFDocument()
+        try {
+            document.createHeader(HeaderFooterType.DEFAULT).apply { createParagraph().createRun().setText(header) }
+            document.createFooter(HeaderFooterType.DEFAULT).apply { createParagraph().createRun().setText(footer) }
+            document.createParagraph().createRun().setText(body)
             val bytes = ByteArrayOutputStream()
             document.write(bytes)
             return bytes.toByteArray()
