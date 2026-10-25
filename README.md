@@ -139,6 +139,7 @@ The executable is `recruiter-cli`. Every operation is a subcommand:
 ```bash
 # build/install/recruiter-cli/bin/recruiter-cli process-inbox
 # build/install/recruiter-cli/bin/recruiter-cli authenticate
+# build/install/recruiter-cli/bin/recruiter-cli pending
 ```
 
 or, without installing the distribution:
@@ -162,6 +163,37 @@ extracting the attachments, evaluating them) are delivered by their own stories.
 > **Note:** on JDK 24 and newer, Clikt's terminal detection prints a `native-access` warning
 > to standard error. Standard output stays clean JSON; add `--enable-native-access=ALL-UNNAMED`
 > to the JVM arguments to silence it.
+
+---
+
+## 📬 The state of the mailbox
+
+Gmail is the state store of the pipeline. Every processed message carries one
+of the nested state labels, so the search `is:inbox -label:Recruiters/*` matches
+exactly the messages that were not processed yet:
+
+| Label | Meaning | Archived |
+| --- | --- | --- |
+| `Recruiters/FilteredOut` | not a recruiter mail | no, it stays in the inbox |
+| `Recruiters/WorthFollowUp` | worth a follow up | no, it stays in the inbox |
+| `Recruiters/NeedsPayCheck` | a recruiter mail, but the pay has to be checked | no, it stays in the inbox |
+| `Recruiters/Trash` | not worth any attention | yes, the message leaves the inbox |
+
+A message carries exactly one state label - applying a new state removes the
+other ones - and the state labels are created in the mailbox when they do not
+exist yet.
+
+`recruiter-cli pending` lists the messages that were not processed yet, it is
+the quickest way to check that the credentials work:
+
+```bash
+recruiter-cli pending
+```
+
+```json
+{"timestamp":"…","level":"INFO","event":"pending.listed","message":"The inbox messages that were not processed yet","attributes":{"count":"2"}}
+{"timestamp":"…","level":"INFO","event":"pending.message","message":"A message of the inbox that was not processed yet","attributes":{"id":"…","sender":"…","subject":"…"}}
+```
 
 ---
 
@@ -240,7 +272,7 @@ src/main/kotlin/uk/me/michaellloydlee/recruiter/
 ├── cli/               # Command line entry point (Clikt commands)
 ├── domain/            # Pure domain model, no infrastructure dependencies
 └── infrastructure/    # Gmail, Ollama, PDF/Word adapters, logging
-    ├── gmail/         # OAuth2 credentials, token store, Gmail REST client
+    ├── gmail/         # OAuth2 credentials, token store, Gmail REST client, label state
     ├── logging/       # Structured (JSON lines) logger
     └── serialization/ # Shared kotlinx.serialization helpers
 ```
