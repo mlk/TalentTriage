@@ -183,11 +183,18 @@ A message carries exactly one state label - applying a new state removes the
 other ones - and the state labels are created in the mailbox when they do not
 exist yet.
 
+The pipeline is a scheduled job, so it only processes the mail that arrived
+since the last run: the search is `is:inbox -label:Recruiters/* after:<time>`,
+the window is 24 hours by default.
+
 `recruiter-cli pending` lists the messages that were not processed yet, it is
-the quickest way to check that the credentials work:
+the quickest way to check that the credentials work. The pipeline only looks at
+the mail that arrived recently — the last 24 hours by default, `--since 7d`
+looks a week back:
 
 ```bash
-recruiter-cli pending
+recruiter-cli pending            # the last 24 hours
+recruiter-cli pending --since 7d  # the last seven days
 ```
 
 ```json
