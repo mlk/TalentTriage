@@ -9,6 +9,9 @@ import io.ktor.http.HttpStatusCode
 import io.ktor.http.headersOf
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.Serializable
+import java.time.Clock
+import java.time.Instant
+import java.time.ZoneOffset
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -52,15 +55,15 @@ class GmailApiClientTest {
                         )
                     }
                 }
-            val tokens = FakeAccessTokenProvider()
+            val refresher = FakeRefresher(refreshedToken())
 
-            val message = apiClient(engine, tokens).get("messages/message-id", TestMessage.serializer())
+            val message = apiClient(engine, refresher).get("messages/message-id", TestMessage.serializer())
 
             assertEquals("message-id", message.id)
             assertEquals(2, engine.requestHistory.size)
             assertEquals("Bearer access-token", engine.requestHistory[0].headers["Authorization"])
-            assertEquals("Bearer refreshed-token", engine.requestHistory[1].headers["Authorization"])
-            assertEquals(1, tokens.refreshCount)
+            assertEquals("Bearer refreshed-access-token", engine.requestHistory[1].headers["Authorization"])
+            assertEquals(1, refresher.refreshCount)
         }
 
     @Test
@@ -106,12 +109,31 @@ class GmailApiClientTest {
 
     private fun apiClient(
         engine: MockEngine,
-        tokens: AccessTokenProvider = FakeAccessTokenProvider(),
+        refresher: FakeRefresher = FakeRefresher(refreshedToken()),
     ): GmailApiClient =
         GmailApiClient(
             httpClient = HttpClient(engine),
-            tokens = tokens,
+            tokens =
+                RefreshingAccessTokenProvider(
+                    refresher = refresher,
+                    tokenStore = FakeTokenStore(storedToken()),
+                    clock = Clock.fixed(NOW, ZoneOffset.UTC),
+                ),
             baseUrl = "https://gmail.example/v1",
+        )
+
+    private fun storedToken(): OAuth2Token =
+        OAuth2Token(
+            accessToken = "access-token",
+            refreshToken = "refresh-token",
+            expiresAt = NOW.plusSeconds(600),
+        )
+
+    private fun refreshedToken(): OAuth2Token =
+        OAuth2Token(
+            accessToken = "refreshed-access-token",
+            refreshToken = "refresh-token",
+            expiresAt = NOW.plusSeconds(600),
         )
 
     private fun jsonHeaders() = headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString())
@@ -121,15 +143,7 @@ class GmailApiClientTest {
         val id: String,
     )
 
-    private class FakeAccessTokenProvider : AccessTokenProvider {
-        var refreshCount: Int = 0
-            private set
-
-        override suspend fun accessToken(): String = "access-token"
-
-        override suspend fun refresh(): String {
-            refreshCount++
-            return "refreshed-token"
-        }
+    companion object {
+        private val NOW: Instant = Instant.parse("2026-10-24T08:00:00Z")
     }
 }

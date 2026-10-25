@@ -31,7 +31,7 @@ import kotlinx.serialization.json.Json
  */
 class GmailApiClient(
     private val httpClient: HttpClient,
-    private val tokens: AccessTokenProvider,
+    private val tokens: RefreshingAccessTokenProvider,
     private val baseUrl: String = DEFAULT_BASE_URL,
     private val json: Json = Json { ignoreUnknownKeys = true },
 ) {

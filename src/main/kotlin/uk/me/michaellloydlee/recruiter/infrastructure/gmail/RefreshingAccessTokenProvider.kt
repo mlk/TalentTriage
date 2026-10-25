@@ -26,11 +26,16 @@ class RefreshingAccessTokenProvider(
     private val tokenStore: OAuth2TokenStore,
     private val clock: Clock = Clock.systemUTC(),
     private val refreshLeeway: Duration = DEFAULT_REFRESH_LEEWAY,
-) : AccessTokenProvider {
+) {
     private val mutex = Mutex()
     private var cached: OAuth2Token? = null
 
-    override suspend fun accessToken(): String {
+    /**
+     * Returns an access token that can be used right now.
+     *
+     * The token is refreshed when it is missing or expired.
+     */
+    suspend fun accessToken(): String {
         mutex.lock()
         try {
             val known = cached ?: tokenStore.load()
@@ -44,7 +49,12 @@ class RefreshingAccessTokenProvider(
         }
     }
 
-    override suspend fun refresh(): String {
+    /**
+     * Forces a refresh and returns the new access token.
+     *
+     * Used when the Gmail API rejects a token that was expected to be valid.
+     */
+    suspend fun refresh(): String {
         mutex.lock()
         try {
             return refreshLocked(cached ?: tokenStore.load()).accessToken

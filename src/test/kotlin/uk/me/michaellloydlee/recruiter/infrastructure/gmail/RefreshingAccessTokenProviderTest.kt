@@ -2,7 +2,6 @@ package uk.me.michaellloydlee.recruiter.infrastructure.gmail
 
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.test.runTest
 import java.time.Clock
 import java.time.Duration
@@ -18,7 +17,7 @@ class RefreshingAccessTokenProviderTest {
     fun returnsTheStoredTokenWhenItIsStillValid() =
         runTest {
             val store = FakeTokenStore(token(NOW.plusSeconds(600)))
-            val refresher = FakeRefresher()
+            val refresher = FakeRefresher(refreshedToken())
 
             val token = provider(store, refresher).accessToken()
 
@@ -30,7 +29,7 @@ class RefreshingAccessTokenProviderTest {
     fun refreshesTheTokenWhenItIsExpired() =
         runTest {
             val store = FakeTokenStore(token(NOW.minusSeconds(10)))
-            val refresher = FakeRefresher()
+            val refresher = FakeRefresher(refreshedToken())
 
             val token = provider(store, refresher).accessToken()
 
@@ -43,7 +42,7 @@ class RefreshingAccessTokenProviderTest {
     fun refreshesTheTokenBeforeItExpires() =
         runTest {
             val store = FakeTokenStore(token(NOW.plusSeconds(30)))
-            val refresher = FakeRefresher()
+            val refresher = FakeRefresher(refreshedToken())
 
             provider(store, refresher).accessToken()
 
@@ -53,7 +52,7 @@ class RefreshingAccessTokenProviderTest {
     @Test
     fun failsWhenNoTokenIsStored() =
         runTest {
-            val provider = provider(FakeTokenStore(null), FakeRefresher())
+            val provider = provider(FakeTokenStore(null), FakeRefresher(refreshedToken()))
 
             val error = assertFailsWith<GmailAuthenticationException> { provider.accessToken() }
 
@@ -65,7 +64,10 @@ class RefreshingAccessTokenProviderTest {
         runTest {
             val store = FakeTokenStore(token(NOW.minusSeconds(10)).copy(refreshToken = null))
 
-            val error = assertFailsWith<GmailAuthenticationException> { provider(store, FakeRefresher()).accessToken() }
+            val error =
+                assertFailsWith<GmailAuthenticationException> {
+                    provider(store, FakeRefresher(refreshedToken())).accessToken()
+                }
 
             assertTrue(error.message!!.contains("no refresh token"))
         }
@@ -74,7 +76,7 @@ class RefreshingAccessTokenProviderTest {
     fun forcesARefresh() =
         runTest {
             val store = FakeTokenStore(token(NOW.plusSeconds(600)))
-            val refresher = FakeRefresher()
+            val refresher = FakeRefresher(refreshedToken())
 
             val token = provider(store, refresher).refresh()
 
@@ -86,7 +88,7 @@ class RefreshingAccessTokenProviderTest {
     fun keepsTheTokenInMemoryAfterTheFirstRefresh() =
         runTest {
             val store = FakeTokenStore(token(NOW.minusSeconds(10)))
-            val refresher = FakeRefresher()
+            val refresher = FakeRefresher(refreshedToken())
             val provider = provider(store, refresher)
 
             provider.accessToken()
@@ -99,7 +101,7 @@ class RefreshingAccessTokenProviderTest {
     fun refreshesOnlyOnceForConcurrentCallers() =
         runTest {
             val store = FakeTokenStore(token(NOW.minusSeconds(10)))
-            val refresher = FakeRefresher()
+            val refresher = FakeRefresher(refreshedToken())
             val provider = provider(store, refresher)
 
             val tokens = listOf(async { provider.accessToken() }, async { provider.accessToken() })
@@ -127,34 +129,12 @@ class RefreshingAccessTokenProviderTest {
             expiresAt = expiry,
         )
 
-    private class FakeTokenStore(
-        private var token: OAuth2Token?,
-    ) : OAuth2TokenStore {
-        var saved: OAuth2Token? = null
-            private set
-
-        override suspend fun load(): OAuth2Token? = token
-
-        override suspend fun save(token: OAuth2Token) {
-            this.token = token
-            saved = token
-        }
-    }
-
-    private class FakeRefresher : OAuth2TokenRefresher {
-        var refreshCount: Int = 0
-            private set
-
-        override suspend fun refreshAccessToken(refreshToken: String): OAuth2Token {
-            refreshCount++
-            delay(1)
-            return OAuth2Token(
-                accessToken = "refreshed-access-token",
-                refreshToken = refreshToken,
-                expiresAt = NOW.plusSeconds(600),
-            )
-        }
-    }
+    private fun refreshedToken(): OAuth2Token =
+        OAuth2Token(
+            accessToken = "refreshed-access-token",
+            refreshToken = "refresh-token",
+            expiresAt = NOW.plusSeconds(600),
+        )
 
     companion object {
         private val NOW: Instant = Instant.parse("2026-10-24T08:00:00Z")
