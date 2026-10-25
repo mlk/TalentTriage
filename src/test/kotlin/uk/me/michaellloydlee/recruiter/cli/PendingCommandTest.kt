@@ -10,6 +10,7 @@ import kotlinx.serialization.json.Json
 import uk.me.michaellloydlee.recruiter.infrastructure.logging.LogRecord
 import uk.me.michaellloydlee.recruiter.infrastructure.logging.StructuredLogger
 import java.nio.file.Path
+import java.time.Instant
 import kotlin.io.path.createTempDirectory
 import kotlin.io.path.writeText
 import kotlin.test.Test
@@ -48,7 +49,9 @@ class PendingCommandTest {
                     }
                 }
 
-            val result = cli(sink) { HttpClient(engine) }.test("pending --credentials ${credentialsFile()}")
+            val result =
+                cli(sink) { HttpClient(engine) }
+                    .test("pending --credentials ${credentialsFile()} --token ${tokenFile()}")
 
             assertEquals(0, result.statusCode)
             val records = records(sink)
@@ -79,7 +82,7 @@ class PendingCommandTest {
 
             val result =
                 cli(sink) { HttpClient(engine) }
-                    .test("pending --limit 1 --credentials ${credentialsFile()}")
+                    .test("pending --limit 1 --credentials ${credentialsFile()} --token ${tokenFile()}")
 
             assertEquals(0, result.statusCode)
             val records = records(sink)
@@ -101,6 +104,15 @@ class PendingCommandTest {
         sink: StringBuilder,
         httpClientFactory: () -> HttpClient = { HttpClient(MockEngine { respond("{}", HttpStatusCode.OK) }) },
     ): TriageCli = TriageCli(StructuredLogger(sink), httpClientFactory)
+
+    private fun tokenFile(): Path {
+        val file = createTempDirectory("token").resolve("token.json")
+        val expiry = Instant.now().plusSeconds(3600)
+        file.writeText(
+            """{"access_token":"access-token","refresh_token":"refresh-token","expires_at":"$expiry"}""",
+        )
+        return file
+    }
 
     private fun credentialsFile(): Path {
         val file = createTempDirectory("credentials").resolve("credentials.json")
