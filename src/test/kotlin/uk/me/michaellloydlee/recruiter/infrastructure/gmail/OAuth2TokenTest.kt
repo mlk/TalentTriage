@@ -22,10 +22,11 @@ class OAuth2TokenTest {
     }
 
     @Test
-    fun isNotValidWithoutAnExpiry() {
+    fun isValidWithoutAnExpiryForTheDefaultLifetime() {
         val token = OAuth2Token(accessToken = "access-token")
 
-        assertFalse(token.isValidAt(NOW))
+        assertTrue(token.isValidAt(NOW))
+        assertFalse(token.isValidAt(NOW, defaultTtl = Duration.ZERO))
     }
 
     @Test

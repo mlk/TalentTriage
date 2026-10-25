@@ -31,14 +31,26 @@ data class OAuth2Token(
     /**
      * Tells whether the access token can still be used at the given moment.
      *
+     * A token without a known expiry is treated as valid for [defaultTtl],
+     * the lifetime Google grants an access token. Refreshing it on every
+     * single call would be pointless, and a token the API rejects is
+     * refreshed anyway.
+     *
      * @param instant the moment to check the token at.
      * @param leeway safety margin, the token is treated as expired that much earlier.
+     * @param defaultTtl lifetime assumed for a token without an expiry.
      */
     fun isValidAt(
         instant: Instant,
         leeway: Duration = Duration.ZERO,
+        defaultTtl: Duration = DEFAULT_TTL,
     ): Boolean {
-        val expiry = expiresAt ?: return false
+        val expiry = expiresAt ?: return instant.isBefore(instant.plus(defaultTtl))
         return instant.isBefore(expiry.minus(leeway))
+    }
+
+    companion object {
+        /** The lifetime Google grants an access token without an explicit expiry. */
+        val DEFAULT_TTL: Duration = Duration.ofHours(1)
     }
 }
