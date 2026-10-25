@@ -1,6 +1,7 @@
 package uk.me.michaellloydlee.recruiter.infrastructure.gmail
 
 import io.ktor.client.HttpClient
+import io.ktor.client.engine.HttpClientEngine
 import io.ktor.client.engine.cio.CIO
 import io.ktor.client.plugins.HttpTimeout
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
@@ -22,9 +23,13 @@ object GmailHttpClientFactory {
      * Creates the client.
      *
      * @param jsonFormat parser used for the JSON payloads.
+     * @param engine the engine the client uses, the CIO engine by default.
      */
-    fun create(jsonFormat: Json = Json { ignoreUnknownKeys = true }): HttpClient =
-        HttpClient(CIO) {
+    fun create(
+        jsonFormat: Json = Json { ignoreUnknownKeys = true },
+        engine: HttpClientEngine = CIO.create(),
+    ): HttpClient =
+        HttpClient(engine) {
             expectSuccess = false
             install(ContentNegotiation) {
                 json(jsonFormat)
