@@ -34,6 +34,7 @@ dependencies {
     implementation(libs.ktor.serialization.kotlinx.json)
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.pdfbox)
+    implementation(libs.poi.ooxml)
 
     runtimeOnly(libs.slf4j.nop)
 
