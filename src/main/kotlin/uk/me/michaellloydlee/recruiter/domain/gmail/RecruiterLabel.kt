@@ -1,0 +1,68 @@
+package uk.me.michaellloydlee.recruiter.domain.gmail
+
+private const val LABEL_PREFIX = "Recruiters/"
+
+/**
+ * The state labels the triage pipeline applies to the messages.
+ *
+ * Gmail is the state store of the pipeline: a message that carries one of
+ * these labels was processed already and is not looked at again. The labels
+ * are nested below the `Recruiters/` prefix, so the whole family can be
+ * excluded from a search with the `-label:Recruiters/…` wildcard.
+ *
+ * @property path the full path of the label in Gmail.
+ * @property archives whether a message with this label is archived.
+ */
+enum class RecruiterLabel(
+    val path: String,
+    val archives: Boolean,
+) {
+    /** The message is not a recruiter mail, it stays in the inbox. */
+    FILTERED_OUT("${LABEL_PREFIX}FilteredOut", archives = false),
+
+    /** The message is worth a follow up, it stays in the inbox. */
+    WORTH_FOLLOW_UP("${LABEL_PREFIX}WorthFollowUp", archives = false),
+
+    /** The message is a recruiter mail, but the pay has to be checked, it stays in the inbox. */
+    NEEDS_PAY_CHECK("${LABEL_PREFIX}NeedsPayCheck", archives = false),
+
+    /** The message is not worth any attention, it is archived. */
+    TRASH("${LABEL_PREFIX}Trash", archives = true),
+    ;
+
+    companion object {
+        /** The prefix all state labels share. */
+        const val PREFIX: String = LABEL_PREFIX
+
+        /** The search that matches the inbox messages without a state label. */
+        const val UNPROCESSED_QUERY: String = "is:inbox -label:Recruiters/*"
+    }
+}
+
+/**
+ * Builds the label transition of a message that changes its state.
+ *
+ * A message carries exactly one state label: the other state labels are
+ * removed, so a message that was filtered out and is worth a follow up
+ * afterwards does not keep both labels. A message whose new state archives it
+ * loses the inbox label as well, that is how Gmail archives a message.
+ *
+ * @param stateLabelIds the ids of the state labels, missing ones are ignored.
+ * @param inboxLabelId the id of the inbox label.
+ * @return the labels to add and to remove.
+ */
+fun RecruiterLabel.transition(
+    stateLabelIds: Map<RecruiterLabel, String>,
+    inboxLabelId: String,
+): LabelTransition {
+    val add = listOfNotNull(stateLabelIds[this])
+    val remove =
+        RecruiterLabel.entries
+            .filter { it != this }
+            .mapNotNull { stateLabelIds[it] }
+            .toMutableList()
+    if (archives) {
+        remove.add(inboxLabelId)
+    }
+    return LabelTransition(add = add, remove = remove)
+}

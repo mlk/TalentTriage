@@ -27,13 +27,13 @@ import kotlinx.serialization.json.Json
  * @param httpClient the client used for the requests.
  * @param tokens provider of the access token.
  * @param baseUrl the base URL of the Gmail REST API.
- * @param json parser used for the responses.
+ * @param json parser used for the responses and for the request bodies.
  */
 class GmailApiClient(
     private val httpClient: HttpClient,
     private val tokens: RefreshingAccessTokenProvider,
     private val baseUrl: String = DEFAULT_BASE_URL,
-    private val json: Json = Json { ignoreUnknownKeys = true },
+    val json: Json = Json { ignoreUnknownKeys = true },
 ) {
     /**
      * Sends a `GET` request and decodes the answer.
