@@ -6,6 +6,7 @@ import io.ktor.client.engine.mock.respond
 import io.ktor.client.plugins.HttpRequestTimeoutException
 import io.ktor.client.plugins.HttpTimeout
 import io.ktor.http.ContentType
+import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.content.TextContent
 import io.ktor.http.headersOf
@@ -99,35 +100,24 @@ class OllamaChatClientTest {
             )
         }
 
-    fun waitsForASlowModelWhenTheTimeoutIsLongEnough() =
-        runTest {
-            val engine =
-                MockEngine {
-                    delay(10_000)
-                    respond(
-                        content = SLOW_ANSWER,
-                        status = HttpStatusCode.OK,
-                        headers = jsonHeaders(),
-                    )
-                }
-
-            val response = client(engine, timeoutMillis = 60_000).chat(request())
-
-            assertEquals("Hi there", response.content)
-        }
-
     @Test
-    fun givesUpWhenTheModelIsTooSlow() =
+    fun givesUpAfterTheConfiguredTimeout() =
         runTest {
             val engine =
                 MockEngine {
-                    delay(10_000)
+                    delay(60_000)
                     respond(content = "{}", status = HttpStatusCode.OK)
                 }
+            val started = System.nanoTime()
 
             assertFailsWith<HttpRequestTimeoutException> {
-                client(engine, timeoutMillis = 1_000).chat(request())
+                client(engine, timeoutMillis = 200).chat(request())
             }
+
+            // The timeout of the client fired, not the default of the plugin
+            // (two minutes), so the call gave up long before that.
+            val elapsedMillis = (System.nanoTime() - started) / 1_000_000
+            assertTrue(elapsedMillis < 10_000, "the call took $elapsedMillis ms")
         }
 
     @Test
@@ -198,9 +188,5 @@ class OllamaChatClientTest {
                 ),
         )
 
-    private fun jsonHeaders() = headersOf(io.ktor.http.HttpHeaders.ContentType, ContentType.Application.Json.toString())
-
-    companion object {
-        private const val SLOW_ANSWER = """{"message":{"role":"assistant","content":"Hi there"}}"""
-    }
+    private fun jsonHeaders() = headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString())
 }

@@ -40,4 +40,11 @@ class OllamaChatResponseTest {
         assertNull(options.numPredict)
         assertNull(options.seed)
     }
+
+    @Test
+    fun theRolesAreTheOnesOfTheApi() {
+        assertEquals("system", OllamaMessage.ROLE_SYSTEM)
+        assertEquals("user", OllamaMessage.ROLE_USER)
+        assertEquals("assistant", OllamaMessage.ROLE_ASSISTANT)
+    }
 }

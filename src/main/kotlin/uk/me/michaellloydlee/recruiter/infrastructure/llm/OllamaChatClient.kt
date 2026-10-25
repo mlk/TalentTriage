@@ -35,6 +35,9 @@ class OllamaChatClient(
     private val json: Json =
         Json {
             ignoreUnknownKeys = true
+            // The defaults are written on purpose: the request has to carry
+            // "stream": false, so that the API answers with the whole text
+            // instead of a stream.
             encodeDefaults = true
             explicitNulls = false
         },
@@ -58,6 +61,10 @@ class OllamaChatClient(
                 expectSuccess = false
                 timeout { requestTimeoutMillis = this@OllamaChatClient.timeoutMillis }
                 contentType(ContentType.Application.Json)
+                // The body is written by hand instead of by the content
+                // negotiation of Ktor: the client brings its own encoder, so
+                // the payload does not depend on the configuration of the
+                // HTTP client it was given.
                 setBody(json.encodeToString(OllamaChatRequest.serializer(), request))
             }
         val body = response.bodyAsText()
