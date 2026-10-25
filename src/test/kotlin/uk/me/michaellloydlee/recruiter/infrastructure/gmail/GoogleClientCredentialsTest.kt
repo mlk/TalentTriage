@@ -74,6 +74,31 @@ class GoogleClientCredentialsTest {
     }
 
     @Test
+    fun ignoresTheUnknownKeysOfTheGoogleFile() {
+        val file =
+            credentialsFile(
+                """
+                {
+                  "web": {
+                    "project_id": "my-project",
+                    "client_id": "web-client-id",
+                    "client_secret": "web-client-secret",
+                    "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+                    "token_uri": "https://oauth2.googleapis.com/token",
+                    "redirect_uris": ["http://localhost"]
+                  }
+                }
+                """.trimIndent(),
+            )
+
+        val credentials = GoogleClientCredentials.load(file)
+
+        assertEquals("web-client-id", credentials.clientId)
+        assertEquals("web-client-secret", credentials.clientSecret)
+        assertEquals(listOf("http://localhost"), credentials.redirectUris)
+    }
+
+    @Test
     fun failsWhenTheFileIsMissing() {
         val missing = Path.of("/does/not/exist/credentials.json")
 

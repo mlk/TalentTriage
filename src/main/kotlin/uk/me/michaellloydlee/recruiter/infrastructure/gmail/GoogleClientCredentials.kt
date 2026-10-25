@@ -3,12 +3,16 @@ package uk.me.michaellloydlee.recruiter.infrastructure.gmail
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonIgnoreUnknownKeys
 import kotlinx.serialization.json.jsonObject
 import java.nio.file.Files
 import java.nio.file.Path
 
 /**
  * The OAuth2 client credentials of the local Google application.
+ *
+ * The file Google downloads contains more keys than the ones used here, for
+ * example `project_id`, so the unknown keys are ignored.
  *
  * @property clientId the client id of the Google application.
  * @property clientSecret the client secret of the Google application.
@@ -17,6 +21,7 @@ import java.nio.file.Path
  * @property redirectUris the redirect URIs registered for the application.
  */
 @Serializable
+@JsonIgnoreUnknownKeys
 data class GoogleClientCredentials(
     @SerialName("client_id")
     val clientId: String,
