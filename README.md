@@ -189,12 +189,12 @@ the window is 24 hours by default.
 
 `recruiter-cli pending` lists the messages that were not processed yet, it is
 the quickest way to check that the credentials work. The pipeline only looks at
-the mail that arrived recently — the last 24 hours by default, `--since 7d`
+the mail that arrived recently — the last 24 hours by default, `--since P7D`
 looks a week back:
 
 ```bash
 recruiter-cli pending            # the last 24 hours
-recruiter-cli pending --since 7d  # the last seven days
+recruiter-cli pending --since P7D  # the last seven days
 ```
 
 ```json

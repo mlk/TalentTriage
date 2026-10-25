@@ -15,6 +15,8 @@ import uk.me.michaellloydlee.recruiter.infrastructure.gmail.GmailServices
 import uk.me.michaellloydlee.recruiter.infrastructure.gmail.GoogleClientCredentials
 import uk.me.michaellloydlee.recruiter.infrastructure.logging.StructuredLogger
 import java.nio.file.Path
+import java.time.Duration
+import java.time.format.DateTimeParseException
 
 /**
  * Lists the inbox messages that were not processed yet.
@@ -48,7 +50,7 @@ class PendingCommand(
     private val since: String by
         option(
             "--since",
-            help = "How far back the messages are looked for, for example 24h or 7d",
+            help = "How far back the messages are looked for, an ISO-8601 duration like PT24H or P1D",
         ).default(DEFAULT_SINCE)
 
     private val limit: Int by
@@ -102,9 +104,12 @@ class PendingCommand(
 
     private fun window(): MessageWindow =
         try {
-            MessageWindow(parseDuration(since))
-        } catch (error: IllegalArgumentException) {
-            throw CommandFailedException(error.message.orEmpty(), error)
+            MessageWindow(Duration.parse(since))
+        } catch (error: DateTimeParseException) {
+            throw CommandFailedException(
+                "'$since' is not a duration, use an ISO-8601 duration like PT24H or P1D",
+                error,
+            )
         }
 
     override fun help(context: Context): String = "List the inbox messages that were not processed yet."
@@ -117,6 +122,6 @@ class PendingCommand(
         const val DEFAULT_LIMIT: Int = 20
 
         /** The window the messages are looked for in by default. */
-        const val DEFAULT_SINCE: String = "24h"
+        const val DEFAULT_SINCE: String = "PT24H"
     }
 }
