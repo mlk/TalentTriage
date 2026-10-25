@@ -61,6 +61,17 @@ class FileOAuth2TokenStoreTest {
             assertEquals("second-token", store.load()?.accessToken)
         }
 
+    @Test
+    fun leavesNoTemporaryFilesBehind() =
+        runTest {
+            val directory = tempDirectory()
+            val store = FileOAuth2TokenStore(directory.resolve("token.json"))
+
+            store.save(OAuth2Token(accessToken = "access-token"))
+
+            assertEquals(listOf("token.json"), directory.toFile().list()!!.toList())
+        }
+
     private fun tempDirectory(): Path = createTempDirectory("token-store")
 
     private fun tempFile(): Path = tempDirectory().resolve("token.json")
