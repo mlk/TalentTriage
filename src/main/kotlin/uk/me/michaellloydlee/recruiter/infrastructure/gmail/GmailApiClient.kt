@@ -2,6 +2,7 @@ package uk.me.michaellloydlee.recruiter.infrastructure.gmail
 
 import io.ktor.client.HttpClient
 import io.ktor.client.plugins.expectSuccess
+import io.ktor.client.request.HttpRequestBuilder
 import io.ktor.client.request.bearerAuth
 import io.ktor.client.request.request
 import io.ktor.client.request.setBody
@@ -70,7 +71,7 @@ class GmailApiClient(
 
     private suspend fun <T> execute(
         deserializer: DeserializationStrategy<T>,
-        request: io.ktor.client.request.HttpRequestBuilder.() -> Unit,
+        request: HttpRequestBuilder.() -> Unit,
     ): T {
         val response = send(request, tokens.accessToken())
         val authenticated =
@@ -87,7 +88,7 @@ class GmailApiClient(
     }
 
     private suspend fun send(
-        request: io.ktor.client.request.HttpRequestBuilder.() -> Unit,
+        request: HttpRequestBuilder.() -> Unit,
         accessToken: String,
     ): HttpResponse =
         httpClient.request {
