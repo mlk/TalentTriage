@@ -20,16 +20,15 @@ object TextCleanup {
             .replace(WINDOWS_LINE_ENDING, "\n")
             .replace('\r', '\n')
             .replace('\t', ' ')
-            .filter { it == '\n' || it == ' ' || (!it.isISOControl() && it != SOFT_HYPHEN && it != BYTE_ORDER_MARK) }
-            .replace(HORIZONTAL_WHITESPACE, " ")
+            .filter {
+                it == '\n' || it == ' ' || (!it.isISOControl() && Character.getType(it) != Character.FORMAT.toInt())
+            }.replace(HORIZONTAL_WHITESPACE, " ")
             .lines()
             .joinToString(separator = "\n") { it.trim() }
             .replace(EMPTY_LINES, "\n\n")
             .trim()
 
     private const val WINDOWS_LINE_ENDING = "\r\n"
-    private const val SOFT_HYPHEN = '\u00AD'
-    private const val BYTE_ORDER_MARK = '\uFEFF'
     private val HORIZONTAL_WHITESPACE = Regex(" +")
     private val EMPTY_LINES = Regex("\n{3,}")
 }
