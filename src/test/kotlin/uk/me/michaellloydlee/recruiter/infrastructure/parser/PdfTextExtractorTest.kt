@@ -46,6 +46,25 @@ class PdfTextExtractorTest {
     }
 
     @Test
+    fun reportsAPasswordProtectedDocumentAsAFailure() {
+        val result = PdfTextExtractor().extract(TestDocuments.protectedPdf())
+
+        assertTrue(result is ExtractionResult.Failed)
+        assertTrue(result.reason.contains("password protected"))
+    }
+
+    @Test
+    fun readsTheTextWithoutSortingByPosition() {
+        val content = TestDocuments.pdfWith(listOf("Hello recruiter", "Your CV was received."))
+
+        val result = PdfTextExtractor(sortByPosition = false).extract(content)
+
+        val text = (result as ExtractionResult.Extracted).text
+        assertTrue(text.contains("Hello recruiter"))
+        assertTrue(text.contains("Your CV was received."))
+    }
+
+    @Test
     fun reportsADocumentWithoutTextAsEmpty() {
         val content = TestDocuments.pdfWith(emptyList())
 

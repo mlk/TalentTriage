@@ -47,6 +47,14 @@ class TextCleanupTest {
     }
 
     @Test
+    fun removesTheZeroWidthCharacters() {
+        assertEquals("Helloworld", TextCleanup.clean("Hello\u200Bworld"))
+        assertEquals("Helloworld", TextCleanup.clean("Hello\u200Cworld"))
+        assertEquals("Helloworld", TextCleanup.clean("Hello\u200Dworld"))
+        assertEquals("Helloworld", TextCleanup.clean("Hello\u2060world"))
+    }
+
+    @Test
     fun removesTheSurroundingEmptyLines() {
         assertEquals("Hello", TextCleanup.clean("\n\n  Hello  \n\n"))
     }
