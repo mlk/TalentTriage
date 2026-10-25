@@ -18,8 +18,10 @@ sealed interface ExtractionResult {
      * The document could not be read.
      *
      * @property reason what went wrong, the pipeline logs it and moves on.
+     * @property cause the exception that broke the extraction, if there was one.
      */
     data class Failed(
         val reason: String,
+        val cause: Throwable? = null,
     ) : ExtractionResult
 }

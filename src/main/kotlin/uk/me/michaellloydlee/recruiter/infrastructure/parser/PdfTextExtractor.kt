@@ -1,6 +1,7 @@
 package uk.me.michaellloydlee.recruiter.infrastructure.parser
 
 import org.apache.pdfbox.Loader
+import org.apache.pdfbox.pdmodel.encryption.InvalidPasswordException
 import org.apache.pdfbox.text.PDFTextStripper
 import java.io.IOException
 
@@ -17,6 +18,7 @@ import java.io.IOException
 class PdfTextExtractor(
     private val sortByPosition: Boolean = true,
 ) : DocumentTextExtractor {
+    @Suppress("TooGenericExceptionCaught")
     override fun extract(content: ByteArray): ExtractionResult =
         try {
             Loader.loadPDF(content).use { document ->
@@ -26,7 +28,11 @@ class PdfTextExtractor(
                         .getText(document)
                 ExtractionResult.Extracted(TextCleanup.clean(text))
             }
-        } catch (error: IOException) {
-            ExtractionResult.Failed("The PDF could not be read: ${error.message}")
+        } catch (error: InvalidPasswordException) {
+            ExtractionResult.Failed("The PDF is password protected and could not be read", error)
+        } catch (error: Exception) {
+            // The content is arbitrary bytes, PDFBox can fail in many ways.
+            // The contract of the extractor is that it never throws.
+            ExtractionResult.Failed("The PDF could not be read: ${error.message}", error)
         }
 }
