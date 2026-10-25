@@ -26,7 +26,9 @@ import java.util.UUID
  * open, with the code it exchanges the code for a token and stores it.
  *
  * @param logger sink for the structured log output.
- * @param httpClientFactory creates the client used for the token requests.
+ * @param httpClientFactory creates the client used for the token requests. It
+ *   is called once per invocation and the client is closed when the command
+ *   is done, so the factory must return a fresh client every time.
  */
 class AuthenticateCommand(
     private val logger: StructuredLogger,
