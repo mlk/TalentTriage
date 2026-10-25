@@ -12,10 +12,6 @@ ktlint = "1.8.0"
 ktlintPlugin = "14.2.0"
 
 [libraries]
-# Tracking entry for the JaCoCo coverage tool: the agent version is the
-# version of the tool itself (jacoco { toolVersion = ... }), and Dependabot
-# updates it through this reference.
-jacoco-agent = { module = "org.jacoco:org.jacoco.agent", version.ref = "jacoco" }
 clikt = { module = "com.github.ajalt.clikt:clikt", version.ref = "clikt" }
 junit-bom = { module = "org.junit:junit-bom", version.ref = "junit" }
 junit-platform-launcher = { module = "org.junit.platform:junit-platform-launcher" }
