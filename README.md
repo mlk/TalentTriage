@@ -269,6 +269,10 @@ Configuration lives in:
 * `config/detekt/detekt.yml` — detekt rule configuration
 * `.editorconfig` — ktlint/IDE formatting rules
 
+The conventions of the repository (architecture, the rules for interfaces and
+error handling, the testing conventions) are documented in
+[`AGENTS.md`](AGENTS.md).
+
 ---
 
 ## 📁 Project Layout
