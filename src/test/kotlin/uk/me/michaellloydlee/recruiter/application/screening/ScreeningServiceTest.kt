@@ -137,7 +137,7 @@ class ScreeningServiceTest {
         val messages = GmailMessagesApi(api)
         return ScreeningService(
             heuristics = RecruiterHeuristics(),
-            classifier = LocalLlmClassifier(client),
+            classifier = RecruiterVerificationClassifier(client),
             stateManager = GmailLabelStateManager(messages, GmailLabelsApi(api)),
         )
     }

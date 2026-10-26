@@ -9,23 +9,26 @@ import uk.me.michaellloydlee.recruiter.infrastructure.llm.OllamaOptions
 import java.io.IOException
 
 /**
- * Asks the screening model whether a message is a recruiter mail.
+ * Asks the recruiter verification model whether a message is a recruiter mail.
  *
  * The model runs on the local Ollama instance, which may forward the request
  * to a cloud model: the answer only has to be a yes or a no, so the latency
- * stays low.
+ * stays low. Every step of the pipeline will have its own model - the
+ * recruiter verification here, the verification of the job descriptions and
+ the answers to the recruiters later.
  *
  * A model that cannot be reached does not decide: the answer is
  * [LocalClassification.Unavailable] and the message is left alone, a recruiter
  * mail must not be filtered out because the model was down.
  *
  * @param client the client of the local Ollama instance.
- * @param model the name of the model.
+ * @param recruiterVerificationModel the name of the model of the recruiter
+ *   verification.
  * @param maxBodyLength how many characters of the body go into the prompt.
  */
-class LocalLlmClassifier(
+class RecruiterVerificationClassifier(
     private val client: OllamaChatClient,
-    private val model: String = DEFAULT_MODEL,
+    private val recruiterVerificationModel: String = DEFAULT_RECRUITER_VERIFICATION_MODEL,
     private val maxBodyLength: Int = DEFAULT_MAX_BODY_LENGTH,
 ) {
     /**
@@ -39,7 +42,7 @@ class LocalLlmClassifier(
             val response =
                 client.chat(
                     OllamaChatRequest(
-                        model = model,
+                        model = recruiterVerificationModel,
                         stream = false,
                         options = OllamaOptions(temperature = 0.0),
                         messages =
@@ -51,9 +54,13 @@ class LocalLlmClassifier(
                 )
             answer(response.content)
         } catch (error: OllamaException) {
-            LocalClassification.Unavailable("The local model answered with an error: ${error.message}")
+            LocalClassification.Unavailable(
+                "The model of the recruiter verification answered with an error: ${error.message}",
+            )
         } catch (error: IOException) {
-            LocalClassification.Unavailable("The local model could not be reached: ${error.message}")
+            LocalClassification.Unavailable(
+                "The model of the recruiter verification could not be reached: ${error.message}",
+            )
         }
 
     /**
@@ -68,10 +75,23 @@ class LocalLlmClassifier(
     private fun answer(content: String): LocalClassification {
         val answer = content.trim().lowercase()
         return when {
-            answer.isEmpty() -> LocalClassification.Unavailable("The local model did not answer")
-            answer.startsWith(ANSWER_YES) -> LocalClassification.Recruiter
-            answer.startsWith(ANSWER_NO) -> LocalClassification.NotRecruiter
-            else -> LocalClassification.Unavailable("The local model answered with '$content'")
+            answer.isEmpty() -> {
+                LocalClassification.Unavailable(
+                    "The model of the recruiter verification did not answer",
+                )
+            }
+
+            answer.startsWith(ANSWER_YES) -> {
+                LocalClassification.Recruiter
+            }
+
+            answer.startsWith(ANSWER_NO) -> {
+                LocalClassification.NotRecruiter
+            }
+
+            else -> {
+                LocalClassification.Unavailable("The model of the recruiter verification answered with '$content'")
+            }
         }
     }
 
@@ -84,8 +104,8 @@ class LocalLlmClassifier(
         """.trimIndent()
 
     companion object {
-        /** The model of the screening. */
-        const val DEFAULT_MODEL: String = "minimax-m3.1-flash:cloud"
+        /** The model of the recruiter verification. */
+        const val DEFAULT_RECRUITER_VERIFICATION_MODEL: String = "minimax-m3.1-flash:cloud"
 
         /** How many characters of the body go into the prompt by default. */
         const val DEFAULT_MAX_BODY_LENGTH: Int = 4_000

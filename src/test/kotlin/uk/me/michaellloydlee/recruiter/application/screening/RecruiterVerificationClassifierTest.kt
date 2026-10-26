@@ -20,7 +20,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
-class LocalLlmClassifierTest {
+class RecruiterVerificationClassifierTest {
     @Test
     fun readsTheYesOfTheModel() =
         runTest {
@@ -135,9 +135,9 @@ class LocalLlmClassifierTest {
 
     private fun classifier(
         engine: MockEngine,
-        maxBodyLength: Int = LocalLlmClassifier.DEFAULT_MAX_BODY_LENGTH,
-    ): LocalLlmClassifier =
-        LocalLlmClassifier(
+        maxBodyLength: Int = RecruiterVerificationClassifier.DEFAULT_MAX_BODY_LENGTH,
+    ): RecruiterVerificationClassifier =
+        RecruiterVerificationClassifier(
             client =
                 OllamaChatClient(
                     httpClient =

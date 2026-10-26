@@ -27,7 +27,7 @@ import uk.me.michaellloydlee.recruiter.infrastructure.gmail.GmailLabelStateManag
  */
 class ScreeningService(
     private val heuristics: RecruiterHeuristics,
-    private val classifier: LocalLlmClassifier,
+    private val classifier: RecruiterVerificationClassifier,
     private val stateManager: GmailLabelStateManager,
 ) {
     /**

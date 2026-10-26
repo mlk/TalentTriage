@@ -6,7 +6,7 @@ import com.github.ajalt.clikt.parameters.options.default
 import com.github.ajalt.clikt.parameters.options.option
 import io.ktor.client.HttpClient
 import uk.me.michaellloydlee.recruiter.application.ProcessInboxService
-import uk.me.michaellloydlee.recruiter.application.screening.LocalLlmClassifier
+import uk.me.michaellloydlee.recruiter.application.screening.RecruiterVerificationClassifier
 import uk.me.michaellloydlee.recruiter.application.screening.ScreeningService
 import uk.me.michaellloydlee.recruiter.domain.screening.RecruiterHeuristics
 import uk.me.michaellloydlee.recruiter.infrastructure.gmail.FileOAuth2TokenStore
@@ -30,7 +30,7 @@ import java.nio.file.Path
  *
  * @param logger sink for the structured log output of the run.
  * @param httpClientFactory creates the client used to talk to Google and to
- *   the local model. It is called once per invocation and the client is closed
+ *   the models of the pipeline. It is called once per invocation and the client is closed
  *   when the command is done, so the factory must return a fresh client every
  *   time.
  */
@@ -52,12 +52,12 @@ class ProcessInboxCommand(
             help = "The file the OAuth2 token is stored in",
         ).default(AuthenticateCommand.DEFAULT_TOKEN_FILE)
 
-    private val model: String by
+    private val recruiterVerificationModel: String by
         option(
-            "--model",
+            "--recruiter-verification-model",
             "-m",
-            help = "The local model that screens the messages",
-        ).default(LocalLlmClassifier.DEFAULT_MODEL)
+            help = "The model that verifies whether a message is a recruiter mail",
+        ).default(RecruiterVerificationClassifier.DEFAULT_RECRUITER_VERIFICATION_MODEL)
 
     override suspend fun run() {
         logger.info(
@@ -81,7 +81,11 @@ class ProcessInboxCommand(
             val screening =
                 ScreeningService(
                     heuristics = RecruiterHeuristics(),
-                    classifier = LocalLlmClassifier(OllamaChatClient(client), model = model),
+                    classifier =
+                        RecruiterVerificationClassifier(
+                            OllamaChatClient(client),
+                            recruiterVerificationModel = recruiterVerificationModel,
+                        ),
                     stateManager = gmail.stateManager,
                 )
             val summary =
