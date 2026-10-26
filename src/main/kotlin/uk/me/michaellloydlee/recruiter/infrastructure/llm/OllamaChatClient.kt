@@ -62,9 +62,9 @@ class OllamaChatClient(
                 timeout { requestTimeoutMillis = this@OllamaChatClient.timeoutMillis }
                 contentType(ContentType.Application.Json)
                 // The body is written by hand instead of by the content
-                // negotiation of Ktor: the client brings its own encoder, so
-                // the payload does not depend on the configuration of the
-                // HTTP client it was given.
+                // negotiation of Ktor: the payload has to be the same no
+                // matter how the HTTP client was configured, and the caller
+                // should not have to install the content negotiation for it.
                 setBody(json.encodeToString(OllamaChatRequest.serializer(), request))
             }
         val body = response.bodyAsText()
