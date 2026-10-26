@@ -10,11 +10,13 @@ import uk.me.michaellloydlee.recruiter.application.screening.LocalLlmClassifier
 import uk.me.michaellloydlee.recruiter.application.screening.ScreeningService
 import uk.me.michaellloydlee.recruiter.domain.screening.RecruiterHeuristics
 import uk.me.michaellloydlee.recruiter.infrastructure.gmail.FileOAuth2TokenStore
+import uk.me.michaellloydlee.recruiter.infrastructure.gmail.GmailApiException
 import uk.me.michaellloydlee.recruiter.infrastructure.gmail.GmailAuthenticationException
 import uk.me.michaellloydlee.recruiter.infrastructure.gmail.GmailHttpClientFactory
 import uk.me.michaellloydlee.recruiter.infrastructure.gmail.GmailServices
 import uk.me.michaellloydlee.recruiter.infrastructure.gmail.GoogleClientCredentials
 import uk.me.michaellloydlee.recruiter.infrastructure.llm.OllamaChatClient
+import uk.me.michaellloydlee.recruiter.infrastructure.llm.OllamaException
 import uk.me.michaellloydlee.recruiter.infrastructure.logging.StructuredLogger
 import java.nio.file.Path
 
@@ -82,7 +84,14 @@ class ProcessInboxCommand(
                     classifier = LocalLlmClassifier(OllamaChatClient(client), model = model),
                     stateManager = gmail.stateManager,
                 )
-            val summary = ProcessInboxService(gmail.messages, screening).run()
+            val summary =
+                try {
+                    ProcessInboxService(gmail.messages, screening).run()
+                } catch (error: GmailApiException) {
+                    throw CommandFailedException(error.message.orEmpty(), error)
+                } catch (error: OllamaException) {
+                    throw CommandFailedException(error.message.orEmpty(), error)
+                }
             logger.info(
                 event = "$COMMAND_NAME.completed",
                 message = "Inbox triage run completed",

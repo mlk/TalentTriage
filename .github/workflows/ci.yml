@@ -38,10 +38,13 @@ jobs:
       - name: Quality gates (tests, ktlint, detekt, coverage report + 80% verification)
         run: ./gradlew check jacocoTestReport --continue
 
+      # The run itself needs a Google account, so the check is that the
+      # executable and the commands are wired.
       - name: Verify the CLI entry point
         run: |
           ./gradlew installDist
-          build/install/recruiter-cli/bin/recruiter-cli process-inbox
+          build/install/recruiter-cli/bin/recruiter-cli --help
+          build/install/recruiter-cli/bin/recruiter-cli process-inbox --help
 
       - name: Upload test reports
         if: always()
