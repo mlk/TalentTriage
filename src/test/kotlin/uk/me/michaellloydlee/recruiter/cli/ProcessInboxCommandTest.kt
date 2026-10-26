@@ -6,6 +6,7 @@ import io.ktor.client.engine.mock.MockEngine
 import io.ktor.client.engine.mock.respond
 import io.ktor.client.plugins.HttpTimeout
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
+import io.ktor.client.request.HttpRequestData
 import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
@@ -25,21 +26,17 @@ import kotlin.test.assertTrue
 
 class ProcessInboxCommandTest {
     @Test
-    fun screensTheUnprocessedMessages() =
+    fun screensTheUnprocessedMessagesWithTheDecisionModel() =
         runTest {
             val sink = StringBuilder()
             val engine = engine()
 
             val result =
-                cli(sink) {
-                    HttpClient(engine) {
-                        install(HttpTimeout)
-                        install(ContentNegotiation) { json(JSON) }
-                    }
-                }.test(
-                    "process-inbox --credentials ${credentialsFile()} " +
-                        "--token ${tokenFile()}",
-                )
+                cli(sink) { mockClient(engine) }
+                    .test(
+                        "process-inbox --credentials ${credentialsFile()} " +
+                            "--token ${tokenFile()}",
+                    )
 
             assertEquals(0, result.statusCode)
             val records = records(sink)
@@ -48,6 +45,35 @@ class ProcessInboxCommandTest {
             assertEquals("process-inbox.completed", completed.event)
             assertEquals("1", completed.attributes["screened"])
             assertEquals("1", completed.attributes["filtered_out"])
+            assertTrue(engine.requestHistory.any { it.url.encodedPath.endsWith("/v1/systemone") })
+        }
+
+    @Test
+    fun screensTheUnprocessedMessagesWithTheChatModel() =
+        runTest {
+            val sink = StringBuilder()
+            val engine = engine()
+
+            val result =
+                cli(sink) { mockClient(engine) }
+                    .test(
+                        "process-inbox --recruiter-verification=llm " +
+                            "--credentials ${credentialsFile()} " +
+                            "--token ${tokenFile()}",
+                    )
+
+            assertEquals(0, result.statusCode)
+            assertTrue(engine.requestHistory.any { it.url.encodedPath.endsWith("/api/chat") })
+        }
+
+    @Test
+    fun failsOnAnUnknownVerification() =
+        runTest {
+            val sink = StringBuilder()
+
+            val result = cli(sink).test("process-inbox --recruiter-verification=magic")
+
+            assertEquals(1, result.statusCode)
         }
 
     @Test
@@ -62,58 +88,40 @@ class ProcessInboxCommandTest {
 
     private fun engine(): MockEngine =
         MockEngine { request ->
-            when {
-                request.url.encodedPath.endsWith("/users/me/messages") -> {
-                    respond(
-                        content = """{"messages":[{"id":"message-id","threadId":"thread-id"}]}""",
-                        status = HttpStatusCode.OK,
-                        headers = jsonHeaders(),
-                    )
-                }
+            respond(
+                content = contentFor(request),
+                status = HttpStatusCode.OK,
+                headers = jsonHeaders(),
+            )
+        }
 
-                request.url.encodedPath.endsWith("/users/me/labels") && request.method.value == "GET" -> {
-                    respond(
-                        content = """{"labels":[{"id":"Label_filteredout","name":"Recruiters/FilteredOut"}]}""",
-                        status = HttpStatusCode.OK,
-                        headers = jsonHeaders(),
-                    )
-                }
-
-                request.url.encodedPath.endsWith("/users/me/labels") -> {
-                    respond(
-                        content = """{"id":"Label_filteredout","name":"Recruiters/FilteredOut"}""",
-                        status = HttpStatusCode.OK,
-                        headers = jsonHeaders(),
-                    )
-                }
-
-                request.url.encodedPath.endsWith("/api/chat") -> {
-                    respond(
-                        content = """{"message":{"role":"assistant","content":"no"},"done":true}""",
-                        status = HttpStatusCode.OK,
-                        headers = jsonHeaders(),
-                    )
-                }
-
-                else -> {
-                    respond(
-                        content =
-                            """
-                            {
-                              "id": "message-id",
-                              "threadId": "thread-id",
-                              "payload": {
-                                "mimeType": "text/plain",
-                                "headers": [{"name": "Subject", "value": "Your CV"}],
-                                "body": {"data": "WWUgbG9va2luZyBmb3IgYSBkZXZlbG9wZXI="}
-                              }
-                            }
-                            """.trimIndent(),
-                        status = HttpStatusCode.OK,
-                        headers = jsonHeaders(),
-                    )
-                }
+    private fun contentFor(request: HttpRequestData): String =
+        when {
+            request.url.encodedPath.endsWith("/v1/systemone") -> {
+                DECISION_ANSWER
             }
+
+            request.url.encodedPath.endsWith("/api/chat") -> {
+                CHAT_ANSWER
+            }
+
+            request.url.encodedPath.endsWith("/users/me/messages") -> {
+                MESSAGE_LIST
+            }
+
+            request.url.encodedPath.endsWith("/users/me/labels") -> {
+                if (request.method.value == "GET") LABEL_LIST else LABEL
+            }
+
+            else -> {
+                MESSAGE
+            }
+        }
+
+    private fun mockClient(engine: MockEngine): HttpClient =
+        HttpClient(engine) {
+            install(HttpTimeout)
+            install(ContentNegotiation) { json(JSON) }
         }
 
     private fun cli(
@@ -151,5 +159,35 @@ class ProcessInboxCommandTest {
                 ignoreUnknownKeys = true
                 encodeDefaults = true
             }
+
+        private const val DECISION_ANSWER =
+            """{"model":"clef:cloud","answers":{"recruiter":{"type":"choice",
+            "choice":"not from a recruiter","probabilities":{"not from a recruiter":0.9},
+            "confidence":0.9}},"usage":{"input_tokens":10,"output_tokens":1}}"""
+
+        private const val CHAT_ANSWER =
+            """{"message":{"role":"assistant","content":"no"},"done":true}"""
+
+        private const val MESSAGE_LIST =
+            """{"messages":[{"id":"message-id","threadId":"thread-id"}]}"""
+
+        private const val LABEL_LIST =
+            """{"labels":[{"id":"Label_filteredout","name":"Recruiters/FilteredOut"}]}"""
+
+        private const val LABEL =
+            """{"id":"Label_filteredout","name":"Recruiters/FilteredOut"}"""
+
+        private val MESSAGE =
+            """
+            {
+              "id": "message-id",
+              "threadId": "thread-id",
+              "payload": {
+                "mimeType": "text/plain",
+                "headers": [{"name": "Subject", "value": "Your CV"}],
+                "body": {"data": "WWUgbG9va2luZyBmb3IgYSBkZXZlbG9wZXI="}
+              }
+            }
+            """.trimIndent()
     }
 }

@@ -12,7 +12,7 @@ import io.ktor.http.headersOf
 import io.ktor.serialization.kotlinx.json.json
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
-import uk.me.michaellloydlee.recruiter.application.screening.RecruiterVerificationClassifier
+import uk.me.michaellloydlee.recruiter.application.screening.ChatModelVerifier
 import uk.me.michaellloydlee.recruiter.application.screening.ScreeningService
 import uk.me.michaellloydlee.recruiter.domain.gmail.EmailMessage
 import uk.me.michaellloydlee.recruiter.domain.screening.RecruiterHeuristics
@@ -115,8 +115,8 @@ class ProcessInboxServiceTest {
             screening =
                 ScreeningService(
                     heuristics = RecruiterHeuristics(),
-                    classifier =
-                        RecruiterVerificationClassifier(
+                    verifier =
+                        ChatModelVerifier(
                             OllamaChatClient(
                                 httpClient =
                                     HttpClient(model) {

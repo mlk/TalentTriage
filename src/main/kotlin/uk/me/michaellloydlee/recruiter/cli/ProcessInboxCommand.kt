@@ -4,9 +4,13 @@ import com.github.ajalt.clikt.command.SuspendingCliktCommand
 import com.github.ajalt.clikt.core.Context
 import com.github.ajalt.clikt.parameters.options.default
 import com.github.ajalt.clikt.parameters.options.option
+import com.github.ajalt.clikt.parameters.types.enum
 import io.ktor.client.HttpClient
 import uk.me.michaellloydlee.recruiter.application.ProcessInboxService
-import uk.me.michaellloydlee.recruiter.application.screening.RecruiterVerificationClassifier
+import uk.me.michaellloydlee.recruiter.application.screening.ChatModelVerifier
+import uk.me.michaellloydlee.recruiter.application.screening.DecisionModelVerifier
+import uk.me.michaellloydlee.recruiter.application.screening.RecruiterVerificationMode
+import uk.me.michaellloydlee.recruiter.application.screening.RecruiterVerifier
 import uk.me.michaellloydlee.recruiter.application.screening.ScreeningService
 import uk.me.michaellloydlee.recruiter.domain.screening.RecruiterHeuristics
 import uk.me.michaellloydlee.recruiter.infrastructure.gmail.FileOAuth2TokenStore
@@ -16,6 +20,7 @@ import uk.me.michaellloydlee.recruiter.infrastructure.gmail.GmailHttpClientFacto
 import uk.me.michaellloydlee.recruiter.infrastructure.gmail.GmailServices
 import uk.me.michaellloydlee.recruiter.infrastructure.gmail.GoogleClientCredentials
 import uk.me.michaellloydlee.recruiter.infrastructure.llm.OllamaChatClient
+import uk.me.michaellloydlee.recruiter.infrastructure.llm.OllamaDecisionClient
 import uk.me.michaellloydlee.recruiter.infrastructure.llm.OllamaException
 import uk.me.michaellloydlee.recruiter.infrastructure.logging.StructuredLogger
 import java.nio.file.Path
@@ -52,12 +57,21 @@ class ProcessInboxCommand(
             help = "The file the OAuth2 token is stored in",
         ).default(AuthenticateCommand.DEFAULT_TOKEN_FILE)
 
+    private val recruiterVerification: RecruiterVerificationMode by
+        option(
+            "--recruiter-verification",
+            "-r",
+            help = "How the messages are verified: a decision model of Ollama or a chat model",
+        ).enum<RecruiterVerificationMode>().default(RecruiterVerificationMode.DECISION, defaultForHelp = "decision")
+
     private val recruiterVerificationModel: String by
         option(
             "--recruiter-verification-model",
             "-m",
-            help = "The model that verifies whether a message is a recruiter mail",
-        ).default(RecruiterVerificationClassifier.DEFAULT_RECRUITER_VERIFICATION_MODEL)
+            help =
+                "The model that verifies the messages: the decision models are nimble, tev1, " +
+                    "clef and clef:cloud, a chat model is needed for --recruiter-verification=llm",
+        ).default(DecisionModelVerifier.DEFAULT_MODEL)
 
     override suspend fun run() {
         logger.info(
@@ -81,11 +95,7 @@ class ProcessInboxCommand(
             val screening =
                 ScreeningService(
                     heuristics = RecruiterHeuristics(),
-                    classifier =
-                        RecruiterVerificationClassifier(
-                            OllamaChatClient(client),
-                            recruiterVerificationModel = recruiterVerificationModel,
-                        ),
+                    verifier = verifier(client),
                     stateManager = gmail.stateManager,
                 )
             val summary =
@@ -109,6 +119,27 @@ class ProcessInboxCommand(
             )
         }
     }
+
+    /**
+     * The verifier of the recruiter verification, the decision model of Ollama
+     * or a chat model.
+     */
+    private fun verifier(client: HttpClient): RecruiterVerifier =
+        when (recruiterVerification) {
+            RecruiterVerificationMode.DECISION -> {
+                DecisionModelVerifier(
+                    client = OllamaDecisionClient(client),
+                    model = recruiterVerificationModel,
+                )
+            }
+
+            else -> {
+                ChatModelVerifier(
+                    client = OllamaChatClient(client),
+                    model = recruiterVerificationModel,
+                )
+            }
+        }
 
     override fun help(context: Context): String = "Fetch, triage and label the unprocessed messages of the inbox."
 

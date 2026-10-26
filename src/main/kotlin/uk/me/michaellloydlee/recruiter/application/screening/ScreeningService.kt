@@ -22,12 +22,12 @@ import uk.me.michaellloydlee.recruiter.infrastructure.gmail.GmailLabelStateManag
  * stays in the inbox and is looked at again by the next run.
  *
  * @param heuristics the rules of the first stage.
- * @param classifier the local model of the second stage.
+ * @param verifier the model of the second stage.
  * @param stateManager applies the state label of a filtered out message.
  */
 class ScreeningService(
     private val heuristics: RecruiterHeuristics,
-    private val classifier: RecruiterVerificationClassifier,
+    private val verifier: RecruiterVerifier,
     private val stateManager: GmailLabelStateManager,
 ) {
     /**
@@ -46,8 +46,8 @@ class ScreeningService(
                 reason = reason,
             )
         }
-        return when (val answer = classifier.classify(message)) {
-            LocalClassification.Recruiter -> {
+        return when (val answer = verifier.verify(message)) {
+            RecruiterVerification.Recruiter -> {
                 ScreeningOutcome(
                     decision = ScreeningDecision.RECRUITER,
                     stage = ScreeningStage.LOCAL_MODEL,
@@ -55,7 +55,7 @@ class ScreeningService(
                 )
             }
 
-            LocalClassification.NotRecruiter -> {
+            RecruiterVerification.NotRecruiter -> {
                 val reason = "The local model does not see a recruiter mail in it"
                 stateManager.apply(message.id, RecruiterLabel.FILTERED_OUT)
                 ScreeningOutcome(
@@ -65,7 +65,7 @@ class ScreeningService(
                 )
             }
 
-            is LocalClassification.Unavailable -> {
+            is RecruiterVerification.Unknown -> {
                 ScreeningOutcome(
                     decision = ScreeningDecision.UNKNOWN,
                     stage = ScreeningStage.LOCAL_MODEL,
