@@ -144,6 +144,14 @@ The executable is `recruiter-cli`. Every operation is a subcommand:
 # build/install/recruiter-cli/bin/recruiter-cli pending
 ```
 
+`process-inbox` fetches the messages of the inbox that were not processed yet
+and screens them: the ones that are not recruiter mails are filtered out with
+the label `Recruiters/FilteredOut`, the recruiter mails are counted for the
+deep evaluation that comes with its own story. The screening asks the model of the
+local Ollama instance (`minimax-m3.1-flash:cloud` by default,
+`--recruiter-verification-model` changes it — every step of the pipeline gets its
+own model).
+
 or, without installing the distribution:
 
 ```bash
@@ -282,8 +290,12 @@ error handling, the testing conventions) are documented in
 ```
 src/main/kotlin/uk/me/michaellloydlee/recruiter/
 ├── application/       # Use cases / orchestration
+│   └── screening/     # The heuristic pre-filter and the local classifier
+│                      # (the pipeline of the process-inbox command)
 ├── cli/               # Command line entry point (Clikt commands)
 ├── domain/            # Pure domain model, no infrastructure dependencies
+│   ├── gmail/         # The state labels of the pipeline
+│   └── screening/     # The rules of the screening
 └── infrastructure/    # Gmail, Ollama, PDF/Word adapters, logging
     ├── gmail/         # OAuth2 credentials, token store, Gmail REST client, label state
     ├── llm/           # Ollama chat client (local models and the AirLLM wrapper)

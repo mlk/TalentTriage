@@ -44,13 +44,41 @@ class OllamaChatClientTest {
 
             val body = (engine.requestHistory.single().body as TextContent).text
             val json = Json.parseToJsonElement(body).jsonObject
-            assertEquals("llama3.2:3b", json["model"]?.jsonPrimitive?.content)
+            assertEquals("minimax-m3.1-flash:cloud", json["model"]?.jsonPrimitive?.content)
             assertEquals(false, json["stream"]?.jsonPrimitive?.content?.toBoolean())
             val messages = json["messages"]!!.jsonArray.map { it.jsonObject }
             assertEquals(2, messages.size)
             assertEquals("user", messages.first()["role"]?.jsonPrimitive?.content)
             assertEquals("Hello", messages.first()["content"]?.jsonPrimitive?.content)
             assertEquals("assistant", messages.last()["role"]?.jsonPrimitive?.content)
+        }
+
+    @Test
+    fun alwaysAsksForTheWholeAnswer() =
+        runTest {
+            val engine = engine()
+
+            client(engine).chat(request())
+
+            val body = (engine.requestHistory.single().body as TextContent).text
+            assertTrue(body.contains("\"stream\":false"))
+        }
+
+    @Test
+    fun failsWithAReadableErrorWhenTheApiStreamsTheAnswer() =
+        runTest {
+            val engine =
+                MockEngine {
+                    respond(
+                        content = "{\"model\":\"qwen:1.8b\",\"message\":{\"role\":\"assistant\",\"content\":\"no\"}}",
+                        status = HttpStatusCode.OK,
+                        headers = headersOf(HttpHeaders.ContentType, "application/x-ndjson"),
+                    )
+                }
+
+            val error = assertFailsWith<OllamaException> { client(engine).chat(request()) }
+
+            assertTrue(error.body.contains("application/x-ndjson"))
         }
 
     @Test
@@ -190,7 +218,8 @@ class OllamaChatClientTest {
 
     private fun request(): OllamaChatRequest =
         OllamaChatRequest(
-            model = "llama3.2:3b",
+            model = "minimax-m3.1-flash:cloud",
+            stream = false,
             messages =
                 listOf(
                     OllamaMessage(role = OllamaMessage.ROLE_USER, content = "Hello"),
