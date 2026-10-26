@@ -5,6 +5,7 @@ import uk.me.michaellloydlee.recruiter.infrastructure.llm.OllamaChatClient
 import uk.me.michaellloydlee.recruiter.infrastructure.llm.OllamaChatRequest
 import uk.me.michaellloydlee.recruiter.infrastructure.llm.OllamaException
 import uk.me.michaellloydlee.recruiter.infrastructure.llm.OllamaMessage
+import uk.me.michaellloydlee.recruiter.infrastructure.llm.OllamaOptions
 import java.io.IOException
 
 /**
@@ -40,6 +41,7 @@ class LocalLlmClassifier(
                     OllamaChatRequest(
                         model = model,
                         stream = false,
+                        options = OllamaOptions(temperature = 0.0),
                         messages =
                             listOf(
                                 OllamaMessage(role = OllamaMessage.ROLE_SYSTEM, content = SYSTEM_PROMPT),
@@ -58,18 +60,18 @@ class LocalLlmClassifier(
      * Reads the answer of the model.
      *
      * The model is asked for one word, but it does not always obey: an answer
-     * that starts with "yes" counts as a yes, everything else as a no. An
-     * empty answer is no answer at all.
+     * that starts with "yes" counts as a yes and one that starts with "no" as
+     * a no. Everything else is no answer at all - a small model sometimes
+     * answers with something else entirely, and that must not be read as a
+     * "no": the message stays in the inbox and is looked at again.
      */
     private fun answer(content: String): LocalClassification {
-        val answer = content.trim()
-        if (answer.isEmpty()) {
-            return LocalClassification.Unavailable("The local model did not answer")
-        }
-        return if (answer.lowercase().startsWith(ANSWER_YES)) {
-            LocalClassification.Recruiter
-        } else {
-            LocalClassification.NotRecruiter
+        val answer = content.trim().lowercase()
+        return when {
+            answer.isEmpty() -> LocalClassification.Unavailable("The local model did not answer")
+            answer.startsWith(ANSWER_YES) -> LocalClassification.Recruiter
+            answer.startsWith(ANSWER_NO) -> LocalClassification.NotRecruiter
+            else -> LocalClassification.Unavailable("The local model answered with '$content'")
         }
     }
 
@@ -90,6 +92,9 @@ class LocalLlmClassifier(
 
         /** The answer of the model that means "it is a recruiter mail". */
         const val ANSWER_YES: String = "yes"
+
+        /** The answer of the model that means "it is not a recruiter mail". */
+        const val ANSWER_NO: String = "no"
 
         private const val SYSTEM_PROMPT =
             "You screen the inbox of a job seeker. Answer with exactly one word: " +

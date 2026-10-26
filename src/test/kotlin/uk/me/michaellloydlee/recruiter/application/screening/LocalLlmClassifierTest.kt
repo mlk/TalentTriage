@@ -52,6 +52,17 @@ class LocalLlmClassifierTest {
         }
 
     @Test
+    fun asksTheModelWithoutAnyRandomness() =
+        runTest {
+            val engine = modelAnswering("yes")
+
+            classifier(engine).classify(message())
+
+            val body = (engine.requestHistory.single().body as TextContent).text
+            assertTrue(body.contains("\"temperature\":0.0"))
+        }
+
+    @Test
     fun readsTheNoOfTheModel() =
         runTest {
             val classifier = classifier(modelAnswering("no"))
@@ -69,6 +80,17 @@ class LocalLlmClassifierTest {
             val answer = classifier.classify(message())
 
             assertIs<LocalClassification.Unavailable>(answer)
+        }
+
+    @Test
+    fun anAnswerThatIsNeitherYesNorNoIsNoAnswer() =
+        runTest {
+            val classifier = classifier(modelAnswering("Unsubscribe: <https://www.linkedin.com/help/s>"))
+
+            val answer = classifier.classify(message())
+
+            val unavailable = assertIs<LocalClassification.Unavailable>(answer)
+            assertTrue(unavailable.reason.contains("Unsubscribe"))
         }
 
     @Test
