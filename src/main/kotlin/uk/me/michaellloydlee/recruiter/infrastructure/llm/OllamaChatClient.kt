@@ -1,7 +1,9 @@
 package uk.me.michaellloydlee.recruiter.infrastructure.llm
 
 import io.ktor.client.HttpClient
+import io.ktor.client.call.body
 import io.ktor.client.plugins.HttpTimeout
+import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.client.plugins.expectSuccess
 import io.ktor.client.plugins.pluginOrNull
 import io.ktor.client.plugins.timeout
@@ -11,8 +13,6 @@ import io.ktor.client.statement.bodyAsText
 import io.ktor.http.ContentType
 import io.ktor.http.contentType
 import io.ktor.http.isSuccess
-import kotlinx.serialization.encodeToString
-import kotlinx.serialization.json.Json
 
 /**
  * The client of the chat endpoint of an Ollama model.
@@ -23,29 +23,22 @@ import kotlinx.serialization.json.Json
  * timeout, the deep evaluation model needs minutes and gets a long one.
  *
  * @param httpClient the client the requests are sent with, it needs the
- *   `HttpTimeout` plugin, otherwise the timeout of the request is ignored.
+ *   `HttpTimeout` and the `ContentNegotiation` plugin.
  * @param baseUrl the base URL of the API, the local Ollama by default.
  * @param timeoutMillis how long a call may take, in milliseconds.
- * @param json encoder and parser of the payloads.
  */
 class OllamaChatClient(
     private val httpClient: HttpClient,
     private val baseUrl: String = DEFAULT_BASE_URL,
     private val timeoutMillis: Long = DEFAULT_TIMEOUT_MILLIS,
-    private val json: Json =
-        Json {
-            ignoreUnknownKeys = true
-            // The defaults are written on purpose: the request states
-            // "stream": false instead of leaving it to the default of the
-            // API. The value itself does not depend on this setting, a
-            // value that differs from the default is written either way.
-            encodeDefaults = true
-            explicitNulls = false
-        },
 ) {
     init {
         require(httpClient.pluginOrNull(HttpTimeout) != null) {
             "The HttpTimeout plugin has to be installed on the client, otherwise the timeout is ignored"
+        }
+        require(httpClient.pluginOrNull(ContentNegotiation) != null) {
+            "The ContentNegotiation plugin has to be installed on the client, " +
+                "it writes the request and reads the answer"
         }
     }
 
@@ -67,17 +60,12 @@ class OllamaChatClient(
                 expectSuccess = false
                 timeout { requestTimeoutMillis = this@OllamaChatClient.timeoutMillis }
                 contentType(ContentType.Application.Json)
-                // The body is written by hand instead of by the content
-                // negotiation of Ktor: the payload has to be the same no
-                // matter how the HTTP client was configured, and the caller
-                // should not have to install the content negotiation for it.
-                setBody(json.encodeToString(OllamaChatRequest.serializer(), request))
+                setBody(request)
             }
-        val body = response.bodyAsText()
         if (!response.status.isSuccess()) {
-            throw OllamaException(response.status.value, body)
+            throw OllamaException(response.status.value, response.bodyAsText())
         }
-        return json.decodeFromString(OllamaChatResponse.serializer(), body)
+        return response.body()
     }
 
     private val chatUrl: String

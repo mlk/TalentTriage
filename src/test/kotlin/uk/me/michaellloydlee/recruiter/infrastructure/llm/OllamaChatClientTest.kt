@@ -5,11 +5,13 @@ import io.ktor.client.engine.mock.MockEngine
 import io.ktor.client.engine.mock.respond
 import io.ktor.client.plugins.HttpRequestTimeoutException
 import io.ktor.client.plugins.HttpTimeout
+import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.content.TextContent
 import io.ktor.http.headersOf
+import io.ktor.serialization.kotlinx.json.json
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
@@ -135,7 +137,16 @@ class OllamaChatClientTest {
         val engine = engine()
 
         assertFailsWith<IllegalArgumentException> {
-            OllamaChatClient(httpClient = HttpClient(engine))
+            OllamaChatClient(httpClient = HttpClient(engine) { install(ContentNegotiation) { json(JSON) } })
+        }
+    }
+
+    @Test
+    fun failsWhenTheClientHasNoContentNegotiation() {
+        val engine = engine()
+
+        assertFailsWith<IllegalArgumentException> {
+            OllamaChatClient(httpClient = HttpClient(engine) { install(HttpTimeout) })
         }
     }
 
@@ -183,7 +194,18 @@ class OllamaChatClientTest {
         timeoutMillis: Long = 30_000,
     ): OllamaChatClient =
         OllamaChatClient(
-            httpClient = HttpClient(engine) { install(HttpTimeout) },
+            httpClient =
+                HttpClient(engine) {
+                    install(HttpTimeout)
+                    install(ContentNegotiation) {
+                        json(
+                            Json {
+                                ignoreUnknownKeys = true
+                                encodeDefaults = true
+                            },
+                        )
+                    }
+                },
             baseUrl = baseUrl,
             timeoutMillis = timeoutMillis,
         )
@@ -199,4 +221,12 @@ class OllamaChatClientTest {
         )
 
     private fun jsonHeaders() = headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString())
+
+    companion object {
+        private val JSON: Json =
+            Json {
+                ignoreUnknownKeys = true
+                encodeDefaults = true
+            }
+    }
 }
