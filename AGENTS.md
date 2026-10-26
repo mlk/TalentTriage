@@ -106,6 +106,22 @@ All of them run in CI, and they fail the build:
 * A test must not depend on the machine it runs on — no file of the working directory, no
   network, no clock of the host.
 
+### Do not test the libraries
+
+A test has to show what **this project** does, not what a library does. The behaviour of Ktor,
+PDFBox, POI or Clikt belongs to the library and is covered by its own tests.
+
+* Test the request the client builds, the text the extractor returns, the label the state manager
+  applies — the parts this project owns.
+* Do not assert what a library does with the values it was given: that a request times out
+  because the timeout plugin was installed, that a payload is encoded the way the serializer
+  encodes it, that the help output of the command line parser looks like something.
+* Testing that the project *uses* a library correctly is fine: that the client refuses a client
+  without the `HttpTimeout` plugin is a rule of this project, the timeout itself is not.
+
+A test that would break when the library is upgraded, without a change in this repository, is a
+test of the library — delete it.
+
 ## Environment quirks
 
 * **The Gradle daemon is pinned to JDK 17** (`gradle/gradle-daemon-jvm.properties`,

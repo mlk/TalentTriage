@@ -82,6 +82,8 @@ flowchart TD
 * **Stateless Gmail Tracking:** Uses nested Gmail labels (`Recruiters/FilteredOut`, `Recruiters/WorthFollowUp`, `Recruiters/NeedsPayCheck`, `Recruiters/Trash`) as state flags.
 * **Document Parsing Engine:** Automatically extracts plain text/Markdown from attached `.pdf` and `.docx` job descriptions using Apache PDFBox and Apache POI. A broken attachment is reported, it never stops the run.
 * **OpenAI/Ollama Compatibility:** Leverages native Ollama REST API JSON formats across all endpoints.
+* **Dual-Tier LLM Architecture:** The same typed client talks to the local Ollama instance (short
+  timeout) and to the AirLLM wrapper (long timeout) — only the base URL and the timeout differ.
 
 ---
 
@@ -284,6 +286,7 @@ src/main/kotlin/uk/me/michaellloydlee/recruiter/
 ├── domain/            # Pure domain model, no infrastructure dependencies
 └── infrastructure/    # Gmail, Ollama, PDF/Word adapters, logging
     ├── gmail/         # OAuth2 credentials, token store, Gmail REST client, label state
+    ├── llm/           # Ollama chat client (local models and the AirLLM wrapper)
     ├── logging/       # Structured (JSON lines) logger
     ├── parser/        # Text extraction of the attached documents (PDFBox)
     └── serialization/ # Shared kotlinx.serialization helpers
