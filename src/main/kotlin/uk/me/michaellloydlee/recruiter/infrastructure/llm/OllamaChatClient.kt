@@ -35,9 +35,10 @@ class OllamaChatClient(
     private val json: Json =
         Json {
             ignoreUnknownKeys = true
-            // The defaults are written on purpose: the request has to carry
-            // "stream": false, so that the API answers with the whole text
-            // instead of a stream.
+            // The defaults are written on purpose: the request states
+            // "stream": false instead of leaving it to the default of the
+            // API. The value itself does not depend on this setting, a
+            // value that differs from the default is written either way.
             encodeDefaults = true
             explicitNulls = false
         },
@@ -53,9 +54,14 @@ class OllamaChatClient(
      *
      * @param request the request with the model and the conversation.
      * @return the answer of the model.
+     * @throws IllegalArgumentException when the request asks for a streamed
+     *   answer, the client cannot read one.
      * @throws OllamaException when the API answers with an error.
      */
     suspend fun chat(request: OllamaChatRequest): OllamaChatResponse {
+        require(!request.stream) {
+            "The client reads the whole answer at once, the API must not stream it"
+        }
         val response =
             httpClient.post(chatUrl) {
                 expectSuccess = false

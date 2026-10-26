@@ -121,6 +121,16 @@ class OllamaChatClientTest {
         }
 
     @Test
+    fun failsWhenTheCallerAsksForAStreamedAnswer() =
+        runTest {
+            val engine = engine()
+
+            assertFailsWith<IllegalArgumentException> {
+                client(engine).chat(request().copy(stream = true))
+            }
+        }
+
+    @Test
     fun failsWhenTheClientHasNoTimeoutPlugin() {
         val engine = engine()
 
