@@ -5,7 +5,7 @@ import kotlinx.serialization.Serializable
 /**
  * A request to the chat endpoint of an Ollama model.
  *
- * @property model the name of the model, for example `qwen:1.8b`.
+ * @property model the name of the model, for example `minimax-m3.1-flash:cloud`.
  * @property messages the conversation so far.
  * @property stream whether the answer is streamed. The field has no default on
  *   purpose: the API streams by default, and a field with a default is left

@@ -9,18 +9,18 @@ import uk.me.michaellloydlee.recruiter.infrastructure.llm.OllamaOptions
 import java.io.IOException
 
 /**
- * Asks a small local model whether a message is a recruiter mail.
+ * Asks the screening model whether a message is a recruiter mail.
  *
- * The model is a small one (one to three billion parameters) that runs on the
- * local Ollama instance: the answer only has to be a yes or a no, so the
- * latency stays low.
+ * The model runs on the local Ollama instance, which may forward the request
+ * to a cloud model: the answer only has to be a yes or a no, so the latency
+ * stays low.
  *
  * A model that cannot be reached does not decide: the answer is
  * [LocalClassification.Unavailable] and the message is left alone, a recruiter
  * mail must not be filtered out because the model was down.
  *
  * @param client the client of the local Ollama instance.
- * @param model the name of the local model.
+ * @param model the name of the model.
  * @param maxBodyLength how many characters of the body go into the prompt.
  */
 class LocalLlmClassifier(
@@ -84,8 +84,8 @@ class LocalLlmClassifier(
         """.trimIndent()
 
     companion object {
-        /** The local model of the screening, a small one. */
-        const val DEFAULT_MODEL: String = "qwen:1.8b"
+        /** The model of the screening. */
+        const val DEFAULT_MODEL: String = "minimax-m3.1-flash:cloud"
 
         /** How many characters of the body go into the prompt by default. */
         const val DEFAULT_MAX_BODY_LENGTH: Int = 4_000

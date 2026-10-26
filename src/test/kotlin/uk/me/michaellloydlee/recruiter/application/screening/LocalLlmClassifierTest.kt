@@ -117,7 +117,7 @@ class LocalLlmClassifierTest {
             val body = (engine.requestHistory.single().body as TextContent).text
             assertTrue(body.contains("Your CV"))
             assertTrue(body.contains("We are looking for a developer"))
-            assertTrue(body.contains("llama3.2") || body.contains("qwen"))
+            assertTrue(body.contains("minimax-m3.1-flash:cloud"))
         }
 
     @Test

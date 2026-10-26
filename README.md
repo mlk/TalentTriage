@@ -147,8 +147,8 @@ The executable is `recruiter-cli`. Every operation is a subcommand:
 `process-inbox` fetches the messages of the inbox that were not processed yet
 and screens them: the ones that are not recruiter mails are filtered out with
 the label `Recruiters/FilteredOut`, the recruiter mails are counted for the
-deep evaluation that comes with its own story. The screening uses a small
-local model (`qwen:1.8b` by default, `--model` changes it).
+deep evaluation that comes with its own story. The screening asks the model of the
+local Ollama instance (`minimax-m3.1-flash:cloud` by default, `--model` changes it).
 
 or, without installing the distribution:
 

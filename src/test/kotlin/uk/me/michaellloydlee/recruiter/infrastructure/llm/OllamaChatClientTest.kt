@@ -44,7 +44,7 @@ class OllamaChatClientTest {
 
             val body = (engine.requestHistory.single().body as TextContent).text
             val json = Json.parseToJsonElement(body).jsonObject
-            assertEquals("qwen:1.8b", json["model"]?.jsonPrimitive?.content)
+            assertEquals("minimax-m3.1-flash:cloud", json["model"]?.jsonPrimitive?.content)
             assertEquals(false, json["stream"]?.jsonPrimitive?.content?.toBoolean())
             val messages = json["messages"]!!.jsonArray.map { it.jsonObject }
             assertEquals(2, messages.size)
@@ -218,7 +218,7 @@ class OllamaChatClientTest {
 
     private fun request(): OllamaChatRequest =
         OllamaChatRequest(
-            model = "qwen:1.8b",
+            model = "minimax-m3.1-flash:cloud",
             stream = false,
             messages =
                 listOf(
