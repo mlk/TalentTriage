@@ -78,6 +78,7 @@ class DecisionModelVerifier(
 
     private fun question(): OllamaDecisionQuestion =
         OllamaDecisionQuestion(
+            type = OllamaDecisionQuestion.TYPE_CHOICE,
             instructions = INSTRUCTIONS,
             criteria =
                 mapOf(

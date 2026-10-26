@@ -19,14 +19,17 @@ data class OllamaDecisionRequest(
 /**
  * A question of a request to the decision API of Ollama.
  *
- * @property type the type of the question: `choice`, `noul` or `score`.
+ * @property type the type of the question: `choice`, `noul` or `score`. The
+ *   field has no default on purpose: a field with a default is left out of the
+ *   payload when the encoder does not write the defaults, and the API rejects a
+ *   question without a type.
  * @property instructions what the model is asked.
  * @property criteria the options of a `choice` question, the key is the answer
  *   the model gives and the value describes it.
  */
 @Serializable
 data class OllamaDecisionQuestion(
-    val type: String = TYPE_CHOICE,
+    val type: String,
     val instructions: String,
     val criteria: Map<String, String?>,
 ) {

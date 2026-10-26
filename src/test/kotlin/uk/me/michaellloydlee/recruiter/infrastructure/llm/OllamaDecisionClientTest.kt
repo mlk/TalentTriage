@@ -60,6 +60,7 @@ class OllamaDecisionClientTest {
                             mapOf(
                                 "recruiter" to
                                     OllamaDecisionQuestion(
+                                        type = OllamaDecisionQuestion.TYPE_CHOICE,
                                         instructions = "Which one?",
                                         criteria = mapOf("from a recruiter" to "a recruiter"),
                                     ),
@@ -139,6 +140,7 @@ class OllamaDecisionClientTest {
                 mapOf(
                     "recruiter" to
                         OllamaDecisionQuestion(
+                            type = OllamaDecisionQuestion.TYPE_CHOICE,
                             instructions = "Which one?",
                             criteria =
                                 mapOf(
