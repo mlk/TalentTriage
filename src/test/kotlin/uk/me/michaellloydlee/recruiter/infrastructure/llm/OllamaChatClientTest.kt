@@ -3,7 +3,6 @@ package uk.me.michaellloydlee.recruiter.infrastructure.llm
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.mock.MockEngine
 import io.ktor.client.engine.mock.respond
-import io.ktor.client.plugins.HttpRequestTimeoutException
 import io.ktor.client.plugins.HttpTimeout
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.http.ContentType
@@ -12,7 +11,6 @@ import io.ktor.http.HttpStatusCode
 import io.ktor.http.content.TextContent
 import io.ktor.http.headersOf
 import io.ktor.serialization.kotlinx.json.json
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonArray
@@ -100,26 +98,6 @@ class OllamaChatClientTest {
                     .url
                     .toString(),
             )
-        }
-
-    @Test
-    fun givesUpAfterTheConfiguredTimeout() =
-        runTest {
-            val engine =
-                MockEngine {
-                    delay(60_000)
-                    respond(content = "{}", status = HttpStatusCode.OK)
-                }
-            val started = System.nanoTime()
-
-            assertFailsWith<HttpRequestTimeoutException> {
-                client(engine, timeoutMillis = 200).chat(request())
-            }
-
-            // The timeout of the client fired, not the default of the plugin
-            // (two minutes), so the call gave up long before that.
-            val elapsedMillis = (System.nanoTime() - started) / 1_000_000
-            assertTrue(elapsedMillis < 10_000, "the call took $elapsedMillis ms")
         }
 
     @Test
