@@ -39,6 +39,7 @@ class LocalLlmClassifier(
                 client.chat(
                     OllamaChatRequest(
                         model = model,
+                        stream = false,
                         messages =
                             listOf(
                                 OllamaMessage(role = OllamaMessage.ROLE_SYSTEM, content = SYSTEM_PROMPT),

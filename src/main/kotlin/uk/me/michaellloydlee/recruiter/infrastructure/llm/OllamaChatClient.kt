@@ -1,6 +1,7 @@
 package uk.me.michaellloydlee.recruiter.infrastructure.llm
 
 import io.ktor.client.HttpClient
+import io.ktor.client.call.NoTransformationFoundException
 import io.ktor.client.call.body
 import io.ktor.client.plugins.HttpTimeout
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
@@ -65,7 +66,17 @@ class OllamaChatClient(
         if (!response.status.isSuccess()) {
             throw OllamaException(response.status.value, response.bodyAsText())
         }
-        return response.body()
+        return try {
+            response.body()
+        } catch (error: NoTransformationFoundException) {
+            // The API streamed the answer although the request asked for the
+            // whole one, the client cannot read a stream.
+            throw OllamaException(
+                response.status.value,
+                "The API answered with ${response.contentType()}, the client reads a single JSON object",
+                error,
+            )
+        }
     }
 
     private val chatUrl: String

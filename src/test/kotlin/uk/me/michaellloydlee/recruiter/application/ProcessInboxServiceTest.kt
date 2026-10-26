@@ -25,6 +25,7 @@ import uk.me.michaellloydlee.recruiter.infrastructure.gmail.GmailMessagesApi
 import uk.me.michaellloydlee.recruiter.infrastructure.gmail.OAuth2Token
 import uk.me.michaellloydlee.recruiter.infrastructure.gmail.RefreshingAccessTokenProvider
 import uk.me.michaellloydlee.recruiter.infrastructure.llm.OllamaChatClient
+import uk.me.michaellloydlee.recruiter.infrastructure.logging.StructuredLogger
 import java.time.Instant
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -110,6 +111,7 @@ class ProcessInboxServiceTest {
         val messages = GmailMessagesApi(api)
         return ProcessInboxService(
             messages = messages,
+            logger = StructuredLogger(StringBuilder()),
             screening =
                 ScreeningService(
                     heuristics = RecruiterHeuristics(),

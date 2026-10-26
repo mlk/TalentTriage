@@ -86,7 +86,7 @@ class ProcessInboxCommand(
                 )
             val summary =
                 try {
-                    ProcessInboxService(gmail.messages, screening).run()
+                    ProcessInboxService(gmail.messages, screening, logger).run()
                 } catch (error: GmailApiException) {
                     throw CommandFailedException(error.message.orEmpty(), error)
                 } catch (error: OllamaException) {

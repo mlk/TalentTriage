@@ -134,4 +134,7 @@ test of the library — delete it.
   are not legal in a Kotlin package name. The Gradle `group` id still uses the hyphenated form.
 * **The token file holds a secret.** `credentials.json` and `token.json` are git-ignored and must
   never be committed.
+* **The Ollama API streams by default.** The `stream` field of a chat request has no default on
+  purpose: a field with a default is left out of the payload when the encoder does not write the
+  defaults, and the API then answers with a stream of JSON lines that the client cannot read.
 * **The test suite must stay offline** — no Gmail, no Ollama, no model downloads.
