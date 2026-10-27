@@ -14,20 +14,20 @@ import uk.me.michaellloydlee.recruiter.infrastructure.gmail.GmailLabelStateManag
  *
  * The screening has two stages: the keyword and sender rules of the
  * [heuristics] decide first, only the messages that pass them are shown to the
- * local model. A message that is not a recruiter mail gets the label
+ * model. A message that is not a recruiter mail gets the label
  * `Recruiters/FilteredOut` and stays in the inbox - the label is what makes
  * the next run of the pipeline skip it.
  *
- * A message the local model could not answer about is not filtered out: it
+ * A message the model could not answer about is not filtered out: it
  * stays in the inbox and is looked at again by the next run.
  *
  * @param heuristics the rules of the first stage.
- * @param classifier the local model of the second stage.
+ * @param verifier the model of the second stage.
  * @param stateManager applies the state label of a filtered out message.
  */
 class ScreeningService(
     private val heuristics: RecruiterHeuristics,
-    private val classifier: RecruiterVerificationClassifier,
+    private val verifier: RecruiterVerifier,
     private val stateManager: GmailLabelStateManager,
 ) {
     /**
@@ -46,17 +46,17 @@ class ScreeningService(
                 reason = reason,
             )
         }
-        return when (val answer = classifier.classify(message)) {
-            LocalClassification.Recruiter -> {
+        return when (val answer = verifier.verify(message)) {
+            RecruiterVerification.Recruiter -> {
                 ScreeningOutcome(
                     decision = ScreeningDecision.RECRUITER,
                     stage = ScreeningStage.LOCAL_MODEL,
-                    reason = "The local model sees a recruiter mail in it",
+                    reason = "The model sees a recruiter mail in it",
                 )
             }
 
-            LocalClassification.NotRecruiter -> {
-                val reason = "The local model does not see a recruiter mail in it"
+            RecruiterVerification.NotRecruiter -> {
+                val reason = "The model does not see a recruiter mail in it"
                 stateManager.apply(message.id, RecruiterLabel.FILTERED_OUT)
                 ScreeningOutcome(
                     decision = ScreeningDecision.NOT_RECRUITER,
@@ -65,7 +65,7 @@ class ScreeningService(
                 )
             }
 
-            is LocalClassification.Unavailable -> {
+            is RecruiterVerification.Unknown -> {
                 ScreeningOutcome(
                     decision = ScreeningDecision.UNKNOWN,
                     stage = ScreeningStage.LOCAL_MODEL,

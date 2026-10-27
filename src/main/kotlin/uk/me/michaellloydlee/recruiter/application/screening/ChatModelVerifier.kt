@@ -9,40 +9,26 @@ import uk.me.michaellloydlee.recruiter.infrastructure.llm.OllamaOptions
 import java.io.IOException
 
 /**
- * Asks the recruiter verification model whether a message is a recruiter mail.
+ * Verifies a message with a chat model of Ollama.
  *
- * The model runs on the local Ollama instance, which may forward the request
- * to a cloud model: the answer only has to be a yes or a no, so the latency
- * stays low. Every step of the pipeline will have its own model - the
- * recruiter verification here, the verification of the job descriptions and
- the answers to the recruiters later.
+ * The model is asked for one word, the answer is read from it. A model that
+ * answers something else is no answer at all: the message is left alone.
  *
- * A model that cannot be reached does not decide: the answer is
- * [LocalClassification.Unavailable] and the message is left alone, a recruiter
- * mail must not be filtered out because the model was down.
- *
- * @param client the client of the local Ollama instance.
- * @param recruiterVerificationModel the name of the model of the recruiter
- *   verification.
+ * @param client the client of the chat API.
+ * @param model the name of the chat model.
  * @param maxBodyLength how many characters of the body go into the prompt.
  */
-class RecruiterVerificationClassifier(
+class ChatModelVerifier(
     private val client: OllamaChatClient,
-    private val recruiterVerificationModel: String = DEFAULT_RECRUITER_VERIFICATION_MODEL,
+    private val model: String = DEFAULT_MODEL,
     private val maxBodyLength: Int = DEFAULT_MAX_BODY_LENGTH,
-) {
-    /**
-     * Asks the model about a message.
-     *
-     * @param message the message to look at.
-     * @return what the model answered.
-     */
-    suspend fun classify(message: EmailMessage): LocalClassification =
+) : RecruiterVerifier {
+    override suspend fun verify(message: EmailMessage): RecruiterVerification =
         try {
             val response =
                 client.chat(
                     OllamaChatRequest(
-                        model = recruiterVerificationModel,
+                        model = model,
                         stream = false,
                         options = OllamaOptions(temperature = 0.0),
                         messages =
@@ -54,11 +40,11 @@ class RecruiterVerificationClassifier(
                 )
             answer(response.content)
         } catch (error: OllamaException) {
-            LocalClassification.Unavailable(
+            RecruiterVerification.Unknown(
                 "The model of the recruiter verification answered with an error: ${error.message}",
             )
         } catch (error: IOException) {
-            LocalClassification.Unavailable(
+            RecruiterVerification.Unknown(
                 "The model of the recruiter verification could not be reached: ${error.message}",
             )
         }
@@ -72,25 +58,25 @@ class RecruiterVerificationClassifier(
      * answers with something else entirely, and that must not be read as a
      * "no": the message stays in the inbox and is looked at again.
      */
-    private fun answer(content: String): LocalClassification {
+    private fun answer(content: String): RecruiterVerification {
         val answer = content.trim().lowercase()
         return when {
             answer.isEmpty() -> {
-                LocalClassification.Unavailable(
-                    "The model of the recruiter verification did not answer",
-                )
+                RecruiterVerification.Unknown("The model of the recruiter verification did not answer")
             }
 
             answer.startsWith(ANSWER_YES) -> {
-                LocalClassification.Recruiter
+                RecruiterVerification.Recruiter
             }
 
             answer.startsWith(ANSWER_NO) -> {
-                LocalClassification.NotRecruiter
+                RecruiterVerification.NotRecruiter
             }
 
             else -> {
-                LocalClassification.Unavailable("The model of the recruiter verification answered with '$content'")
+                RecruiterVerification.Unknown(
+                    "The model of the recruiter verification answered with '$content'",
+                )
             }
         }
     }
@@ -104,8 +90,11 @@ class RecruiterVerificationClassifier(
         """.trimIndent()
 
     companion object {
-        /** The model of the recruiter verification. */
-        const val DEFAULT_RECRUITER_VERIFICATION_MODEL: String = "minimax-m3.1-flash:cloud"
+        /**
+         * The chat model of the recruiter verification. It is a cloud model: it
+         * needs a paid plan of Ollama or usage credits.
+         */
+        const val DEFAULT_MODEL: String = "minimax-m3.1-flash:cloud"
 
         /** How many characters of the body go into the prompt by default. */
         const val DEFAULT_MAX_BODY_LENGTH: Int = 4_000

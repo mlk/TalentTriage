@@ -137,4 +137,8 @@ test of the library — delete it.
 * **The Ollama API streams by default.** The `stream` field of a chat request has no default on
   purpose: a field with a default is left out of the payload when the encoder does not write the
   defaults, and the API then answers with a stream of JSON lines that the client cannot read.
+* **The decision API of Ollama is `POST /v1/systemone`.** It answers a typed question about a text
+  (`choice`, `noul` or `score`) and gives the probability of every answer. The decision models are
+  `nimble`, `tev1`, `clef` and `clef-flash`; `clef:cloud` runs in the cloud of Ollama (Ollama
+  v0.40.5 or later, a paid plan or usage credits).
 * **The test suite must stay offline** — no Gmail, no Ollama, no model downloads.

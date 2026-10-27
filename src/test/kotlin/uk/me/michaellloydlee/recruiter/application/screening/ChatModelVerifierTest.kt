@@ -15,82 +15,60 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
 import uk.me.michaellloydlee.recruiter.domain.gmail.EmailMessage
 import uk.me.michaellloydlee.recruiter.infrastructure.llm.OllamaChatClient
+import java.io.IOException
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
-class RecruiterVerificationClassifierTest {
+class ChatModelVerifierTest {
     @Test
     fun readsTheYesOfTheModel() =
         runTest {
-            val classifier = classifier(modelAnswering("yes"))
+            val answer = chatVerifier(modelAnswering("yes")).verify(message())
 
-            val answer = classifier.classify(message())
-
-            assertEquals(LocalClassification.Recruiter, answer)
+            assertEquals(RecruiterVerification.Recruiter, answer)
         }
 
     @Test
     fun readsTheYesOfTheModelWithExtraText() =
         runTest {
-            val classifier = classifier(modelAnswering("Yes, this is a recruiter mail"))
+            val answer = chatVerifier(modelAnswering("Yes, this is a recruiter mail")).verify(message())
 
-            val answer = classifier.classify(message())
-
-            assertEquals(LocalClassification.Recruiter, answer)
+            assertEquals(RecruiterVerification.Recruiter, answer)
         }
 
     @Test
     fun readsTheYesOfTheModelInAnotherCase() =
         runTest {
-            val classifier = classifier(modelAnswering("YES"))
+            val answer = chatVerifier(modelAnswering("YES")).verify(message())
 
-            val answer = classifier.classify(message())
-
-            assertEquals(LocalClassification.Recruiter, answer)
-        }
-
-    @Test
-    fun asksTheModelWithoutAnyRandomness() =
-        runTest {
-            val engine = modelAnswering("yes")
-
-            classifier(engine).classify(message())
-
-            val body = (engine.requestHistory.single().body as TextContent).text
-            assertTrue(body.contains("\"temperature\":0.0"))
+            assertEquals(RecruiterVerification.Recruiter, answer)
         }
 
     @Test
     fun readsTheNoOfTheModel() =
         runTest {
-            val classifier = classifier(modelAnswering("no"))
+            val answer = chatVerifier(modelAnswering("no")).verify(message())
 
-            val answer = classifier.classify(message())
-
-            assertEquals(LocalClassification.NotRecruiter, answer)
+            assertEquals(RecruiterVerification.NotRecruiter, answer)
         }
 
     @Test
     fun anEmptyAnswerIsNoAnswer() =
         runTest {
-            val classifier = classifier(modelAnswering("   "))
+            val answer = chatVerifier(modelAnswering("   ")).verify(message())
 
-            val answer = classifier.classify(message())
-
-            assertIs<LocalClassification.Unavailable>(answer)
+            assertIs<RecruiterVerification.Unknown>(answer)
         }
 
     @Test
     fun anAnswerThatIsNeitherYesNorNoIsNoAnswer() =
         runTest {
-            val classifier = classifier(modelAnswering("Unsubscribe: <https://www.linkedin.com/help/s>"))
+            val answer = chatVerifier(modelAnswering("Unsubscribe: <https://example.com>")).verify(message())
 
-            val answer = classifier.classify(message())
-
-            val unavailable = assertIs<LocalClassification.Unavailable>(answer)
-            assertTrue(unavailable.reason.contains("Unsubscribe"))
+            val unknown = assertIs<RecruiterVerification.Unknown>(answer)
+            assertTrue(unknown.reason.contains("Unsubscribe"))
         }
 
     @Test
@@ -101,10 +79,21 @@ class RecruiterVerificationClassifierTest {
                     respond(content = """{"error":"model not found"}""", status = HttpStatusCode.NotFound)
                 }
 
-            val answer = classifier(engine).classify(message())
+            val answer = chatVerifier(engine).verify(message())
 
-            val unavailable = assertIs<LocalClassification.Unavailable>(answer)
-            assertTrue(unavailable.reason.contains("model not found"))
+            val unknown = assertIs<RecruiterVerification.Unknown>(answer)
+            assertTrue(unknown.reason.contains("model not found"))
+        }
+
+    @Test
+    fun aNetworkFailureLeavesTheMessageAlone() =
+        runTest {
+            val engine = MockEngine { throw IOException("the network is down") }
+
+            val answer = chatVerifier(engine).verify(message())
+
+            val unknown = assertIs<RecruiterVerification.Unknown>(answer)
+            assertTrue(unknown.reason.contains("could not be reached"))
         }
 
     @Test
@@ -112,12 +101,22 @@ class RecruiterVerificationClassifierTest {
         runTest {
             val engine = modelAnswering("yes")
 
-            classifier(engine).classify(message(subject = "Your CV", body = "We are looking for a developer"))
+            chatVerifier(engine).verify(message(subject = "Your CV", body = "We are looking for a developer"))
 
             val body = (engine.requestHistory.single().body as TextContent).text
             assertTrue(body.contains("Your CV"))
             assertTrue(body.contains("We are looking for a developer"))
-            assertTrue(body.contains("minimax-m3.1-flash:cloud"))
+        }
+
+    @Test
+    fun asksTheModelWithoutAnyRandomness() =
+        runTest {
+            val engine = modelAnswering("yes")
+
+            chatVerifier(engine).verify(message())
+
+            val body = (engine.requestHistory.single().body as TextContent).text
+            assertTrue(body.contains("\"temperature\":0.0"))
         }
 
     @Test
@@ -125,19 +124,19 @@ class RecruiterVerificationClassifierTest {
         runTest {
             val engine = modelAnswering("yes")
 
-            classifier(engine, maxBodyLength = 10)
-                .classify(message(subject = "Your CV", body = "a body that is much too long"))
+            chatVerifier(engine, maxBodyLength = 10)
+                .verify(message(subject = "Your CV", body = "a body that is much too long"))
 
             val body = (engine.requestHistory.single().body as TextContent).text
             assertTrue(body.contains("a body tha"))
             assertTrue(!body.contains("much too long"))
         }
 
-    private fun classifier(
+    private fun chatVerifier(
         engine: MockEngine,
-        maxBodyLength: Int = RecruiterVerificationClassifier.DEFAULT_MAX_BODY_LENGTH,
-    ): RecruiterVerificationClassifier =
-        RecruiterVerificationClassifier(
+        maxBodyLength: Int = ChatModelVerifier.DEFAULT_MAX_BODY_LENGTH,
+    ): ChatModelVerifier =
+        ChatModelVerifier(
             client =
                 OllamaChatClient(
                     httpClient =

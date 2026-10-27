@@ -7,6 +7,6 @@ enum class ScreeningStage {
     /** The keyword and sender rules decided it, no model was asked. */
     HEURISTICS,
 
-    /** The local model decided it. */
+    /** The model decided it. */
     LOCAL_MODEL,
 }

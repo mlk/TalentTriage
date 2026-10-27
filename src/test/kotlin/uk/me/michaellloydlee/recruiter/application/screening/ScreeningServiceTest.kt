@@ -25,7 +25,7 @@ import uk.me.michaellloydlee.recruiter.infrastructure.gmail.GmailLabelsApi
 import uk.me.michaellloydlee.recruiter.infrastructure.gmail.GmailMessagesApi
 import uk.me.michaellloydlee.recruiter.infrastructure.gmail.OAuth2Token
 import uk.me.michaellloydlee.recruiter.infrastructure.gmail.RefreshingAccessTokenProvider
-import uk.me.michaellloydlee.recruiter.infrastructure.llm.OllamaChatClient
+import uk.me.michaellloydlee.recruiter.infrastructure.llm.OllamaDecisionClient
 import java.time.Instant
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -35,7 +35,7 @@ class ScreeningServiceTest {
     @Test
     fun filtersOutAMessageThatMatchesNoRule() =
         runTest {
-            val model = modelAnswering("no")
+            val model = modelAnswering("not from a recruiter")
             val labels = labelEngine()
             val service = service(model, labels)
 
@@ -49,9 +49,9 @@ class ScreeningServiceTest {
         }
 
     @Test
-    fun filtersOutAMessageTheLocalModelDoesNotSeeAsRecruiterMail() =
+    fun filtersOutAMessageTheModelDoesNotSeeAsRecruiterMail() =
         runTest {
-            val model = modelAnswering("no")
+            val model = modelAnswering("not from a recruiter")
             val labels = labelEngine()
             val service = service(model, labels)
 
@@ -65,9 +65,9 @@ class ScreeningServiceTest {
         }
 
     @Test
-    fun keepsAMessageTheLocalModelSeesAsRecruiterMail() =
+    fun keepsAMessageTheModelSeesAsRecruiterMail() =
         runTest {
-            val model = modelAnswering("yes")
+            val model = modelAnswering("from a recruiter")
             val labels = labelEngine()
             val service = service(model, labels)
 
@@ -81,7 +81,7 @@ class ScreeningServiceTest {
         }
 
     @Test
-    fun leavesAMessageAloneWhenTheLocalModelCannotBeAsked() =
+    fun leavesAMessageAloneWhenTheModelCannotBeAsked() =
         runTest {
             val model =
                 MockEngine {
@@ -99,9 +99,9 @@ class ScreeningServiceTest {
         }
 
     @Test
-    fun asksTheLocalModelWithTheSubjectAndTheBody() =
+    fun asksTheModelWithTheSubjectAndTheBody() =
         runTest {
-            val model = modelAnswering("yes")
+            val model = modelAnswering("from a recruiter")
 
             service(model, labelEngine())
                 .screen(message(subject = "Your CV", body = "We are looking for a developer in Berlin"))
@@ -116,7 +116,7 @@ class ScreeningServiceTest {
         labels: MockEngine,
     ): ScreeningService {
         val client =
-            OllamaChatClient(
+            OllamaDecisionClient(
                 httpClient =
                     HttpClient(model) {
                         install(HttpTimeout)
@@ -137,7 +137,7 @@ class ScreeningServiceTest {
         val messages = GmailMessagesApi(api)
         return ScreeningService(
             heuristics = RecruiterHeuristics(),
-            classifier = RecruiterVerificationClassifier(client),
+            verifier = DecisionModelVerifier(client),
             stateManager = GmailLabelStateManager(messages, GmailLabelsApi(api)),
         )
     }
@@ -145,7 +145,12 @@ class ScreeningServiceTest {
     private fun modelAnswering(answer: String): MockEngine =
         MockEngine {
             respond(
-                content = """{"message":{"role":"assistant","content":"$answer"},"done":true}""",
+                content =
+                    """
+                    {"model":"clef:cloud","answers":{"recruiter":{"type":"choice","choice":"$answer",
+                    "probabilities":{"from a recruiter":0.9},"confidence":0.9}},
+                    "usage":{"input_tokens":10,"output_tokens":1}}
+                    """.trimIndent(),
                 status = HttpStatusCode.OK,
                 headers = jsonHeaders(),
             )

@@ -147,10 +147,27 @@ The executable is `recruiter-cli`. Every operation is a subcommand:
 `process-inbox` fetches the messages of the inbox that were not processed yet
 and screens them: the ones that are not recruiter mails are filtered out with
 the label `Recruiters/FilteredOut`, the recruiter mails are counted for the
-deep evaluation that comes with its own story. The screening asks the model of the
-local Ollama instance (`minimax-m3.1-flash:cloud` by default,
-`--recruiter-verification-model` changes it — every step of the pipeline gets its
-own model).
+deep evaluation that comes with its own story.
+
+The screening asks a model of the local Ollama instance. By default it is a
+**decision model** (`clef:cloud`), which answers a typed question on the
+decision API of Ollama: `from a recruiter`, `not from a recruiter` or
+`unknown`, with the probability of every answer. A chat model can be used
+instead:
+
+```bash
+recruiter-cli process-inbox                                  # the decision model (default)
+recruiter-cli process-inbox --recruiter-verification=llm     # a chat model
+recruiter-cli process-inbox --recruiter-verification-model=nimble
+```
+
+Every step of the pipeline gets its own model, so the model of the recruiter
+verification is chosen with `--recruiter-verification-model`.
+
+The default models of both verifiers run in the cloud of Ollama (`clef:cloud`
+and `minimax-m3.1-flash:cloud`), they need a paid plan or usage credits. A
+local model works as well: `nimble`, `tev1`, `clef` and `clef-flash` are the
+decision models, they need Ollama v0.35.0 or later.
 
 or, without installing the distribution:
 
