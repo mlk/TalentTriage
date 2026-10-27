@@ -8,10 +8,14 @@ package uk.me.michaellloydlee.recruiter.infrastructure.parser
  */
 fun documentTextExtractor(mimeType: String): DocumentTextExtractor? =
     when (mimeType.lowercase()) {
-        PDF_MIME_TYPE -> PdfTextExtractor()
-        in WORD_MIME_TYPES -> DocxTextExtractor()
+        PDF_MIME_TYPE -> PDF_EXTRACTOR
+        in WORD_MIME_TYPES -> WORD_EXTRACTOR
         else -> null
     }
+
+private val PDF_EXTRACTOR: DocumentTextExtractor = PdfTextExtractor()
+
+private val WORD_EXTRACTOR: DocumentTextExtractor = DocxTextExtractor()
 
 /** The type of a PDF document. */
 const val PDF_MIME_TYPE: String = "application/pdf"
