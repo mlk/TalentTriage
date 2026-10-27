@@ -9,6 +9,7 @@ package uk.me.michaellloydlee.recruiter.domain.gmail
  * @property subject the value of the `Subject` header.
  * @property body the plain text body of the message.
  * @property labelIds the ids of the labels the message carries.
+ * @property attachments the documents that came with the message.
  */
 data class EmailMessage(
     val id: String,
@@ -17,4 +18,5 @@ data class EmailMessage(
     val subject: String,
     val body: String,
     val labelIds: List<String>,
+    val attachments: List<EmailAttachment> = emptyList(),
 )

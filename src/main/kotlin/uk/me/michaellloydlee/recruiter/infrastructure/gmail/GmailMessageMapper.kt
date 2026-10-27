@@ -1,5 +1,6 @@
 package uk.me.michaellloydlee.recruiter.infrastructure.gmail
 
+import uk.me.michaellloydlee.recruiter.domain.gmail.EmailAttachment
 import uk.me.michaellloydlee.recruiter.domain.gmail.EmailMessage
 import java.util.Base64
 
@@ -20,7 +21,39 @@ internal object GmailMessageMapper {
             subject = header(message, "Subject"),
             body = body(message),
             labelIds = message.labelIds,
+            attachments = attachments(message),
         )
+
+    /**
+     * The documents that came with the message.
+     *
+     * The parts of the payload that carry an attachment id are the documents,
+     * the parts with a body are the text of the message.
+     */
+    private fun attachments(message: GmailMessageResource): List<EmailAttachment> {
+        val payload = message.payload ?: return emptyList()
+        val attachments = mutableListOf<EmailAttachment>()
+        collectAttachments(payload, attachments)
+        return attachments
+    }
+
+    private fun collectAttachments(
+        payload: GmailPayloadResource,
+        attachments: MutableList<EmailAttachment>,
+    ) {
+        val attachmentId = payload.body.attachmentId
+        if (!attachmentId.isNullOrEmpty()) {
+            attachments.add(
+                EmailAttachment(
+                    id = attachmentId,
+                    fileName = payload.fileName,
+                    mimeType = payload.mimeType,
+                    size = payload.body.size,
+                ),
+            )
+        }
+        payload.parts.forEach { collectAttachments(it, attachments) }
+    }
 
     private fun header(
         message: GmailMessageResource,

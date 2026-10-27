@@ -21,6 +21,7 @@ internal data class GmailMessageResource(
 @Serializable
 internal data class GmailPayloadResource(
     val mimeType: String = "",
+    val fileName: String = "",
     val headers: List<GmailHeaderResource> = emptyList(),
     val body: GmailBodyResource = GmailBodyResource(),
     val parts: List<GmailPayloadResource> = emptyList(),
@@ -42,6 +43,7 @@ internal data class GmailHeaderResource(
 internal data class GmailBodyResource(
     val data: String? = null,
     val size: Long = 0,
+    val attachmentId: String? = null,
 )
 
 /**
@@ -80,6 +82,15 @@ internal data class GmailLabelResource(
     val id: String,
     val name: String = "",
     val type: String = "",
+)
+
+/**
+ * The answer of the endpoint that fetches an attachment.
+ */
+@Serializable
+internal data class GmailAttachmentResource(
+    val data: String = "",
+    val size: Long = 0,
 )
 
 /**
