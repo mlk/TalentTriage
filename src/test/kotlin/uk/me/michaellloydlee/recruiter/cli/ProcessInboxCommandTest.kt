@@ -35,7 +35,8 @@ class ProcessInboxCommandTest {
                 cli(sink) { mockClient(engine) }
                     .test(
                         "process-inbox --credentials ${credentialsFile()} " +
-                            "--token ${tokenFile()}",
+                            "--token ${tokenFile()} " +
+                            "--requirements ${requirementsFile()}",
                     )
 
             assertEquals(0, result.statusCode)
@@ -59,7 +60,8 @@ class ProcessInboxCommandTest {
                     .test(
                         "process-inbox --recruiter-verification=llm " +
                             "--credentials ${credentialsFile()} " +
-                            "--token ${tokenFile()}",
+                            "--token ${tokenFile()} " +
+                            "--requirements ${requirementsFile()}",
                     )
 
             assertEquals(0, result.statusCode)
@@ -72,6 +74,21 @@ class ProcessInboxCommandTest {
             val sink = StringBuilder()
 
             val result = cli(sink).test("process-inbox --recruiter-verification=magic")
+
+            assertEquals(1, result.statusCode)
+        }
+
+    @Test
+    fun failsWhenTheRequirementsAreMissing() =
+        runTest {
+            val sink = StringBuilder()
+
+            val result =
+                cli(sink).test(
+                    "process-inbox --credentials ${credentialsFile()} " +
+                        "--token ${tokenFile()} " +
+                        "--requirements /does/not/exist/requirements.json",
+                )
 
             assertEquals(1, result.statusCode)
         }
@@ -132,6 +149,14 @@ class ProcessInboxCommandTest {
     private fun credentialsFile(): Path {
         val file = createTempDirectory("credentials").resolve("credentials.json")
         file.writeText("""{"client_id":"client-id","client_secret":"client-secret"}""")
+        return file
+    }
+
+    private fun requirementsFile(): Path {
+        val file = createTempDirectory("requirements").resolve("requirements.json")
+        file.writeText(
+            """{"maximum_office_days": 2, "profile": "Senior Kotlin engineer"}""",
+        )
         return file
     }
 

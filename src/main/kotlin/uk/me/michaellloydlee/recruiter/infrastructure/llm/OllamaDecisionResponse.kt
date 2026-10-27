@@ -22,6 +22,7 @@ data class OllamaDecisionResponse(
  *
  * @property type the type of the question the answer belongs to.
  * @property choice the option the model chose.
+ * @property noul the probability of `true` of a yes or no answer.
  * @property probabilities the probability of every option, they sum up to one.
  * @property confidence how strongly the model favours the option, zero is a
  *   uniform distribution and near one is a clear winner. It is not a
@@ -31,6 +32,7 @@ data class OllamaDecisionResponse(
 data class OllamaDecisionAnswer(
     val type: String = "",
     val choice: String? = null,
+    val noul: Double? = null,
     val probabilities: Map<String, Double> = emptyMap(),
     val confidence: Double? = null,
 )

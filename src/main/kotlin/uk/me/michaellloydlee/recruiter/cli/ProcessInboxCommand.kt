@@ -7,11 +7,19 @@ import com.github.ajalt.clikt.parameters.options.option
 import com.github.ajalt.clikt.parameters.types.enum
 import io.ktor.client.HttpClient
 import uk.me.michaellloydlee.recruiter.application.ProcessInboxService
+import uk.me.michaellloydlee.recruiter.application.ProcessInboxSummary
+import uk.me.michaellloydlee.recruiter.application.evaluation.AttachmentTextReader
+import uk.me.michaellloydlee.recruiter.application.evaluation.ChatModelEvaluator
+import uk.me.michaellloydlee.recruiter.application.evaluation.DecisionModelEvaluator
+import uk.me.michaellloydlee.recruiter.application.evaluation.EvaluationService
+import uk.me.michaellloydlee.recruiter.application.evaluation.JobDescriptionEvaluationMode
+import uk.me.michaellloydlee.recruiter.application.evaluation.JobDescriptionEvaluator
 import uk.me.michaellloydlee.recruiter.application.screening.ChatModelVerifier
 import uk.me.michaellloydlee.recruiter.application.screening.DecisionModelVerifier
 import uk.me.michaellloydlee.recruiter.application.screening.RecruiterVerificationMode
 import uk.me.michaellloydlee.recruiter.application.screening.RecruiterVerifier
 import uk.me.michaellloydlee.recruiter.application.screening.ScreeningService
+import uk.me.michaellloydlee.recruiter.domain.requirements.JobRequirements
 import uk.me.michaellloydlee.recruiter.domain.screening.RecruiterHeuristics
 import uk.me.michaellloydlee.recruiter.infrastructure.gmail.FileOAuth2TokenStore
 import uk.me.michaellloydlee.recruiter.infrastructure.gmail.GmailApiException
@@ -23,6 +31,7 @@ import uk.me.michaellloydlee.recruiter.infrastructure.llm.OllamaChatClient
 import uk.me.michaellloydlee.recruiter.infrastructure.llm.OllamaDecisionClient
 import uk.me.michaellloydlee.recruiter.infrastructure.llm.OllamaException
 import uk.me.michaellloydlee.recruiter.infrastructure.logging.StructuredLogger
+import uk.me.michaellloydlee.recruiter.infrastructure.requirements.RequirementsFile
 import java.nio.file.Path
 
 /**
@@ -64,6 +73,32 @@ class ProcessInboxCommand(
             help = "How the messages are verified: a decision model of Ollama or a chat model",
         ).enum<RecruiterVerificationMode>().default(RecruiterVerificationMode.DECISION, defaultForHelp = "decision")
 
+    private val jobDescriptionEvaluation: JobDescriptionEvaluationMode by
+        option(
+            "--job-description-evaluation",
+            "-e",
+            help = "How the job descriptions are evaluated: a decision model of Ollama or a chat model",
+        ).enum<JobDescriptionEvaluationMode>().default(
+            JobDescriptionEvaluationMode.DECISION,
+            defaultForHelp = "decision",
+        )
+
+    private val jobDescriptionEvaluationModel: String by
+        option(
+            "--job-description-evaluation-model",
+            "-j",
+            help =
+                "The model that evaluates the job descriptions: the decision models are nimble, tev1, " +
+                    "clef and clef:cloud, a chat model is needed for --job-description-evaluation=chat",
+        ).default(DecisionModelEvaluator.DEFAULT_MODEL)
+
+    private val requirementsFile: String by
+        option(
+            "--requirements",
+            "-q",
+            help = "The file with the requirements of the job seeker",
+        ).default(DEFAULT_REQUIREMENTS_FILE)
+
     private val recruiterVerificationModel: String by
         option(
             "--recruiter-verification-model",
@@ -79,12 +114,8 @@ class ProcessInboxCommand(
             message = "Inbox triage run started",
             attributes = mapOf(TRIGGER_ATTRIBUTE to TRIGGER_CLI),
         )
-        val credentials =
-            try {
-                GoogleClientCredentials.load(Path.of(credentialsFile))
-            } catch (error: GmailAuthenticationException) {
-                throw CommandFailedException(error.message.orEmpty(), error)
-            }
+        val credentials = credentials()
+        val requirements = requirements()
         httpClientFactory().use { client ->
             val gmail =
                 GmailServices.create(
@@ -92,15 +123,25 @@ class ProcessInboxCommand(
                     tokenStore = FileOAuth2TokenStore(Path.of(tokenFile)),
                     httpClient = client,
                 )
-            val screening =
-                ScreeningService(
-                    heuristics = RecruiterHeuristics(),
-                    verifier = verifier(client),
-                    stateManager = gmail.stateManager,
-                )
             val summary =
                 try {
-                    ProcessInboxService(gmail.messages, screening, logger).run()
+                    ProcessInboxService(
+                        messages = gmail.messages,
+                        screening =
+                            ScreeningService(
+                                heuristics = RecruiterHeuristics(),
+                                verifier = verifier(client),
+                                stateManager = gmail.stateManager,
+                            ),
+                        evaluation =
+                            EvaluationService(
+                                evaluator = evaluator(client),
+                                stateManager = gmail.stateManager,
+                            ),
+                        attachments = AttachmentTextReader(gmail.messages),
+                        requirements = requirements,
+                        logger = logger,
+                    ).run()
                 } catch (error: GmailApiException) {
                     throw CommandFailedException(error.message.orEmpty(), error)
                 } catch (error: OllamaException) {
@@ -109,13 +150,7 @@ class ProcessInboxCommand(
             logger.info(
                 event = "$COMMAND_NAME.completed",
                 message = "Inbox triage run completed",
-                attributes =
-                    mapOf(
-                        "screened" to summary.screened.toString(),
-                        "recruiters" to summary.recruiters.toString(),
-                        "filtered_out" to summary.filteredOut.toString(),
-                        "unknown" to summary.unknown.toString(),
-                    ),
+                attributes = summary.attributes(),
             )
         }
     }
@@ -141,6 +176,62 @@ class ProcessInboxCommand(
             }
         }
 
+    /**
+     * The credentials of the Google application.
+     */
+    private fun credentials(): GoogleClientCredentials =
+        try {
+            GoogleClientCredentials.load(Path.of(credentialsFile))
+        } catch (error: GmailAuthenticationException) {
+            throw CommandFailedException(error.message.orEmpty(), error)
+        }
+
+    /**
+     * The requirements of the job seeker, they are read from the file of the
+     * working directory.
+     */
+    private fun requirements(): JobRequirements =
+        try {
+            RequirementsFile.load(Path.of(requirementsFile))
+        } catch (error: IllegalArgumentException) {
+            throw CommandFailedException(error.message.orEmpty(), error)
+        }
+
+    /**
+     * The counters of the run, they go into the log.
+     */
+    private fun ProcessInboxSummary.attributes(): Map<String, String> =
+        mapOf(
+            "screened" to screened.toString(),
+            "recruiters" to recruiters.toString(),
+            "filtered_out" to filteredOut.toString(),
+            "worth_follow_up" to worthFollowUp.toString(),
+            "needs_pay_check" to needsPayCheck.toString(),
+            "trashed" to trashed.toString(),
+            "unknown" to unknown.toString(),
+        )
+
+    /**
+     * The evaluator of the job descriptions, the decision model of Ollama or a
+     * chat model.
+     */
+    private fun evaluator(client: HttpClient): JobDescriptionEvaluator =
+        when (jobDescriptionEvaluation) {
+            JobDescriptionEvaluationMode.DECISION -> {
+                DecisionModelEvaluator(
+                    client = OllamaDecisionClient(client),
+                    model = jobDescriptionEvaluationModel,
+                )
+            }
+
+            JobDescriptionEvaluationMode.CHAT -> {
+                ChatModelEvaluator(
+                    client = OllamaChatClient(client),
+                    model = jobDescriptionEvaluationModel,
+                )
+            }
+        }
+
     override fun help(context: Context): String = "Fetch, triage and label the unprocessed messages of the inbox."
 
     companion object {
@@ -152,5 +243,8 @@ class ProcessInboxCommand(
 
         /** Value of the trigger attribute for a run started from the command line. */
         const val TRIGGER_CLI: String = "cli"
+
+        /** The file with the requirements of the job seeker. */
+        const val DEFAULT_REQUIREMENTS_FILE: String = "requirements.json"
     }
 }

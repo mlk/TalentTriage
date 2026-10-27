@@ -36,5 +36,8 @@ data class OllamaDecisionQuestion(
     companion object {
         /** The type of a question with named options. */
         const val TYPE_CHOICE: String = "choice"
+
+        /** The type of a question that is answered with yes or no. */
+        const val TYPE_NOUL: String = "noul"
     }
 }

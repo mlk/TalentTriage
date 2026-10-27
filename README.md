@@ -149,6 +149,18 @@ and screens them: the ones that are not recruiter mails are filtered out with
 the label `Recruiters/FilteredOut`, the recruiter mails are counted for the
 deep evaluation that comes with its own story.
 
+The requirements of the job seeker — the pay, the profile and the number of
+days of office a job may demand — are read from `requirements.json` in the
+working directory (`--requirements` changes the file):
+
+```json
+{
+  "minimum_pay": { "amount": 120000, "currency": "EUR", "period": "year" },
+  "maximum_office_days": 2,
+  "profile": "Senior Kotlin engineer, distributed systems, 8+ years, fintech"
+}
+```
+
 The screening asks a model of the local Ollama instance. By default it is a
 **decision model** (`clef:cloud`), which answers a typed question on the
 decision API of Ollama: `from a recruiter`, `not from a recruiter` or
@@ -156,13 +168,20 @@ decision API of Ollama: `from a recruiter`, `not from a recruiter` or
 instead:
 
 ```bash
+# the screening of the recruiter mails
 recruiter-cli process-inbox                                  # the decision model (default)
 recruiter-cli process-inbox --recruiter-verification=llm     # a chat model
 recruiter-cli process-inbox --recruiter-verification-model=nimble
+
+# the evaluation of the job descriptions
+recruiter-cli process-inbox --job-description-evaluation=decision   # the decision model (default)
+recruiter-cli process-inbox --job-description-evaluation=chat      # a chat model
+recruiter-cli process-inbox --job-description-evaluation-model=clef:cloud
 ```
 
 Every step of the pipeline gets its own model, so the model of the recruiter
-verification is chosen with `--recruiter-verification-model`.
+verification is chosen with `--recruiter-verification-model` and the model of
+the job description evaluation with `--job-description-evaluation-model`.
 
 The default models of both verifiers run in the cloud of Ollama (`clef:cloud`
 and `minimax-m3.1-flash:cloud`), they need a paid plan or usage credits. A
