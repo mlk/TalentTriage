@@ -3,7 +3,10 @@ package uk.me.michaellloydlee.recruiter.infrastructure.llm
 import io.ktor.client.HttpClient
 import io.ktor.client.call.NoTransformationFoundException
 import io.ktor.client.call.body
+import io.ktor.client.plugins.HttpTimeout
+import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.client.plugins.expectSuccess
+import io.ktor.client.plugins.pluginOrNull
 import io.ktor.client.plugins.timeout
 import io.ktor.client.request.post
 import io.ktor.client.request.setBody
@@ -29,6 +32,16 @@ class OllamaDecisionClient(
     private val baseUrl: String = OllamaChatClient.DEFAULT_BASE_URL,
     private val timeoutMillis: Long = OllamaChatClient.DEFAULT_TIMEOUT_MILLIS,
 ) {
+    init {
+        require(httpClient.pluginOrNull(HttpTimeout) != null) {
+            "The HttpTimeout plugin has to be installed on the client, otherwise the timeout is ignored"
+        }
+        require(httpClient.pluginOrNull(ContentNegotiation) != null) {
+            "The ContentNegotiation plugin has to be installed on the client, " +
+                "it writes the request and reads the answer"
+        }
+    }
+
     /**
      * Asks the decision model and returns its answer.
      *

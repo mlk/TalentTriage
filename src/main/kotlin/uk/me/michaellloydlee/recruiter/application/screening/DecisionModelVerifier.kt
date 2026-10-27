@@ -1,6 +1,7 @@
 package uk.me.michaellloydlee.recruiter.application.screening
 
 import uk.me.michaellloydlee.recruiter.domain.gmail.EmailMessage
+import uk.me.michaellloydlee.recruiter.infrastructure.llm.OllamaDecisionAnswer
 import uk.me.michaellloydlee.recruiter.infrastructure.llm.OllamaDecisionClient
 import uk.me.michaellloydlee.recruiter.infrastructure.llm.OllamaDecisionQuestion
 import uk.me.michaellloydlee.recruiter.infrastructure.llm.OllamaDecisionRequest

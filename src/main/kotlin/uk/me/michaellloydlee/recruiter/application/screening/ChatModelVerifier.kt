@@ -90,7 +90,10 @@ class ChatModelVerifier(
         """.trimIndent()
 
     companion object {
-        /** The chat model of the recruiter verification. */
+        /**
+         * The chat model of the recruiter verification. It is a cloud model: it
+         * needs a paid plan of Ollama or usage credits.
+         */
         const val DEFAULT_MODEL: String = "minimax-m3.1-flash:cloud"
 
         /** How many characters of the body go into the prompt by default. */

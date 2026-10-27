@@ -17,6 +17,7 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import uk.me.michaellloydlee.recruiter.domain.gmail.EmailMessage
 import uk.me.michaellloydlee.recruiter.infrastructure.llm.OllamaDecisionClient
+import java.io.IOException
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
@@ -87,6 +88,17 @@ class DecisionModelVerifierTest {
 
             val unknown = assertIs<RecruiterVerification.Unknown>(answer)
             assertTrue(unknown.reason.contains("model not found"))
+        }
+
+    @Test
+    fun aNetworkFailureLeavesTheMessageAlone() =
+        runTest {
+            val engine = MockEngine { throw IOException("the network is down") }
+
+            val answer = verifier(engine).verify(message())
+
+            val unknown = assertIs<RecruiterVerification.Unknown>(answer)
+            assertTrue(unknown.reason.contains("could not be reached"))
         }
 
     @Test

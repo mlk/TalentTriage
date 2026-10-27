@@ -164,6 +164,11 @@ recruiter-cli process-inbox --recruiter-verification-model=nimble
 Every step of the pipeline gets its own model, so the model of the recruiter
 verification is chosen with `--recruiter-verification-model`.
 
+The default models of both verifiers run in the cloud of Ollama (`clef:cloud`
+and `minimax-m3.1-flash:cloud`), they need a paid plan or usage credits. A
+local model works as well: `nimble`, `tev1`, `clef` and `clef-flash` are the
+decision models, they need Ollama v0.35.0 or later.
+
 or, without installing the distribution:
 
 ```bash
