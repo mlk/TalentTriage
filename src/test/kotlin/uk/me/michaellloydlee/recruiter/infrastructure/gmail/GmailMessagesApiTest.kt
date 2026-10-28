@@ -57,7 +57,7 @@ class GmailMessagesApiTest {
                 "is:inbox " +
                     "-label:Recruiters/FilteredOut " +
                     "-label:Recruiters/WorthFollowUp " +
-                    "-label:Recruiters/NeedsPayCheck " +
+                    "-label:Recruiters/NeedsMoreInformation " +
                     "-label:Recruiters/Trash " +
                     "after:${NOW.minusSeconds(86400).epochSecond}",
                 request.url.parameters["q"],

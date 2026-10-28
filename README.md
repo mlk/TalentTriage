@@ -62,13 +62,13 @@ flowchart TD
 
     %% Stage 3 Branching
     AirLLM -- "Pay & JD & Office Match" --> LabelFollowUp["Label: Recruiters/WorthFollowUp"]
-    AirLLM -- "JD Match, Pay Missing" --> LabelCheckPay["Label: Recruiters/NeedsPayCheck"]
+    AirLLM -- "JD Match, Pay Or Office Days Missing" --> LabelMoreInfo["Label: Recruiters/NeedsMoreInformation"]
     AirLLM -- "Mismatch / Unsuitable" --> LabelTrash["Label: Recruiters/Trash"]
 
     %% Gmail Label Updates
     ApplyFilteredOut --> ApplyLabel
     LabelFollowUp --> ApplyLabel
-    LabelCheckPay --> ApplyLabel
+    LabelMoreInfo --> ApplyLabel
     LabelTrash --> ApplyLabel
     LabelTrash --> Archive
 ```
@@ -79,7 +79,7 @@ flowchart TD
 
 * **Zero-Idle Memory Footprint:** Executes completely as a CLI command and terminates, returning 100% of VRAM/RAM back to macOS.
 * **Dual-Tier LLM Architecture:** Uses a fast, small model via Ollama for initial screening and routes qualified emails to an AirLLM Python wrapper (or large quantized Ollama model) for deep evaluation.
-* **Stateless Gmail Tracking:** Uses nested Gmail labels (`Recruiters/FilteredOut`, `Recruiters/WorthFollowUp`, `Recruiters/NeedsPayCheck`, `Recruiters/Trash`) as state flags.
+* **Stateless Gmail Tracking:** Uses nested Gmail labels (`Recruiters/FilteredOut`, `Recruiters/WorthFollowUp`, `Recruiters/NeedsMoreInformation`, `Recruiters/Trash`) as state flags.
 * **Document Parsing Engine:** Automatically extracts plain text/Markdown from attached `.pdf` and `.docx` job descriptions using Apache PDFBox and Apache POI. A broken attachment is reported, it never stops the run.
 * **OpenAI/Ollama Compatibility:** Leverages native Ollama REST API JSON formats across all endpoints.
 * **Dual-Tier LLM Architecture:** The same typed client talks to the local Ollama instance (short
@@ -253,7 +253,7 @@ excluded by its own path:
 | --- | --- | --- |
 | `Recruiters/FilteredOut` | not a recruiter mail | no, it stays in the inbox |
 | `Recruiters/WorthFollowUp` | worth a follow up | no, it stays in the inbox |
-| `Recruiters/NeedsPayCheck` | a recruiter mail, but the pay has to be checked | no, it stays in the inbox |
+| `Recruiters/NeedsMoreInformation` | a recruiter mail that matches, but something is missing: the pay is not stated or the job description does not say how many days of office it demands | no, it stays in the inbox |
 | `Recruiters/Trash` | not worth any attention | yes, the message leaves the inbox |
 
 A message carries exactly one state label - applying a new state removes the

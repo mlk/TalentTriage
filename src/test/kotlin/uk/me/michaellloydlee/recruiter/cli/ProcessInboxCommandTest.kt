@@ -49,6 +49,7 @@ class ProcessInboxCommandTest {
             assertEquals("1", completed.attributes["screened"])
             assertEquals("1", completed.attributes["recruiters"])
             assertEquals("1", completed.attributes["worth_follow_up"])
+            assertEquals("0", completed.attributes["needs_more_information"])
             assertTrue(engine.requestHistory.any { it.url.encodedPath.endsWith("/v1/systemone") })
         }
 
@@ -204,7 +205,7 @@ class ProcessInboxCommandTest {
                 val choice =
                     when (name) {
                         "recruiter" -> "from a recruiter"
-                        "jd_matches", "office_days_matches" -> "matches"
+                        "jd_matches", "office_days" -> "matches"
                         else -> "does not match"
                     }
                 """"$name":{"type":"choice","choice":"$choice","confidence":0.9}"""

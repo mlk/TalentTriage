@@ -13,7 +13,7 @@ class RecruiterLabelTest {
             listOf(
                 "Recruiters/FilteredOut",
                 "Recruiters/WorthFollowUp",
-                "Recruiters/NeedsPayCheck",
+                "Recruiters/NeedsMoreInformation",
                 "Recruiters/Trash",
             ),
             RecruiterLabel.entries.map { it.path },
@@ -25,7 +25,7 @@ class RecruiterLabelTest {
         assertTrue(RecruiterLabel.TRASH.archives)
         assertFalse(RecruiterLabel.FILTERED_OUT.archives)
         assertFalse(RecruiterLabel.WORTH_FOLLOW_UP.archives)
-        assertFalse(RecruiterLabel.NEEDS_PAY_CHECK.archives)
+        assertFalse(RecruiterLabel.NEEDS_MORE_INFORMATION.archives)
     }
 
     @Test
@@ -34,7 +34,7 @@ class RecruiterLabelTest {
             "is:inbox " +
                 "-label:Recruiters/FilteredOut " +
                 "-label:Recruiters/WorthFollowUp " +
-                "-label:Recruiters/NeedsPayCheck " +
+                "-label:Recruiters/NeedsMoreInformation " +
                 "-label:Recruiters/Trash",
             RecruiterLabel.UNPROCESSED_QUERY,
         )
@@ -61,14 +61,14 @@ class RecruiterLabelTest {
             mapOf(
                 RecruiterLabel.FILTERED_OUT to "id-filtered",
                 RecruiterLabel.WORTH_FOLLOW_UP to "id-worth",
-                RecruiterLabel.NEEDS_PAY_CHECK to "id-pay",
+                RecruiterLabel.NEEDS_MORE_INFORMATION to "id-more",
                 RecruiterLabel.TRASH to "id-trash",
             )
 
         val transition = RecruiterLabel.WORTH_FOLLOW_UP.transition(ids, inboxLabelId = "INBOX")
 
         assertEquals(listOf("id-worth"), transition.add)
-        assertEquals(listOf("id-filtered", "id-pay", "id-trash"), transition.remove)
+        assertEquals(listOf("id-filtered", "id-more", "id-trash"), transition.remove)
     }
 
     @Test

@@ -16,6 +16,7 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import uk.me.michaellloydlee.recruiter.domain.evaluation.JobDescriptionEvaluation
+import uk.me.michaellloydlee.recruiter.domain.evaluation.OfficeDays
 import uk.me.michaellloydlee.recruiter.domain.gmail.EmailMessage
 import uk.me.michaellloydlee.recruiter.domain.requirements.JobRequirements
 import uk.me.michaellloydlee.recruiter.domain.requirements.PayRequirement
@@ -42,7 +43,7 @@ class DecisionModelEvaluatorTest {
                     .jsonObject["questions"]!!
                     .jsonObject
             assertEquals(
-                listOf("jd_matches", "office_days_matches", "pay_matches", "pay_missing"),
+                listOf("jd_matches", "office_days", "pay_matches", "pay_missing"),
                 questions.keys.sorted(),
             )
         }
@@ -72,7 +73,7 @@ class DecisionModelEvaluatorTest {
                     .parseToJsonElement((engine.requestHistory.single().body as TextContent).text)
                     .jsonObject["questions"]!!
                     .jsonObject
-            assertEquals(listOf("jd_matches", "office_days_matches"), questions.keys.toList())
+            assertEquals(listOf("jd_matches", "office_days"), questions.keys.toList())
         }
 
     @Test
@@ -84,8 +85,103 @@ class DecisionModelEvaluatorTest {
 
             val evaluated = assertIs<JobDescriptionEvaluation.Evaluated>(evaluation)
             assertEquals(true, evaluated.jdMatches)
-            assertEquals(true, evaluated.officeDaysMatch)
+            assertEquals(OfficeDays.AT_MOST_THE_ALLOWED_DAYS, evaluated.officeDays)
             assertEquals(false, evaluated.payMissing)
+        }
+
+    @Test
+    fun theQuestionOfTheOfficeDaysHasThreeAnswers() =
+        runTest {
+            val engine = engine()
+
+            evaluator(engine).evaluate(message(), "", REQUIREMENTS)
+
+            val questions =
+                Json
+                    .parseToJsonElement((engine.requestHistory.single().body as TextContent).text)
+                    .jsonObject["questions"]!!
+                    .jsonObject
+            val options =
+                questions["office_days"]!!
+                    .jsonObject["criteria"]!!
+                    .jsonObject
+            assertEquals(
+                listOf("does not match", "matches", "unclear"),
+                options.keys.sorted(),
+            )
+        }
+
+    @Test
+    fun readsTheOfficeDaysThatAreUnclear() =
+        runTest {
+            val engine =
+                engine(
+                    answers =
+                        mapOf(
+                            "jd_matches" to "matches",
+                            "office_days" to "unclear",
+                        ),
+                )
+
+            val evaluation = evaluator(engine).evaluate(message(), "", REQUIREMENTS_WITHOUT_PAY)
+
+            val evaluated = assertIs<JobDescriptionEvaluation.Evaluated>(evaluation)
+            assertEquals(OfficeDays.UNCLEAR, evaluated.officeDays)
+        }
+
+    @Test
+    fun readsTheOfficeDaysThatAreTooMany() =
+        runTest {
+            val engine =
+                engine(
+                    answers =
+                        mapOf(
+                            "jd_matches" to "matches",
+                            "office_days" to "does not match",
+                        ),
+                )
+
+            val evaluation = evaluator(engine).evaluate(message(), "", REQUIREMENTS_WITHOUT_PAY)
+
+            val evaluated = assertIs<JobDescriptionEvaluation.Evaluated>(evaluation)
+            assertEquals(OfficeDays.MORE_THAN_THE_ALLOWED_DAYS, evaluated.officeDays)
+        }
+
+    @Test
+    fun aModelThatIsNotSureAboutTheOfficeDaysStillSaysThatTheyAreUnclear() =
+        runTest {
+            val engine =
+                engine(
+                    answers =
+                        mapOf(
+                            "jd_matches" to "matches",
+                            "office_days" to "unclear",
+                        ),
+                    confidenceOfTheOfficeDays = 0.37,
+                )
+
+            val evaluation = evaluator(engine).evaluate(message(), "", REQUIREMENTS_WITHOUT_PAY)
+
+            val evaluated = assertIs<JobDescriptionEvaluation.Evaluated>(evaluation)
+            assertEquals(OfficeDays.UNCLEAR, evaluated.officeDays)
+        }
+
+    @Test
+    fun anAnswerWithAnUnknownOptionLeavesTheMailAlone() =
+        runTest {
+            val engine =
+                engine(
+                    answers =
+                        mapOf(
+                            "jd_matches" to "matches",
+                            "office_days" to "who knows",
+                        ),
+                )
+
+            val evaluation = evaluator(engine).evaluate(message(), "", REQUIREMENTS_WITHOUT_PAY)
+
+            val unknown = assertIs<JobDescriptionEvaluation.Unknown>(evaluation)
+            assertTrue(unknown.reason.contains("unknown option"))
         }
 
     @Test
@@ -157,14 +253,17 @@ class DecisionModelEvaluatorTest {
             mapOf(
                 "pay_matches" to "does not match",
                 "jd_matches" to "matches",
-                "office_days_matches" to "matches",
+                "office_days" to "matches",
                 "pay_missing" to "does not match",
             ),
+        confidenceOfTheOfficeDays: Double = confidence,
     ): MockEngine =
         MockEngine {
             val answer =
                 answers.entries.joinToString(",") { (name, choice) ->
-                    """"$name":{"type":"choice","choice":"$choice","confidence":$confidence}"""
+                    val answerConfidence =
+                        if (name == "office_days") confidenceOfTheOfficeDays else confidence
+                    """"$name":{"type":"choice","choice":"$choice","confidence":$answerConfidence}"""
                 }
             respond(
                 content = DECISION_ANSWER.replace("{}", "{$answer}"),

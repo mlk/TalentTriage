@@ -10,8 +10,8 @@ import uk.me.michaellloydlee.recruiter.infrastructure.gmail.GmailLabelStateManag
  * pipeline.
  *
  * A mail that is worth a follow up gets the label `Recruiters/WorthFollowUp`, a
- * mail that matches but says nothing about the pay gets
- * `Recruiters/NeedsPayCheck` and a mail that does not match gets
+ * mail that matches but does not say everything the job seeker needs to know
+ * gets `Recruiters/NeedsMoreInformation` and a mail that does not match gets
  * `Recruiters/Trash` and is archived. A mail the model could not decide about
  * stays in the inbox and is looked at again by the next run.
  *

@@ -261,7 +261,7 @@ class ProcessInboxCommand(
             "recruiters" to recruiters.toString(),
             "filtered_out" to filteredOut.toString(),
             "worth_follow_up" to worthFollowUp.toString(),
-            "needs_pay_check" to needsPayCheck.toString(),
+            "needs_more_information" to needsMoreInformation.toString(),
             "trashed" to trashed.toString(),
             "unknown" to unknown.toString(),
         )

@@ -26,7 +26,7 @@ class GmailLabelStateManagerTest {
             val body = bodyOf(engine)
             assertTrue(body.contains("Label_worthfollowup"))
             assertTrue(body.contains("Label_filteredout"))
-            assertTrue(body.contains("Label_needspaycheck"))
+            assertTrue(body.contains("Label_needsmoreinformation"))
             assertTrue(body.contains("Label_trash"))
             assertFalse(body.contains("INBOX"))
         }
@@ -146,7 +146,7 @@ class GmailLabelStateManagerTest {
             listOf(
                 "Recruiters/FilteredOut",
                 "Recruiters/WorthFollowUp",
-                "Recruiters/NeedsPayCheck",
+                "Recruiters/NeedsMoreInformation",
                 "Recruiters/Trash",
             )
     }
