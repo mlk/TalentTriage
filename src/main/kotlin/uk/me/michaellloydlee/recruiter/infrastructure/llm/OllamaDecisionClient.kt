@@ -22,9 +22,12 @@ import io.ktor.http.isSuccess
  * the named options and tell how likely every one of them is. The answer is
  * much more predictable than the text of a chat model.
  *
+ * Every model call of the pipeline has its own endpoint and its own timeout,
+ * the command line fills them in.
+ *
  * @param httpClient the client the requests are sent with, it needs the
  *   `HttpTimeout` and the `ContentNegotiation` plugin.
- * @param baseUrl the base URL of the API, the local Ollama by default.
+ * @param baseUrl the base URL of the API.
  * @param timeoutMillis how long a call may take, in milliseconds.
  */
 class OllamaDecisionClient(

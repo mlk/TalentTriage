@@ -9,11 +9,11 @@ import uk.me.michaellloydlee.recruiter.domain.gmail.EmailMessage
  * They are the first stage of the screening: a message that matches none of
  * them is not a recruiter mail and is filtered out without asking a model.
  * The rules are deliberately generous - a message that passes them is only a
- * candidate, the local model has the last word - because a recruiter mail
+ * candidate, the model has the last word - because a recruiter mail
  * that is filtered out here never comes back.
  *
  * The words are matched as a part of a word, so "cv" also matches "revolve".
- * That costs a call to the local model, a recruiter mail that is not matched
+ * That costs a call to the model, a recruiter mail that is not matched
  * at all costs the mail itself.
  *
  * @param keywords the words a recruiter mail talks about, they are looked for

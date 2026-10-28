@@ -18,14 +18,14 @@ import io.ktor.http.isSuccess
 /**
  * The client of the chat endpoint of an Ollama model.
  *
- * The client talks to the native Ollama API, so the same class serves the
- * local Ollama instance and the AirLLM wrapper - only the base URL and the
- * timeout are different. The local model answers in seconds and gets a short
- * timeout, the deep evaluation model needs minutes and gets a long one.
+ * The client talks to the native Ollama API. The endpoint and the timeout
+ * are the settings of the call, every model call of the pipeline has its own:
+ * the screening of the recruiter mails is quick, the evaluation of the job
+ * descriptions needs minutes.
  *
  * @param httpClient the client the requests are sent with, it needs the
  *   `HttpTimeout` and the `ContentNegotiation` plugin.
- * @param baseUrl the base URL of the API, the local Ollama by default.
+ * @param baseUrl the base URL of the API.
  * @param timeoutMillis how long a call may take, in milliseconds.
  */
 class OllamaChatClient(
@@ -83,17 +83,11 @@ class OllamaChatClient(
         get() = "${baseUrl.trimEnd('/')}$CHAT_PATH"
 
     companion object {
-        /** The base URL of a local Ollama instance. */
+        /** The base URL of an Ollama instance. */
         const val DEFAULT_BASE_URL: String = "http://localhost:11434"
 
-        /** The base URL of the AirLLM wrapper. */
-        const val DEEP_EVAL_BASE_URL: String = "http://localhost:8000"
-
-        /** How long a call to the local model may take, in milliseconds. */
+        /** How long a call may take, in milliseconds. */
         const val DEFAULT_TIMEOUT_MILLIS: Long = 120_000
-
-        /** How long a call to the deep evaluation model may take, in milliseconds. */
-        const val DEEP_EVAL_TIMEOUT_MILLIS: Long = 600_000
 
         /** The path of the chat endpoint of the API. */
         const val CHAT_PATH: String = "/api/chat"

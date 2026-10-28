@@ -11,7 +11,7 @@ enum class ScreeningDecision {
     NOT_RECRUITER,
 
     /**
-     * The screening could not decide, for example because the local model was
+     * The screening could not decide, for example because the model was
      * not reachable. The message stays in the inbox and is looked at again by
      * the next run of the pipeline.
      */
