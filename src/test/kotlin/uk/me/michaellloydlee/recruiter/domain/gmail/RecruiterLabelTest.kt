@@ -30,7 +30,29 @@ class RecruiterLabelTest {
 
     @Test
     fun theSearchMatchesTheInboxMessagesWithoutAStateLabel() {
-        assertEquals("is:inbox -label:Recruiters/*", RecruiterLabel.UNPROCESSED_QUERY)
+        assertEquals(
+            "is:inbox " +
+                "-label:Recruiters/FilteredOut " +
+                "-label:Recruiters/WorthFollowUp " +
+                "-label:Recruiters/NeedsPayCheck " +
+                "-label:Recruiters/Trash",
+            RecruiterLabel.UNPROCESSED_QUERY,
+        )
+    }
+
+    @Test
+    fun theSearchExcludesEveryStateLabelByItsPath() {
+        assertTrue(
+            RecruiterLabel.entries.all { "-label:${it.path}" in RecruiterLabel.UNPROCESSED_QUERY },
+        )
+    }
+
+    @Test
+    fun theSearchHasNoWildcardBecauseGmailDoesNotUnderstandOne() {
+        assertFalse(
+            RecruiterLabel.UNPROCESSED_QUERY.contains("*"),
+            "Gmail ignores a wildcard in the name of a label",
+        )
     }
 
     @Test

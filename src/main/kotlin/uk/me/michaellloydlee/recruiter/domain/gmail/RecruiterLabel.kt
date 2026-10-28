@@ -8,7 +8,7 @@ private const val LABEL_PREFIX = "Recruiters/"
  * Gmail is the state store of the pipeline: a message that carries one of
  * these labels was processed already and is not looked at again. The labels
  * are nested below the `Recruiters/` prefix, so the whole family can be
- * excluded from a search with the `-label:Recruiters/…` wildcard.
+ * excluded from a search with one `-label:…` per state.
  *
  * @property path the full path of the label in Gmail.
  * @property archives whether a message with this label is archived.
@@ -34,8 +34,17 @@ enum class RecruiterLabel(
         /** The prefix all state labels share. */
         const val PREFIX: String = LABEL_PREFIX
 
-        /** The search that matches the inbox messages without a state label. */
-        const val UNPROCESSED_QUERY: String = "is:inbox -label:Recruiters/*"
+        /**
+         * The search that matches the inbox messages without a state label.
+         *
+         * Gmail does not understand a wildcard in the name of a label: the
+         * search `is:inbox -label:Recruiters/…` still returns the messages
+         * that carry a nested label, and the parent label `Recruiters` does
+         * not cover the nested ones either. Every state label is excluded by
+         * its own path, that is the only search that works.
+         */
+        val UNPROCESSED_QUERY: String =
+            "is:inbox " + entries.joinToString(separator = " ") { "-label:${it.path}" }
     }
 }
 
