@@ -90,7 +90,9 @@ class ProcessInboxCommand(
             "-j",
             help =
                 "The model that evaluates the job descriptions: the decision models are nimble, tev1, " +
-                    "clef and clef:cloud, a chat model is needed for --job-description-evaluation=chat",
+                    "clef and clef:cloud, a chat model is needed for --job-description-evaluation=chat. " +
+                    "The models with the suffix :cloud run in the cloud of Ollama and need a paid plan " +
+                    "or usage credits",
         ).default(DecisionModelEvaluator.DEFAULT_MODEL)
 
     private val requirementsFile: String by
@@ -130,7 +132,9 @@ class ProcessInboxCommand(
             "-m",
             help =
                 "The model that verifies the messages: the decision models are nimble, tev1, " +
-                    "clef and clef:cloud, a chat model is needed for --recruiter-verification=llm",
+                    "clef and clef:cloud, a chat model is needed for --recruiter-verification=llm. " +
+                    "The models with the suffix :cloud run in the cloud of Ollama and need a paid plan " +
+                    "or usage credits",
         ).default(DecisionModelVerifier.DEFAULT_MODEL)
 
     override suspend fun run() {
