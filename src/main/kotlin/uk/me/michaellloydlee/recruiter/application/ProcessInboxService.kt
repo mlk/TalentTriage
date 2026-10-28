@@ -1,24 +1,36 @@
 package uk.me.michaellloydlee.recruiter.application
 
+import uk.me.michaellloydlee.recruiter.application.evaluation.AttachmentTextReader
+import uk.me.michaellloydlee.recruiter.application.evaluation.EvaluationService
 import uk.me.michaellloydlee.recruiter.application.screening.ScreeningService
+import uk.me.michaellloydlee.recruiter.domain.evaluation.JobDescriptionEvaluation
+import uk.me.michaellloydlee.recruiter.domain.gmail.EmailMessage
+import uk.me.michaellloydlee.recruiter.domain.gmail.RecruiterLabel
+import uk.me.michaellloydlee.recruiter.domain.requirements.JobRequirements
 import uk.me.michaellloydlee.recruiter.domain.screening.ScreeningDecision
 import uk.me.michaellloydlee.recruiter.infrastructure.gmail.GmailMessagesApi
 import uk.me.michaellloydlee.recruiter.infrastructure.logging.StructuredLogger
 
 /**
- * Runs one pass of the pipeline over the unprocessed messages of the inbox.
+ * Runs one pass of the pipeline over the messages of the inbox.
  *
- * The messages that were not processed yet are fetched, screened and the ones
- * that are not recruiter mails are filtered out. The recruiter mails are
- * counted here, the deep evaluation of their attachments comes later.
+ * The messages that were not processed yet are fetched and screened. The
+ * recruiter mails are evaluated against the requirements of the job seeker and
+ * end in one of the three states of the pipeline.
  *
  * @param messages the message endpoints of the Gmail API.
  * @param screening the screening of the messages.
- * @param logger sink for the log of the screened messages.
+ * @param evaluation the evaluation of the job descriptions.
+ * @param attachments reads the text of the attached documents.
+ * @param requirements the requirements of the job seeker.
+ * @param logger sink for the log of the run.
  */
 class ProcessInboxService(
     private val messages: GmailMessagesApi,
     private val screening: ScreeningService,
+    private val evaluation: EvaluationService,
+    private val attachments: AttachmentTextReader,
+    private val requirements: JobRequirements,
     private val logger: StructuredLogger,
 ) {
     /**
@@ -28,39 +40,108 @@ class ProcessInboxService(
      */
     suspend fun run(): ProcessInboxSummary {
         val pending = messages.listUnprocessed()
-        var recruiters = 0
-        var filteredOut = 0
-        var unknown = 0
+        val counters = Counters()
         pending.forEach { summary ->
-            val message = messages.getMessage(summary.id)
-            val outcome = screening.screen(message)
-            logger.info(
-                event = "$EVENT_SCREENED",
-                message = "A message of the inbox was screened",
-                attributes =
-                    mapOf(
-                        "id" to message.id,
-                        "decision" to outcome.decision.name,
-                        "stage" to outcome.stage.name,
-                        "reason" to outcome.reason,
-                    ),
-            )
-            when (outcome.decision) {
-                ScreeningDecision.RECRUITER -> recruiters++
-                ScreeningDecision.NOT_RECRUITER -> filteredOut++
-                ScreeningDecision.UNKNOWN -> unknown++
-            }
+            screen(messages.getMessage(summary.id), counters)
         }
         return ProcessInboxSummary(
             screened = pending.size,
-            recruiters = recruiters,
-            filteredOut = filteredOut,
-            unknown = unknown,
+            recruiters = counters.recruiters,
+            filteredOut = counters.filteredOut,
+            unknown = counters.unknown,
+            worthFollowUp = counters.worthFollowUp,
+            needsPayCheck = counters.needsPayCheck,
+            trashed = counters.trashed,
         )
+    }
+
+    private suspend fun screen(
+        message: EmailMessage,
+        counters: Counters,
+    ) {
+        val outcome = screening.screen(message)
+        logger.info(
+            event = EVENT_SCREENED,
+            message = "A message of the inbox was screened",
+            attributes =
+                mapOf(
+                    "id" to message.id,
+                    "decision" to outcome.decision.name,
+                    "stage" to outcome.stage.name,
+                    "reason" to outcome.reason,
+                ),
+        )
+        when (outcome.decision) {
+            ScreeningDecision.RECRUITER -> {
+                counters.recruiters++
+                evaluate(message, counters)
+            }
+
+            ScreeningDecision.NOT_RECRUITER -> {
+                counters.filteredOut++
+            }
+
+            ScreeningDecision.UNKNOWN -> {
+                counters.unknown++
+            }
+        }
+    }
+
+    private suspend fun evaluate(
+        message: EmailMessage,
+        counters: Counters,
+    ) {
+        val evaluation =
+            evaluation.evaluate(
+                message = message,
+                attachments = attachments.textOf(message),
+                requirements = requirements,
+            )
+        logger.info(
+            event = EVENT_EVALUATED,
+            message = "A job description of the inbox was evaluated",
+            attributes =
+                mapOf(
+                    "id" to message.id,
+                    "state" to (stateOf(evaluation)?.name ?: "UNKNOWN"),
+                    "reason" to reasonOf(evaluation),
+                ),
+        )
+        when (stateOf(evaluation)) {
+            RecruiterLabel.WORTH_FOLLOW_UP -> counters.worthFollowUp++
+            RecruiterLabel.NEEDS_PAY_CHECK -> counters.needsPayCheck++
+            RecruiterLabel.TRASH -> counters.trashed++
+            RecruiterLabel.FILTERED_OUT -> counters.filteredOut++
+            null -> counters.unknown++
+        }
+    }
+
+    private fun stateOf(evaluation: JobDescriptionEvaluation): RecruiterLabel? =
+        (evaluation as? JobDescriptionEvaluation.Evaluated)?.state
+
+    private fun reasonOf(evaluation: JobDescriptionEvaluation): String =
+        when (evaluation) {
+            is JobDescriptionEvaluation.Evaluated -> "The model decided"
+            is JobDescriptionEvaluation.Unknown -> evaluation.reason
+        }
+
+    /**
+     * The counters of a run.
+     */
+    private class Counters {
+        var recruiters: Int = 0
+        var filteredOut: Int = 0
+        var unknown: Int = 0
+        var worthFollowUp: Int = 0
+        var needsPayCheck: Int = 0
+        var trashed: Int = 0
     }
 
     companion object {
         /** The event of the log of a screened message. */
         const val EVENT_SCREENED: String = "process-inbox.screened"
+
+        /** The event of the log of an evaluated job description. */
+        const val EVENT_EVALUATED: String = "process-inbox.evaluated"
     }
 }

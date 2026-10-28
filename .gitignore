@@ -18,5 +18,6 @@ out/
 credentials.json
 token.json
 client_secret.json
+requirements.json
 *.keystore
 *.jks

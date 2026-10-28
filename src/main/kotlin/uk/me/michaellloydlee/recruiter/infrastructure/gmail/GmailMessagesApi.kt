@@ -8,6 +8,7 @@ import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
 import java.time.Clock
 import java.time.Instant
+import java.util.Base64
 
 /**
  * The message endpoints of the Gmail REST API.
@@ -58,6 +59,25 @@ class GmailMessagesApi(
     suspend fun getMessage(id: String): EmailMessage {
         val message = api.get("users/me/messages/$id?format=full", GmailMessageResource.serializer())
         return GmailMessageMapper.toDomain(message)
+    }
+
+    /**
+     * Fetches the content of an attachment of a message.
+     *
+     * @param messageId the id of the message the attachment belongs to.
+     * @param attachmentId the id of the attachment.
+     * @return the bytes of the attachment.
+     */
+    suspend fun getAttachment(
+        messageId: String,
+        attachmentId: String,
+    ): ByteArray {
+        val attachment =
+            api.get(
+                "users/me/messages/$messageId/attachments/$attachmentId",
+                GmailAttachmentResource.serializer(),
+            )
+        return Base64.getUrlDecoder().decode(attachment.data)
     }
 
     /**

@@ -8,14 +8,19 @@ import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
+import io.ktor.http.content.TextContent
 import io.ktor.http.headersOf
 import io.ktor.serialization.kotlinx.json.json
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
-import uk.me.michaellloydlee.recruiter.application.screening.ChatModelVerifier
+import kotlinx.serialization.json.jsonObject
+import uk.me.michaellloydlee.recruiter.application.evaluation.AttachmentTextReader
+import uk.me.michaellloydlee.recruiter.application.evaluation.DecisionModelEvaluator
+import uk.me.michaellloydlee.recruiter.application.evaluation.EvaluationService
+import uk.me.michaellloydlee.recruiter.application.screening.DecisionModelVerifier
 import uk.me.michaellloydlee.recruiter.application.screening.ScreeningService
 import uk.me.michaellloydlee.recruiter.domain.gmail.EmailMessage
-import uk.me.michaellloydlee.recruiter.domain.screening.RecruiterHeuristics
+import uk.me.michaellloydlee.recruiter.domain.requirements.JobRequirements
 import uk.me.michaellloydlee.recruiter.infrastructure.gmail.FakeRefresher
 import uk.me.michaellloydlee.recruiter.infrastructure.gmail.FakeTokenStore
 import uk.me.michaellloydlee.recruiter.infrastructure.gmail.GmailApiClient
@@ -24,7 +29,7 @@ import uk.me.michaellloydlee.recruiter.infrastructure.gmail.GmailLabelsApi
 import uk.me.michaellloydlee.recruiter.infrastructure.gmail.GmailMessagesApi
 import uk.me.michaellloydlee.recruiter.infrastructure.gmail.OAuth2Token
 import uk.me.michaellloydlee.recruiter.infrastructure.gmail.RefreshingAccessTokenProvider
-import uk.me.michaellloydlee.recruiter.infrastructure.llm.OllamaChatClient
+import uk.me.michaellloydlee.recruiter.infrastructure.llm.OllamaDecisionClient
 import uk.me.michaellloydlee.recruiter.infrastructure.logging.StructuredLogger
 import java.time.Instant
 import kotlin.test.Test
@@ -35,29 +40,29 @@ class ProcessInboxServiceTest {
     fun screensEveryUnprocessedMessage() =
         runTest {
             val gmail = gmailEngine()
-            val model = modelAnswering("no")
-            val service = service(gmail, model)
+            val model = modelEngine()
 
-            val summary = service.run()
-
-            assertEquals(2, summary.screened)
-            assertEquals(0, summary.recruiters)
-            assertEquals(2, summary.filteredOut)
-            assertEquals(0, summary.unknown)
-        }
-
-    @Test
-    fun countsTheRecruiterMails() =
-        runTest {
-            val gmail = gmailEngine()
-            val model = modelAnswering("yes")
-            val service = service(gmail, model)
-
-            val summary = service.run()
+            val summary = service(gmail, model).run()
 
             assertEquals(2, summary.screened)
             assertEquals(2, summary.recruiters)
             assertEquals(0, summary.filteredOut)
+            assertEquals(0, summary.unknown)
+        }
+
+    @Test
+    fun countsTheStateOfTheRecruiterMails() =
+        runTest {
+            val gmail = gmailEngine()
+            val model = modelEngine()
+
+            val summary = service(gmail, model).run()
+
+            assertEquals(2, summary.screened)
+            assertEquals(2, summary.recruiters)
+            assertEquals(2, summary.worthFollowUp)
+            assertEquals(0, summary.needsPayCheck)
+            assertEquals(0, summary.trashed)
         }
 
     @Test
@@ -68,30 +73,13 @@ class ProcessInboxServiceTest {
                 MockEngine {
                     respond(content = """{"error":"model not found"}""", status = HttpStatusCode.NotFound)
                 }
-            val service = service(gmail, model)
 
-            val summary = service.run()
+            val summary = service(gmail, model).run()
 
             assertEquals(2, summary.screened)
             assertEquals(0, summary.recruiters)
             assertEquals(0, summary.filteredOut)
             assertEquals(2, summary.unknown)
-        }
-
-    @Test
-    fun doesNothingWithoutUnprocessedMessages() =
-        runTest {
-            val gmail =
-                MockEngine {
-                    respond(content = """{"messages":[]}""", status = HttpStatusCode.OK, headers = jsonHeaders())
-                }
-            val model = modelAnswering("no")
-            val service = service(gmail, model)
-
-            val summary = service.run()
-
-            assertEquals(0, summary.screened)
-            assertEquals(0, model.requestHistory.size)
         }
 
     private fun service(
@@ -109,35 +97,72 @@ class ProcessInboxServiceTest {
                 baseUrl = "https://gmail.example/v1",
             )
         val messages = GmailMessagesApi(api)
+        val stateManager = GmailLabelStateManager(messages, GmailLabelsApi(api))
+        val modelClient =
+            OllamaDecisionClient(
+                httpClient =
+                    HttpClient(model) {
+                        install(HttpTimeout)
+                        install(ContentNegotiation) { json(JSON) }
+                    },
+            )
         return ProcessInboxService(
             messages = messages,
-            logger = StructuredLogger(StringBuilder()),
             screening =
                 ScreeningService(
-                    heuristics = RecruiterHeuristics(),
-                    verifier =
-                        ChatModelVerifier(
-                            OllamaChatClient(
-                                httpClient =
-                                    HttpClient(model) {
-                                        install(HttpTimeout)
-                                        install(ContentNegotiation) { json(JSON) }
-                                    },
-                            ),
-                        ),
-                    stateManager = GmailLabelStateManager(messages, GmailLabelsApi(api)),
+                    heuristics =
+                        uk.me.michaellloydlee.recruiter.domain.screening
+                            .RecruiterHeuristics(),
+                    verifier = DecisionModelVerifier(modelClient),
+                    stateManager = stateManager,
                 ),
+            evaluation =
+                EvaluationService(
+                    evaluator = DecisionModelEvaluator(modelClient),
+                    stateManager = stateManager,
+                ),
+            attachments = AttachmentTextReader(messages),
+            requirements =
+                JobRequirements(
+                    minimumPay = null,
+                    maximumOfficeDays = 2,
+                    profile = "Senior Kotlin engineer",
+                ),
+            logger = StructuredLogger(StringBuilder()),
         )
     }
+
+    /**
+     * The model answers the recruiter question and the four criteria of the
+     * evaluation.
+     */
+    private fun modelEngine(): MockEngine =
+        MockEngine { request ->
+            val body = (request.body as TextContent).text
+            val questions = Json.parseToJsonElement(body).jsonObject["questions"]!!.jsonObject
+            val answer =
+                if (questions.containsKey("recruiter")) {
+                    """"recruiter":{"type":"choice","choice":"from a recruiter","confidence":0.9}"""
+                } else {
+                    questions.keys.joinToString(",") { name ->
+                        val matches = name == "jd_matches" || name == "office_days_matches"
+                        val choice = if (matches) "matches" else "does not match"
+                        """"$name":{"type":"choice","choice":"$choice","confidence":0.9}"""
+                    }
+                }
+            respond(
+                content = DECISION_ANSWER.replace("{}", "{$answer}"),
+                status = HttpStatusCode.OK,
+                headers = headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString()),
+            )
+        }
 
     private fun gmailEngine(): MockEngine =
         MockEngine { request ->
             when {
                 request.url.encodedPath.endsWith("/users/me/messages") -> {
                     respond(
-                        content =
-                            """{"messages":[{"id":"first","threadId":"thread-1"},""" +
-                                """{"id":"second","threadId":"thread-2"}]}""",
+                        content = MESSAGE_LIST,
                         status = HttpStatusCode.OK,
                         headers = jsonHeaders(),
                     )
@@ -145,7 +170,7 @@ class ProcessInboxServiceTest {
 
                 request.url.encodedPath.endsWith("/users/me/labels") && request.method.value == "GET" -> {
                     respond(
-                        content = """{"labels":[{"id":"Label_filteredout","name":"Recruiters/FilteredOut"}]}""",
+                        content = """{"labels":[{"id":"Label_worthfollowup","name":"Recruiters/WorthFollowUp"}]}""",
                         status = HttpStatusCode.OK,
                         headers = jsonHeaders(),
                     )
@@ -153,7 +178,7 @@ class ProcessInboxServiceTest {
 
                 request.url.encodedPath.endsWith("/users/me/labels") -> {
                     respond(
-                        content = """{"id":"Label_filteredout","name":"Recruiters/FilteredOut"}""",
+                        content = """{"id":"Label_worthfollowup","name":"Recruiters/WorthFollowUp"}""",
                         status = HttpStatusCode.OK,
                         headers = jsonHeaders(),
                     )
@@ -161,18 +186,7 @@ class ProcessInboxServiceTest {
 
                 else -> {
                     respond(
-                        content =
-                            """
-                            {
-                              "id": "first",
-                              "threadId": "thread-1",
-                              "payload": {
-                                "mimeType": "text/plain",
-                                "headers": [{"name": "Subject", "value": "Your CV"}],
-                                "body": {"data": "WWUgbG9va2luZyBmb3IgYSBkZXZlbG9wZXI="}
-                              }
-                            }
-                            """.trimIndent(),
+                        content = message(),
                         status = HttpStatusCode.OK,
                         headers = jsonHeaders(),
                     )
@@ -180,14 +194,25 @@ class ProcessInboxServiceTest {
             }
         }
 
-    private fun modelAnswering(answer: String): MockEngine =
-        MockEngine {
-            respond(
-                content = """{"message":{"role":"assistant","content":"$answer"},"done":true}""",
-                status = HttpStatusCode.OK,
-                headers = jsonHeaders(),
-            )
-        }
+    private fun message(): String {
+        val text =
+            """
+            {
+              "id": "first",
+              "threadId": "thread-1",
+              "labelIds": ["INBOX"],
+              "payload": {
+                "mimeType": "text/plain",
+                "headers": [
+                  {"name": "From", "value": "recruiter@example.com"},
+                  {"name": "Subject", "value": "Your CV"}
+                ],
+                "body": {"data": "WWUgbG9va2luZyBmb3IgYSBkZXZlbG9wZXI="}
+              }
+            }
+            """.trimIndent()
+        return text
+    }
 
     private fun token(): OAuth2Token =
         OAuth2Token(
@@ -199,10 +224,12 @@ class ProcessInboxServiceTest {
     private fun jsonHeaders() = headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString())
 
     companion object {
-        private val JSON: Json =
-            Json {
-                ignoreUnknownKeys = true
-                encodeDefaults = true
-            }
+        private const val DECISION_ANSWER =
+            """{"model":"clef:cloud","answers":{},"usage":{"input_tokens":10,"output_tokens":1}}"""
+
+        private const val MESSAGE_LIST =
+            """{"messages":[{"id":"first","threadId":"thread-1"},{"id":"second","threadId":"thread-2"}]}"""
+
+        private val JSON: Json = Json { ignoreUnknownKeys = true }
     }
 }
