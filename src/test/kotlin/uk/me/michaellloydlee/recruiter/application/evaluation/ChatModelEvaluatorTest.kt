@@ -14,6 +14,7 @@ import io.ktor.serialization.kotlinx.json.json
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
 import uk.me.michaellloydlee.recruiter.domain.evaluation.JobDescriptionEvaluation
+import uk.me.michaellloydlee.recruiter.domain.evaluation.OfficeDays
 import uk.me.michaellloydlee.recruiter.domain.gmail.EmailMessage
 import uk.me.michaellloydlee.recruiter.domain.requirements.JobRequirements
 import uk.me.michaellloydlee.recruiter.domain.requirements.PayRequirement
@@ -29,21 +30,57 @@ class ChatModelEvaluatorTest {
     fun readsTheAnswerOfTheModel() =
         runTest {
             val engine =
-                engine("""{"pay_matches":true,"jd_matches":true,"office_days_matches":true,"pay_missing":false}""")
+                engine("""{"pay_matches":true,"jd_matches":true,"office_days":"matches","pay_missing":false}""")
 
             val evaluation = evaluator(engine).evaluate(message(), "", REQUIREMENTS)
 
             val evaluated = assertIs<JobDescriptionEvaluation.Evaluated>(evaluation)
             assertEquals(true, evaluated.payMatches)
             assertEquals(true, evaluated.jdMatches)
-            assertEquals(true, evaluated.officeDaysMatch)
+            assertEquals(OfficeDays.AT_MOST_THE_ALLOWED_DAYS, evaluated.officeDays)
             assertEquals(false, evaluated.payMissing)
+        }
+
+    @Test
+    fun readsTheOfficeDaysThatAreUnclear() =
+        runTest {
+            val engine =
+                engine("""{"jd_matches":true,"office_days":"unclear"}""")
+
+            val evaluation = evaluator(engine).evaluate(message(), "", REQUIREMENTS)
+
+            val evaluated = assertIs<JobDescriptionEvaluation.Evaluated>(evaluation)
+            assertEquals(OfficeDays.UNCLEAR, evaluated.officeDays)
+        }
+
+    @Test
+    fun readsTheOfficeDaysThatAreTooMany() =
+        runTest {
+            val engine =
+                engine("""{"jd_matches":true,"office_days":"does not match"}""")
+
+            val evaluation = evaluator(engine).evaluate(message(), "", REQUIREMENTS)
+
+            val evaluated = assertIs<JobDescriptionEvaluation.Evaluated>(evaluation)
+            assertEquals(OfficeDays.MORE_THAN_THE_ALLOWED_DAYS, evaluated.officeDays)
+        }
+
+    @Test
+    fun anAnswerWithAnUnknownOptionLeavesTheMailAlone() =
+        runTest {
+            val engine =
+                engine("""{"jd_matches":true,"office_days":"who knows"}""")
+
+            val evaluation = evaluator(engine).evaluate(message(), "", REQUIREMENTS)
+
+            val unknown = assertIs<JobDescriptionEvaluation.Unknown>(evaluation)
+            assertTrue(unknown.reason.contains("unknown option"))
         }
 
     @Test
     fun readsTheAnswerOutOfASentence() =
         runTest {
-            val engine = engine("Here you are: {\"jd_matches\":true,\"office_days_matches\":true} it is a good job")
+            val engine = engine("Here you are: {\"jd_matches\":true,\"office_days\":\"matches\"} it is a good job")
 
             val evaluation = evaluator(engine).evaluate(message(), "", REQUIREMENTS)
 

@@ -14,6 +14,7 @@ import io.ktor.serialization.kotlinx.json.json
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import uk.me.michaellloydlee.recruiter.application.evaluation.AttachmentTextReader
 import uk.me.michaellloydlee.recruiter.application.evaluation.DecisionModelEvaluator
 import uk.me.michaellloydlee.recruiter.application.evaluation.EvaluationService
@@ -100,6 +101,24 @@ class ProcessInboxServiceTest {
         }
 
     @Test
+    fun tagsAMailWithUnclearOfficeDaysForTheWorkFromHomeCheck() =
+        runTest {
+            val gmail = gmailEngine()
+            val model = modelEngine(officeDays = "unclear")
+
+            val summary = service(gmail, model).run()
+
+            assertEquals(2, summary.needsWorkFromHomeCheck)
+            assertEquals(0, summary.worthFollowUp)
+            val labels = gmail.requestHistory.filter { it.url.encodedPath.endsWith("/modify") }
+            assertEquals(2, labels.size)
+            labels.forEach { label ->
+                val body = (label.body as TextContent).text
+                assertTrue(body.contains("Label_needsworkfromhomecheck"))
+            }
+        }
+
+    @Test
     fun leavesTheMailItCouldNotDecideWithoutALabel() =
         runTest {
             val gmail = gmailEngine()
@@ -168,7 +187,7 @@ class ProcessInboxServiceTest {
      * The model answers the recruiter question and the four criteria of the
      * evaluation.
      */
-    private fun modelEngine(): MockEngine =
+    private fun modelEngine(officeDays: String = "matches"): MockEngine =
         MockEngine { request ->
             val body = (request.body as TextContent).text
             val questions = Json.parseToJsonElement(body).jsonObject["questions"]!!.jsonObject
@@ -177,8 +196,12 @@ class ProcessInboxServiceTest {
                     """"recruiter":{"type":"choice","choice":"from a recruiter","confidence":0.9}"""
                 } else {
                     questions.keys.joinToString(",") { name ->
-                        val matches = name == "jd_matches" || name == "office_days_matches"
-                        val choice = if (matches) "matches" else "does not match"
+                        val choice =
+                            when (name) {
+                                "jd_matches" -> "matches"
+                                "office_days" -> officeDays
+                                else -> "does not match"
+                            }
                         """"$name":{"type":"choice","choice":"$choice","confidence":0.9}"""
                     }
                 }
@@ -188,6 +211,8 @@ class ProcessInboxServiceTest {
                 headers = headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString()),
             )
         }
+
+    private fun idOf(label: String): String = "Label_${label.substringAfterLast('/').lowercase()}"
 
     private fun gmailEngine(): MockEngine =
         MockEngine { request ->
@@ -209,8 +234,14 @@ class ProcessInboxServiceTest {
                 }
 
                 request.url.encodedPath.endsWith("/users/me/labels") -> {
+                    val name =
+                        Json
+                            .parseToJsonElement((request.body as TextContent).text)
+                            .jsonObject["name"]!!
+                            .jsonPrimitive
+                            .content
                     respond(
-                        content = """{"id":"Label_worthfollowup","name":"Recruiters/WorthFollowUp"}""",
+                        content = """{"id":"${idOf(name)}","name":"$name"}""",
                         status = HttpStatusCode.OK,
                         headers = jsonHeaders(),
                     )
