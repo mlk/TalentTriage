@@ -5,6 +5,7 @@ import com.github.ajalt.clikt.core.Context
 import com.github.ajalt.clikt.parameters.options.default
 import com.github.ajalt.clikt.parameters.options.option
 import com.github.ajalt.clikt.parameters.types.enum
+import com.github.ajalt.clikt.parameters.types.long
 import io.ktor.client.HttpClient
 import uk.me.michaellloydlee.recruiter.application.ProcessInboxService
 import uk.me.michaellloydlee.recruiter.application.ProcessInboxSummary
@@ -99,6 +100,30 @@ class ProcessInboxCommand(
             help = "The file with the requirements of the job seeker",
         ).default(DEFAULT_REQUIREMENTS_FILE)
 
+    private val recruiterVerificationEndpoint: String by
+        option(
+            "--recruiter-verification-endpoint",
+            help = "The endpoint of the model that verifies the recruiter mails",
+        ).default(OllamaChatClient.DEFAULT_BASE_URL)
+
+    private val recruiterVerificationTimeout: Long by
+        option(
+            "--recruiter-verification-timeout",
+            help = "How long the verification of a recruiter mail may take, in milliseconds",
+        ).long().default(OllamaChatClient.DEFAULT_TIMEOUT_MILLIS)
+
+    private val jobDescriptionEvaluationEndpoint: String by
+        option(
+            "--job-description-evaluation-endpoint",
+            help = "The endpoint of the model that evaluates the job descriptions",
+        ).default(OllamaChatClient.DEFAULT_BASE_URL)
+
+    private val jobDescriptionEvaluationTimeout: Long by
+        option(
+            "--job-description-evaluation-timeout",
+            help = "How long the evaluation of a job description may take, in milliseconds",
+        ).long().default(DEFAULT_EVALUATION_TIMEOUT_MILLIS)
+
     private val recruiterVerificationModel: String by
         option(
             "--recruiter-verification-model",
@@ -159,21 +184,47 @@ class ProcessInboxCommand(
      * The verifier of the recruiter verification, the decision model of Ollama
      * or a chat model.
      */
-    private fun verifier(client: HttpClient): RecruiterVerifier =
-        when (recruiterVerification) {
+    private fun verifier(client: HttpClient): RecruiterVerifier {
+        val endpoint = endpoint(recruiterVerificationEndpoint)
+        val timeout = recruiterVerificationTimeout
+        return when (recruiterVerification) {
             RecruiterVerificationMode.DECISION -> {
                 DecisionModelVerifier(
-                    client = OllamaDecisionClient(client),
+                    client =
+                        OllamaDecisionClient(
+                            httpClient = client,
+                            baseUrl = endpoint,
+                            timeoutMillis = timeout,
+                        ),
                     model = recruiterVerificationModel,
                 )
             }
 
             else -> {
                 ChatModelVerifier(
-                    client = OllamaChatClient(client),
+                    client =
+                        OllamaChatClient(
+                            httpClient = client,
+                            baseUrl = endpoint,
+                            timeoutMillis = timeout,
+                        ),
                     model = recruiterVerificationModel,
                 )
             }
+        }
+    }
+
+    /**
+     * The endpoint of a model, it has to be a URL the client can talk to.
+     */
+    private fun endpoint(value: String): String =
+        try {
+            require(value.startsWith("http://") || value.startsWith("https://")) {
+                "'$value' is not an endpoint, it needs a scheme like http:// or https://"
+            }
+            value
+        } catch (error: IllegalArgumentException) {
+            throw CommandFailedException(error.message.orEmpty(), error)
         }
 
     /**
@@ -215,22 +266,35 @@ class ProcessInboxCommand(
      * The evaluator of the job descriptions, the decision model of Ollama or a
      * chat model.
      */
-    private fun evaluator(client: HttpClient): JobDescriptionEvaluator =
-        when (jobDescriptionEvaluation) {
+    private fun evaluator(client: HttpClient): JobDescriptionEvaluator {
+        val endpoint = endpoint(jobDescriptionEvaluationEndpoint)
+        val timeout = jobDescriptionEvaluationTimeout
+        return when (jobDescriptionEvaluation) {
             JobDescriptionEvaluationMode.DECISION -> {
                 DecisionModelEvaluator(
-                    client = OllamaDecisionClient(client),
+                    client =
+                        OllamaDecisionClient(
+                            httpClient = client,
+                            baseUrl = endpoint,
+                            timeoutMillis = timeout,
+                        ),
                     model = jobDescriptionEvaluationModel,
                 )
             }
 
             JobDescriptionEvaluationMode.CHAT -> {
                 ChatModelEvaluator(
-                    client = OllamaChatClient(client),
+                    client =
+                        OllamaChatClient(
+                            httpClient = client,
+                            baseUrl = endpoint,
+                            timeoutMillis = timeout,
+                        ),
                     model = jobDescriptionEvaluationModel,
                 )
             }
         }
+    }
 
     override fun help(context: Context): String = "Fetch, triage and label the unprocessed messages of the inbox."
 
@@ -246,5 +310,8 @@ class ProcessInboxCommand(
 
         /** The file with the requirements of the job seeker. */
         const val DEFAULT_REQUIREMENTS_FILE: String = "requirements.json"
+
+        /** How long the evaluation of a job description may take, in milliseconds. */
+        const val DEFAULT_EVALUATION_TIMEOUT_MILLIS: Long = 600_000
     }
 }

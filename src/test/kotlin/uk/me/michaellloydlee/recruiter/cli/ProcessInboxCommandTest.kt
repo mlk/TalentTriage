@@ -10,10 +10,12 @@ import io.ktor.client.request.HttpRequestData
 import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
+import io.ktor.http.content.TextContent
 import io.ktor.http.headersOf
 import io.ktor.serialization.kotlinx.json.json
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonObject
 import uk.me.michaellloydlee.recruiter.infrastructure.logging.LogRecord
 import uk.me.michaellloydlee.recruiter.infrastructure.logging.StructuredLogger
 import java.nio.file.Path
@@ -45,7 +47,8 @@ class ProcessInboxCommandTest {
             val completed = records.last()
             assertEquals("process-inbox.completed", completed.event)
             assertEquals("1", completed.attributes["screened"])
-            assertEquals("1", completed.attributes["filtered_out"])
+            assertEquals("1", completed.attributes["recruiters"])
+            assertEquals("1", completed.attributes["worth_follow_up"])
             assertTrue(engine.requestHistory.any { it.url.encodedPath.endsWith("/v1/systemone") })
         }
 
@@ -94,6 +97,60 @@ class ProcessInboxCommandTest {
         }
 
     @Test
+    fun usesTheEndpointOfTheModelCalls() =
+        runTest {
+            val sink = StringBuilder()
+            val engine = engine()
+
+            val result =
+                cli(sink) { mockClient(engine) }
+                    .test(
+                        "process-inbox --credentials ${credentialsFile()} " +
+                            "--token ${tokenFile()} " +
+                            "--requirements ${requirementsFile()} " +
+                            "--recruiter-verification-endpoint http://screening.example:11434 " +
+                            "--job-description-evaluation-endpoint http://evaluation.example:8000",
+                    )
+
+            assertEquals(0, result.statusCode)
+            val endpoints = engine.requestHistory.map { it.url.host }.distinct()
+            assertTrue(endpoints.contains("screening.example"))
+            assertTrue(endpoints.contains("evaluation.example"))
+        }
+
+    @Test
+    fun failsOnAnEndpointWithoutAScheme() =
+        runTest {
+            val sink = StringBuilder()
+
+            val result =
+                cli(sink).test(
+                    "process-inbox --recruiter-verification-endpoint localhost:11434 " +
+                        "--credentials ${credentialsFile()} " +
+                        "--token ${tokenFile()} " +
+                        "--requirements ${requirementsFile()}",
+                )
+
+            assertEquals(1, result.statusCode)
+        }
+
+    @Test
+    fun failsOnATimeoutThatIsNotANumber() =
+        runTest {
+            val sink = StringBuilder()
+
+            val result =
+                cli(sink).test(
+                    "process-inbox --recruiter-verification-timeout soon " +
+                        "--credentials ${credentialsFile()} " +
+                        "--token ${tokenFile()} " +
+                        "--requirements ${requirementsFile()}",
+                )
+
+            assertEquals(1, result.statusCode)
+        }
+
+    @Test
     fun failsWhenTheCredentialsAreMissing() =
         runTest {
             val sink = StringBuilder()
@@ -115,7 +172,7 @@ class ProcessInboxCommandTest {
     private fun contentFor(request: HttpRequestData): String =
         when {
             request.url.encodedPath.endsWith("/v1/systemone") -> {
-                DECISION_ANSWER
+                decisionAnswer(request)
             }
 
             request.url.encodedPath.endsWith("/api/chat") -> {
@@ -134,6 +191,26 @@ class ProcessInboxCommandTest {
                 MESSAGE
             }
         }
+
+    /**
+     * The answer of the decision model: the recruiter question of the screening
+     * and the criteria of the evaluation are answered differently.
+     */
+    private fun decisionAnswer(request: HttpRequestData): String {
+        val body = (request.body as TextContent).text
+        val questions = Json.parseToJsonElement(body).jsonObject["questions"]!!.jsonObject
+        val answer =
+            questions.keys.joinToString(",") { name ->
+                val choice =
+                    when (name) {
+                        "recruiter" -> "from a recruiter"
+                        "jd_matches", "office_days_matches" -> "matches"
+                        else -> "does not match"
+                    }
+                """"$name":{"type":"choice","choice":"$choice","confidence":0.9}"""
+            }
+        return """{"model":"clef:cloud","answers":{$answer},"usage":{"input_tokens":10,"output_tokens":1}}"""
+    }
 
     private fun mockClient(engine: MockEngine): HttpClient =
         HttpClient(engine) {
@@ -184,11 +261,6 @@ class ProcessInboxCommandTest {
                 ignoreUnknownKeys = true
                 encodeDefaults = true
             }
-
-        private const val DECISION_ANSWER =
-            """{"model":"clef:cloud","answers":{"recruiter":{"type":"choice",
-            "choice":"not from a recruiter","probabilities":{"not from a recruiter":0.9},
-            "confidence":0.9}},"usage":{"input_tokens":10,"output_tokens":1}}"""
 
         private const val CHAT_ANSWER =
             """{"message":{"role":"assistant","content":"no"},"done":true}"""
