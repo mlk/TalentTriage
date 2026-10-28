@@ -23,14 +23,13 @@ enum class RecruiterLabel(
     /** The message is worth a follow up, it stays in the inbox. */
     WORTH_FOLLOW_UP("${LABEL_PREFIX}WorthFollowUp", archives = false),
 
-    /** The message is a recruiter mail, but the pay has to be checked, it stays in the inbox. */
-    NEEDS_PAY_CHECK("${LABEL_PREFIX}NeedsPayCheck", archives = false),
-
     /**
-     * The message is a recruiter mail that matches, but the job description
-     * does not say how many days of office it demands, it stays in the inbox.
+     * The message is a recruiter mail that matches, but something is missing
+     * for the decision: the pay is not stated or the job description does not
+     * say how many days of office it demands. It stays in the inbox, the job
+     * seeker looks at it.
      */
-    NEEDS_WORK_FROM_HOME_CHECK("${LABEL_PREFIX}NeedsWorkFromHomeCheck", archives = false),
+    NEEDS_MORE_INFORMATION("${LABEL_PREFIX}NeedsMoreInformation", archives = false),
 
     /** The message is not worth any attention, it is archived. */
     TRASH("${LABEL_PREFIX}Trash", archives = true),

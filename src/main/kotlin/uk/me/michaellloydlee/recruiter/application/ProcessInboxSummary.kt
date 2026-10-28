@@ -9,9 +9,8 @@ package uk.me.michaellloydlee.recruiter.application
  * @property unknown how many of them the screening or the evaluation could not
  *   decide, they stay in the inbox.
  * @property worthFollowUp how many of them are worth a follow up.
- * @property needsPayCheck how many of them match but say nothing about the pay.
- * @property needsWorkFromHomeCheck how many of them match but do not say how
- *   many days of office they demand.
+ * @property needsMoreInformation how many of them match but do not say
+ *   everything the job seeker needs to know.
  * @property trashed how many of them do not match at all.
  */
 data class ProcessInboxSummary(
@@ -20,7 +19,6 @@ data class ProcessInboxSummary(
     val filteredOut: Int,
     val unknown: Int,
     val worthFollowUp: Int = 0,
-    val needsPayCheck: Int = 0,
-    val needsWorkFromHomeCheck: Int = 0,
+    val needsMoreInformation: Int = 0,
     val trashed: Int = 0,
 )

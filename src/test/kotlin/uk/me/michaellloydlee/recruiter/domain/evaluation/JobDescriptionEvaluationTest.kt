@@ -33,17 +33,17 @@ class JobDescriptionEvaluationTest {
     }
 
     @Test
-    fun aJobWithoutAPayNeedsThePayChecked() {
+    fun aJobWithoutAPayNeedsMoreInformation() {
         val evaluation = evaluation(payMatches = false, jdMatches = true, officeDays = AT_MOST, payMissing = true)
 
-        assertEquals(RecruiterLabel.NEEDS_PAY_CHECK, evaluation.state)
+        assertEquals(RecruiterLabel.NEEDS_MORE_INFORMATION, evaluation.state)
     }
 
     @Test
-    fun aJobWithATooLowPayNeedsThePayChecked() {
+    fun aJobWithATooLowPayNeedsMoreInformation() {
         val evaluation = evaluation(payMatches = false, jdMatches = true, officeDays = AT_MOST, payMissing = false)
 
-        assertEquals(RecruiterLabel.NEEDS_PAY_CHECK, evaluation.state)
+        assertEquals(RecruiterLabel.NEEDS_MORE_INFORMATION, evaluation.state)
     }
 
     @Test
@@ -54,7 +54,7 @@ class JobDescriptionEvaluationTest {
     }
 
     @Test
-    fun aJobWithUnclearOfficeDaysNeedsTheWorkFromHomeCheck() {
+    fun aJobWithUnclearOfficeDaysNeedsMoreInformation() {
         val evaluation =
             evaluation(
                 payMatches = true,
@@ -63,11 +63,11 @@ class JobDescriptionEvaluationTest {
                 payMissing = false,
             )
 
-        assertEquals(RecruiterLabel.NEEDS_WORK_FROM_HOME_CHECK, evaluation.state)
+        assertEquals(RecruiterLabel.NEEDS_MORE_INFORMATION, evaluation.state)
     }
 
     @Test
-    fun aJobWithUnclearOfficeDaysNeedsTheWorkFromHomeCheckEvenWithoutAPay() {
+    fun aJobWithUnclearOfficeDaysNeedsMoreInformationEvenWithoutAPay() {
         val evaluation =
             evaluation(
                 payMatches = false,
@@ -76,7 +76,7 @@ class JobDescriptionEvaluationTest {
                 payMissing = true,
             )
 
-        assertEquals(RecruiterLabel.NEEDS_WORK_FROM_HOME_CHECK, evaluation.state)
+        assertEquals(RecruiterLabel.NEEDS_MORE_INFORMATION, evaluation.state)
     }
 
     @Test
@@ -90,6 +90,43 @@ class JobDescriptionEvaluationTest {
             )
 
         assertEquals(RecruiterLabel.TRASH, evaluation.state)
+    }
+
+    @Test
+    fun aJobThatIsWorthAFollowUpIsMissingNothing() {
+        val evaluation = evaluation(payMatches = true, jdMatches = true, officeDays = AT_MOST, payMissing = false)
+
+        assertEquals(null, evaluation.missing)
+    }
+
+    @Test
+    fun theMissingOfficeDaysAreNamed() {
+        val evaluation =
+            evaluation(
+                payMatches = true,
+                jdMatches = true,
+                officeDays = OfficeDays.UNCLEAR,
+                payMissing = false,
+            )
+
+        assertEquals(
+            "the job description does not say how many days of office it demands",
+            evaluation.missing,
+        )
+    }
+
+    @Test
+    fun theMissingPayIsNamed() {
+        val evaluation = evaluation(payMatches = false, jdMatches = true, officeDays = AT_MOST, payMissing = true)
+
+        assertEquals("the message states no pay", evaluation.missing)
+    }
+
+    @Test
+    fun theTooLowPayIsNamed() {
+        val evaluation = evaluation(payMatches = false, jdMatches = true, officeDays = AT_MOST, payMissing = false)
+
+        assertEquals("the pay is below the target", evaluation.missing)
     }
 
     private fun evaluation(

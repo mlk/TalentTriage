@@ -26,7 +26,7 @@ class GmailLabelStateManagerTest {
             val body = bodyOf(engine)
             assertTrue(body.contains("Label_worthfollowup"))
             assertTrue(body.contains("Label_filteredout"))
-            assertTrue(body.contains("Label_needspaycheck"))
+            assertTrue(body.contains("Label_needsmoreinformation"))
             assertTrue(body.contains("Label_trash"))
             assertFalse(body.contains("INBOX"))
         }
@@ -66,7 +66,7 @@ class GmailLabelStateManagerTest {
                 engine.requestHistory.filter {
                     it.method.value == "POST" && it.url.encodedPath.endsWith("/users/me/labels")
                 }
-            assertEquals(4, created.size)
+            assertEquals(3, created.size)
             val body = (created.first().body as TextContent).text
             assertTrue(body.contains("Recruiters/FilteredOut"))
         }
@@ -146,8 +146,7 @@ class GmailLabelStateManagerTest {
             listOf(
                 "Recruiters/FilteredOut",
                 "Recruiters/WorthFollowUp",
-                "Recruiters/NeedsPayCheck",
-                "Recruiters/NeedsWorkFromHomeCheck",
+                "Recruiters/NeedsMoreInformation",
                 "Recruiters/Trash",
             )
     }

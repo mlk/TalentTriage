@@ -63,7 +63,7 @@ class ProcessInboxServiceTest {
             assertEquals(2, summary.screened)
             assertEquals(2, summary.recruiters)
             assertEquals(2, summary.worthFollowUp)
-            assertEquals(0, summary.needsPayCheck)
+            assertEquals(0, summary.needsMoreInformation)
             assertEquals(0, summary.trashed)
         }
 
@@ -101,21 +101,33 @@ class ProcessInboxServiceTest {
         }
 
     @Test
-    fun tagsAMailWithUnclearOfficeDaysForTheWorkFromHomeCheck() =
+    fun tagsAMailWithUnclearOfficeDaysForMoreInformation() =
         runTest {
             val gmail = gmailEngine()
             val model = modelEngine(officeDays = "unclear")
 
             val summary = service(gmail, model).run()
 
-            assertEquals(2, summary.needsWorkFromHomeCheck)
+            assertEquals(2, summary.needsMoreInformation)
             assertEquals(0, summary.worthFollowUp)
             val labels = gmail.requestHistory.filter { it.url.encodedPath.endsWith("/modify") }
             assertEquals(2, labels.size)
             labels.forEach { label ->
                 val body = (label.body as TextContent).text
-                assertTrue(body.contains("Label_needsworkfromhomecheck"))
+                assertTrue(body.contains("Label_needsmoreinformation"))
             }
+        }
+
+    @Test
+    fun theLogSaysWhatIsMissing() =
+        runTest {
+            val gmail = gmailEngine()
+            val model = modelEngine(officeDays = "unclear")
+            val log = StringBuilder()
+
+            service(gmail, model, log).run()
+
+            assertTrue(log.toString().contains("does not say how many days of office"))
         }
 
     @Test
@@ -136,6 +148,7 @@ class ProcessInboxServiceTest {
     private fun service(
         gmail: MockEngine,
         model: MockEngine,
+        log: StringBuilder = StringBuilder(),
     ): ProcessInboxService {
         val api =
             GmailApiClient(
@@ -179,7 +192,7 @@ class ProcessInboxServiceTest {
                     maximumOfficeDays = 2,
                     profile = "Senior Kotlin engineer",
                 ),
-            logger = StructuredLogger(StringBuilder()),
+            logger = StructuredLogger(log),
         )
     }
 
