@@ -148,6 +148,25 @@ class DecisionModelEvaluatorTest {
         }
 
     @Test
+    fun aModelThatIsNotSureAboutTheOfficeDaysStillSaysThatTheyAreUnclear() =
+        runTest {
+            val engine =
+                engine(
+                    answers =
+                        mapOf(
+                            "jd_matches" to "matches",
+                            "office_days" to "unclear",
+                        ),
+                    confidenceOfTheOfficeDays = 0.37,
+                )
+
+            val evaluation = evaluator(engine).evaluate(message(), "", REQUIREMENTS_WITHOUT_PAY)
+
+            val evaluated = assertIs<JobDescriptionEvaluation.Evaluated>(evaluation)
+            assertEquals(OfficeDays.UNCLEAR, evaluated.officeDays)
+        }
+
+    @Test
     fun anAnswerWithAnUnknownOptionLeavesTheMailAlone() =
         runTest {
             val engine =
@@ -237,11 +256,14 @@ class DecisionModelEvaluatorTest {
                 "office_days" to "matches",
                 "pay_missing" to "does not match",
             ),
+        confidenceOfTheOfficeDays: Double = confidence,
     ): MockEngine =
         MockEngine {
             val answer =
                 answers.entries.joinToString(",") { (name, choice) ->
-                    """"$name":{"type":"choice","choice":"$choice","confidence":$confidence}"""
+                    val answerConfidence =
+                        if (name == "office_days") confidenceOfTheOfficeDays else confidence
+                    """"$name":{"type":"choice","choice":"$choice","confidence":$answerConfidence}"""
                 }
             respond(
                 content = DECISION_ANSWER.replace("{}", "{$answer}"),

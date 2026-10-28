@@ -24,7 +24,8 @@ import java.io.IOException
  * @param client the client of the decision API.
  * @param model the name of the decision model.
  * @param minimumConfidence how sure the model has to be, a model that is less
- *   sure leaves the mail alone.
+ *   sure leaves the mail alone. The answer `unclear` is the exception: it
+ *   does not decide anything, it asks the job seeker to look at the mail.
  * @param maxBodyLength how many characters of the text go into the state.
  */
 class DecisionModelEvaluator(
@@ -80,13 +81,22 @@ class DecisionModelEvaluator(
     /**
      * The question the model is not sure enough about.
      *
+     * The answer `unclear` is never a reason to leave the mail alone: it
+     * says that the job description does not answer the question, and the
+     * state of the mail is the work from home check - the job seeker looks
+     * at it. The model is not sure about it either, it answered the
+     * question of the days of office with a confidence of 0.37 in the
+     * measurement of the story.
+     *
      * @param answers the answers of the model.
      * @return why the model is not sure enough, `null` when it is sure.
      */
     private fun notSureAbout(answers: Map<String, OllamaDecisionAnswer>): String? =
         answers.entries
             .firstOrNull { (_, answer) ->
-                answer.confidence != null && answer.confidence < minimumConfidence
+                answer.choice != OPTION_UNCLEAR &&
+                    answer.confidence != null &&
+                    answer.confidence < minimumConfidence
             }?.let { (name, answer) ->
                 "The decision model is not sure enough about $name (confidence ${answer.confidence})"
             }
