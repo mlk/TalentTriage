@@ -34,6 +34,7 @@ import uk.me.michaellloydlee.recruiter.infrastructure.logging.StructuredLogger
 import java.time.Instant
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 
 class ProcessInboxServiceTest {
     @Test
@@ -80,6 +81,37 @@ class ProcessInboxServiceTest {
             assertEquals(0, summary.recruiters)
             assertEquals(0, summary.filteredOut)
             assertEquals(2, summary.unknown)
+        }
+
+    @Test
+    fun labelsEveryMailItDecidedSoItIsNotScreenedAgain() =
+        runTest {
+            val gmail = gmailEngine()
+            val model = modelEngine()
+
+            service(gmail, model).run()
+
+            val labels = gmail.requestHistory.filter { it.url.encodedPath.endsWith("/modify") }
+            assertEquals(2, labels.size)
+            labels.forEach { label ->
+                val body = (label.body as TextContent).text
+                assertTrue(body.contains("Label_worthfollowup"))
+            }
+        }
+
+    @Test
+    fun leavesTheMailItCouldNotDecideWithoutALabel() =
+        runTest {
+            val gmail = gmailEngine()
+            val model =
+                MockEngine {
+                    respond(content = """{"error":"model not found"}""", status = HttpStatusCode.NotFound)
+                }
+
+            service(gmail, model).run()
+
+            val labels = gmail.requestHistory.filter { it.url.encodedPath.endsWith("/modify") }
+            assertTrue(labels.isEmpty())
         }
 
     private fun service(
