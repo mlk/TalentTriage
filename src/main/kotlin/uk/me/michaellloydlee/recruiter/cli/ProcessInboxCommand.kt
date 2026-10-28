@@ -20,6 +20,8 @@ import uk.me.michaellloydlee.recruiter.application.screening.DecisionModelVerifi
 import uk.me.michaellloydlee.recruiter.application.screening.RecruiterVerificationMode
 import uk.me.michaellloydlee.recruiter.application.screening.RecruiterVerifier
 import uk.me.michaellloydlee.recruiter.application.screening.ScreeningService
+import uk.me.michaellloydlee.recruiter.domain.gmail.MessageWindow
+import uk.me.michaellloydlee.recruiter.domain.gmail.messageWindow
 import uk.me.michaellloydlee.recruiter.domain.requirements.JobRequirements
 import uk.me.michaellloydlee.recruiter.domain.screening.RecruiterHeuristics
 import uk.me.michaellloydlee.recruiter.infrastructure.gmail.FileOAuth2TokenStore
@@ -102,6 +104,12 @@ class ProcessInboxCommand(
             help = "The file with the requirements of the job seeker",
         ).default(DEFAULT_REQUIREMENTS_FILE)
 
+    private val since: String by
+        option(
+            "--since",
+            help = "How far back the messages are looked for, an ISO-8601 duration like PT24H or P1D",
+        ).default(PendingCommand.DEFAULT_SINCE)
+
     private val recruiterVerificationEndpoint: String by
         option(
             "--recruiter-verification-endpoint",
@@ -143,6 +151,7 @@ class ProcessInboxCommand(
             message = "Inbox triage run started",
             attributes = mapOf(TRIGGER_ATTRIBUTE to TRIGGER_CLI),
         )
+        val window = window()
         val credentials = credentials()
         val requirements = requirements()
         httpClientFactory().use { client ->
@@ -156,6 +165,7 @@ class ProcessInboxCommand(
                 try {
                     ProcessInboxService(
                         messages = gmail.messages,
+                        window = window,
                         screening =
                             ScreeningService(
                                 heuristics = RecruiterHeuristics(),
@@ -232,6 +242,17 @@ class ProcessInboxCommand(
         }
 
     /**
+     * The window of the run, the messages that arrived before it are not
+     * looked at.
+     */
+    private fun window(): MessageWindow =
+        try {
+            messageWindow(since)
+        } catch (error: IllegalArgumentException) {
+            throw CommandFailedException(error.message.orEmpty(), error)
+        }
+
+    /**
      * The credentials of the Google application.
      */
     private fun credentials(): GoogleClientCredentials =
@@ -263,6 +284,7 @@ class ProcessInboxCommand(
             "worth_follow_up" to worthFollowUp.toString(),
             "needs_more_information" to needsMoreInformation.toString(),
             "trashed" to trashed.toString(),
+            "window" to window.duration.toString(),
             "unknown" to unknown.toString(),
         )
 
