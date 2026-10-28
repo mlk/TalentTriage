@@ -188,6 +188,33 @@ and `minimax-m3.1-flash:cloud`), they need a paid plan or usage credits. A
 local model works as well: `nimble`, `tev1`, `clef` and `clef-flash` are the
 decision models, they need Ollama v0.35.0 or later.
 
+### The arguments of the commands
+
+| Command | Argument | What it does | Default |
+| --- | --- | --- | --- |
+| `authenticate` | `--credentials`, `-c` | The file with the OAuth2 client credentials | `credentials.json` |
+| `authenticate` | `--token`, `-t` | The file the OAuth2 token is stored in | `token.json` |
+| `pending` | `--credentials`, `-c` | The file with the OAuth2 client credentials | `credentials.json` |
+| `pending` | `--token`, `-t` | The file the OAuth2 token is stored in | `token.json` |
+| `pending` | `--since` | How far back the messages are looked for, an ISO-8601 duration | `PT24H` |
+| `pending` | `--limit`, `-l` | The number of messages that are shown | `20` |
+| `process-inbox` | `--credentials`, `-c` | The file with the OAuth2 client credentials | `credentials.json` |
+| `process-inbox` | `--token`, `-t` | The file the OAuth2 token is stored in | `token.json` |
+| `process-inbox` | `--requirements`, `-q` | The file with the requirements of the job seeker | `requirements.json` |
+| `process-inbox` | `--recruiter-verification` | How the recruiter mails are verified: a decision model or a chat model | `decision` |
+| `process-inbox` | `--recruiter-verification-model`, `-m` | The model that verifies the recruiter mails | `clef:cloud` |
+| `process-inbox` | `--recruiter-verification-endpoint` | The endpoint of the model that verifies the recruiter mails | `http://localhost:11434` |
+| `process-inbox` | `--recruiter-verification-timeout` | How long the verification of a recruiter mail may take, in milliseconds | `120000` |
+| `process-inbox` | `--job-description-evaluation` | How the job descriptions are evaluated: a decision model or a chat model | `decision` |
+| `process-inbox` | `--job-description-evaluation-model`, `-j` | The model that evaluates the job descriptions | `clef:cloud` |
+| `process-inbox` | `--job-description-evaluation-endpoint` | The endpoint of the model that evaluates the job descriptions | `http://localhost:11434` |
+| `process-inbox` | `--job-description-evaluation-timeout` | How long the evaluation of a job description may take, in milliseconds | `600000` |
+
+The models with the suffix `:cloud` run in the cloud of Ollama and need a paid plan or usage
+credits. The local decision models are `nimble`, `tev1`, `clef` and `clef-flash`, they need
+Ollama v0.35.0 or later.
+
+
 or, without installing the distribution:
 
 ```bash
