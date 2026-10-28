@@ -254,7 +254,9 @@ exactly the messages that were not processed yet:
 
 A message carries exactly one state label - applying a new state removes the
 other ones - and the state labels are created in the mailbox when they do not
-exist yet.
+exist yet. The state label is the marker of the pipeline: the search of the
+pending mails (`is:inbox -label:Recruiters/*`) skips every message that
+carries one, so a message that was processed is never looked at again.
 
 The pipeline is a scheduled job, so it only processes the mail that arrived
 since the last run: the search is `is:inbox -label:Recruiters/* after:<time>`,
