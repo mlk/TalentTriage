@@ -54,7 +54,12 @@ class GmailMessagesApiTest {
 
             val request = engine.requestHistory.single()
             assertEquals(
-                "${RecruiterLabel.UNPROCESSED_QUERY} after:${NOW.minusSeconds(86400).epochSecond}",
+                "is:inbox " +
+                    "-label:Recruiters/FilteredOut " +
+                    "-label:Recruiters/WorthFollowUp " +
+                    "-label:Recruiters/NeedsPayCheck " +
+                    "-label:Recruiters/Trash " +
+                    "after:${NOW.minusSeconds(86400).epochSecond}",
                 request.url.parameters["q"],
             )
             assertEquals("100", request.url.parameters["maxResults"])

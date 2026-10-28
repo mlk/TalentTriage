@@ -23,7 +23,7 @@ flowchart TD
     end
 
     subgraph GmailAPI ["📧 Gmail REST API Layer"]
-        Fetch["Fetch Unlabelled Emails\n(is:inbox -label:Recruiters/*)"]
+        Fetch["Fetch Unlabelled Emails\n(is:inbox, every state label excluded)"]
         ApplyLabel["Apply Gmail State Labels"]
         Archive["Archive Email (Trash)"]
     end
@@ -242,8 +242,12 @@ extracting the attachments, evaluating them) are delivered by their own stories.
 ## 📬 The state of the mailbox
 
 Gmail is the state store of the pipeline. Every processed message carries one
-of the nested state labels, so the search `is:inbox -label:Recruiters/*` matches
-exactly the messages that were not processed yet:
+of the nested state labels, so the search `is:inbox` with every state label
+excluded (`-label:Recruiters/FilteredOut -label:Recruiters/WorthFollowUp …`)
+matches exactly the messages that were not processed yet. Gmail does not
+understand a wildcard in the name of a label: `is:inbox -label:Recruiters/*`
+still returns the messages that carry a nested label, so every state label is
+excluded by its own path:
 
 | Label | Meaning | Archived |
 | --- | --- | --- |
@@ -259,8 +263,8 @@ pending mails (`is:inbox -label:Recruiters/*`) skips every message that
 carries one, so a message that was processed is never looked at again.
 
 The pipeline is a scheduled job, so it only processes the mail that arrived
-since the last run: the search is `is:inbox -label:Recruiters/* after:<time>`,
-the window is 24 hours by default.
+since the last run: the search is `is:inbox` with every state label excluded
+and `after:<time>` added, the window is 24 hours by default.
 
 `recruiter-cli pending` lists the messages that were not processed yet, it is
 the quickest way to check that the credentials work. The pipeline only looks at
