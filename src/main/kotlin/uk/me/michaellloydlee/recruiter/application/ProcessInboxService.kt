@@ -16,7 +16,7 @@ import uk.me.michaellloydlee.recruiter.infrastructure.logging.StructuredLogger
  *
  * The messages that were not processed yet are fetched and screened. The
  * recruiter mails are evaluated against the requirements of the job seeker and
- * end in one of the three states of the pipeline.
+ * end in one of the states of the pipeline.
  *
  * @param messages the message endpoints of the Gmail API.
  * @param screening the screening of the messages.
@@ -51,6 +51,7 @@ class ProcessInboxService(
             unknown = counters.unknown,
             worthFollowUp = counters.worthFollowUp,
             needsPayCheck = counters.needsPayCheck,
+            needsWorkFromHomeCheck = counters.needsWorkFromHomeCheck,
             trashed = counters.trashed,
         )
     }
@@ -110,6 +111,7 @@ class ProcessInboxService(
         when (stateOf(evaluation)) {
             RecruiterLabel.WORTH_FOLLOW_UP -> counters.worthFollowUp++
             RecruiterLabel.NEEDS_PAY_CHECK -> counters.needsPayCheck++
+            RecruiterLabel.NEEDS_WORK_FROM_HOME_CHECK -> counters.needsWorkFromHomeCheck++
             RecruiterLabel.TRASH -> counters.trashed++
             RecruiterLabel.FILTERED_OUT -> counters.filteredOut++
             null -> counters.unknown++
@@ -134,6 +136,7 @@ class ProcessInboxService(
         var unknown: Int = 0
         var worthFollowUp: Int = 0
         var needsPayCheck: Int = 0
+        var needsWorkFromHomeCheck: Int = 0
         var trashed: Int = 0
     }
 

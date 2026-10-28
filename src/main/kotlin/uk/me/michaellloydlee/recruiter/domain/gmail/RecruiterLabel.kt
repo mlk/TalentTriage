@@ -26,6 +26,12 @@ enum class RecruiterLabel(
     /** The message is a recruiter mail, but the pay has to be checked, it stays in the inbox. */
     NEEDS_PAY_CHECK("${LABEL_PREFIX}NeedsPayCheck", archives = false),
 
+    /**
+     * The message is a recruiter mail that matches, but the job description
+     * does not say how many days of office it demands, it stays in the inbox.
+     */
+    NEEDS_WORK_FROM_HOME_CHECK("${LABEL_PREFIX}NeedsWorkFromHomeCheck", archives = false),
+
     /** The message is not worth any attention, it is archived. */
     TRASH("${LABEL_PREFIX}Trash", archives = true),
     ;

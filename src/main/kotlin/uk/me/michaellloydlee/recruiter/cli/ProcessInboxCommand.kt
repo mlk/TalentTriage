@@ -262,6 +262,7 @@ class ProcessInboxCommand(
             "filtered_out" to filteredOut.toString(),
             "worth_follow_up" to worthFollowUp.toString(),
             "needs_pay_check" to needsPayCheck.toString(),
+            "needs_work_from_home_check" to needsWorkFromHomeCheck.toString(),
             "trashed" to trashed.toString(),
             "unknown" to unknown.toString(),
         )

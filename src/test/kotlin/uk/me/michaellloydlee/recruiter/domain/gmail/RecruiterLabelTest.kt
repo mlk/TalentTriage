@@ -14,6 +14,7 @@ class RecruiterLabelTest {
                 "Recruiters/FilteredOut",
                 "Recruiters/WorthFollowUp",
                 "Recruiters/NeedsPayCheck",
+                "Recruiters/NeedsWorkFromHomeCheck",
                 "Recruiters/Trash",
             ),
             RecruiterLabel.entries.map { it.path },
@@ -35,6 +36,7 @@ class RecruiterLabelTest {
                 "-label:Recruiters/FilteredOut " +
                 "-label:Recruiters/WorthFollowUp " +
                 "-label:Recruiters/NeedsPayCheck " +
+                "-label:Recruiters/NeedsWorkFromHomeCheck " +
                 "-label:Recruiters/Trash",
             RecruiterLabel.UNPROCESSED_QUERY,
         )
