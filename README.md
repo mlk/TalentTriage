@@ -201,6 +201,7 @@ decision models, they need Ollama v0.35.0 or later.
 | `process-inbox` | `--credentials`, `-c` | The file with the OAuth2 client credentials | `credentials.json` |
 | `process-inbox` | `--token`, `-t` | The file the OAuth2 token is stored in | `token.json` |
 | `process-inbox` | `--requirements`, `-q` | The file with the requirements of the job seeker | `requirements.json` |
+| `process-inbox` | `--since` | How far back the messages are looked for, an ISO-8601 duration | `PT24H` |
 | `process-inbox` | `--recruiter-verification` | How the recruiter mails are verified: a decision model or a chat model | `decision` |
 | `process-inbox` | `--recruiter-verification-model`, `-m` | The model that verifies the recruiter mails | `clef:cloud` |
 | `process-inbox` | `--recruiter-verification-endpoint` | The endpoint of the model that verifies the recruiter mails | `http://localhost:11434` |
@@ -264,12 +265,13 @@ carries one, so a message that was processed is never looked at again.
 
 The pipeline is a scheduled job, so it only processes the mail that arrived
 since the last run: the search is `is:inbox` with every state label excluded
-and `after:<time>` added, the window is 24 hours by default.
+and `after:<time>` added. The window is 24 hours by default, `--since` says
+how far back the run looks: `PT24H` or `P1D` are the same, `P7D` looks a week
+back. The window of the run is in the log of the run.
 
 `recruiter-cli pending` lists the messages that were not processed yet, it is
-the quickest way to check that the credentials work. The pipeline only looks at
-the mail that arrived recently — the last 24 hours by default, `--since P7D`
-looks a week back:
+the quickest way to check that the credentials work. It takes the same
+`--since` window, so both commands look at the same mails:
 
 ```bash
 recruiter-cli pending            # the last 24 hours
