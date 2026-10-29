@@ -11,9 +11,12 @@ import uk.me.michaellloydlee.recruiter.infrastructure.gmail.GmailLabelStateManag
  *
  * A mail that is worth a follow up gets the label `Recruiters/WorthFollowUp`, a
  * mail that matches but does not say everything the job seeker needs to know
- * gets `Recruiters/NeedsMoreInformation` and a mail that does not match gets
- * `Recruiters/Trash` and is archived. A mail the model could not decide about
- * stays in the inbox and is looked at again by the next run.
+ * gets `Recruiters/NeedsMoreInformation` - the pay is not stated, the pay is
+ * below the target or the job description does not say how many days of
+ * office it demands - and a mail that does not match, or that demands more
+ * days of office than the job seeker allows, gets `Recruiters/Trash` and is
+ * archived. A mail the model could not decide about stays in the inbox and is
+ * looked at again by the next run.
  *
  * @param evaluator the model that evaluates the job descriptions.
  * @param stateManager applies the state label of the mail.
