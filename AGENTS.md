@@ -77,6 +77,27 @@ turns into an exit code. Throwing is for the cases the caller cannot do anything
 The clock, the HTTP client, the sinks and the parsers are constructor parameters with a default.
 That is what makes the code testable without a network and without a file system.
 
+### The states of a message
+
+Gmail is the state store of the pipeline: a processed message carries exactly one of the four
+state labels below `Recruiters/` — `FilteredOut`, `WorthFollowUp`, `NeedsMoreInformation` and
+`Trash`. A message without a state label is pending.
+
+* `NeedsMoreInformation` is the single state for a mail that matches but is incomplete. Both gaps
+  of a job description land there: the pay is not stated and the days of office are not stated
+  (`OfficeDays.UNCLEAR`). It is one state, not two.
+* The state is derived from the evaluation, never from the exception of the model.
+* The label carries the state, the log carries the reason. A detail that is not a state — why the
+  evaluation is incomplete, for instance — belongs in the log.
+
+### The confidence gate of the decision model
+
+A typed answer of the decision model is only used when its confidence is at least `0.5`. The answer
+`unclear` is the exception and is never a reason to leave a mail alone. The model reports a low
+confidence (0.37) when a job description does not say how many days of office it demands, and that
+low confidence is the expected answer, not a defect. Do not remove the exemption and do not raise
+the gate.
+
 ## Quality gates
 
 All of them run in CI, and they fail the build:
@@ -122,6 +143,72 @@ PDFBox, POI or Clikt belongs to the library and is covered by its own tests.
 A test that would break when the library is upgraded, without a change in this repository, is a
 test of the library — delete it.
 
+## Workflow
+
+The work is reviewed before it is merged, so it is done in the open.
+
+* **A branch per issue.** `feat/issue-<number>-<slug>` for a story, `fix/issue-<number>-<slug>` for
+  a fix, branched off `main`.
+* **Small commits.** One commit per step, each of them compiling. The message starts with a
+  keyword (`feat:`, `fix:`, `test:`, `docs:`, `refactor:`) and describes the change in one line.
+* **Push when the branch is done**, not after every commit. The pull request closes the issue
+  (`Closes #<number>`) and lists the acceptance criteria of the issue.
+* **CI is the gate.** The `Build & Quality Gates` job has to be green before the review, watched
+  with `gh pr checks <number> --watch`.
+* **Every comment gets an answer.** A review comment is answered in the thread of the pull
+  request, with what was changed or why nothing was changed.
+* **Never force-push.** Rebase or merge, do not rewrite the history of a pushed branch.
+* **Coverage numbers are measured, not copied.** The percentage in a pull request body is the one
+  measured on the branch. When reviewing another branch, measure it again instead of trusting the
+  number in the body.
+
+## Issues
+
+A story has to be readable on its own, so a ticket follows a fixed shape:
+
+```markdown
+## Epic 5: In-Depth JD Evaluation via AirLLM Wrapper
+
+**Goal:** …
+
+**As the** job seeker,
+**I want** …,
+**So that** …
+
+## Acceptance Criteria
+
+- [ ] …
+
+---
+
+## Project Context
+
+### Architecture & Technology Stack
+
+* **Language:** Kotlin
+* **Build Tool:** Gradle with **Kotlin DSL (`build.gradle.kts`)**
+* **Base Package:** `uk.me.michael-lloyd-lee.recruiter`
+* **Networking:** Ktor Client (CIO engine, `kotlinx.serialization`)
+* **AI Integration:** Ollama REST API client (the decision API `/v1/systemone` and the chat API `/api/chat`, the local Ollama instance and the cloud of Ollama)
+* **Quality & CI:** GitHub Actions, JaCoCo (minimum 80% line coverage enforced), `ktlint`, and `detekt`
+
+### Notes
+
+* …
+
+### Definition of Done (DoD)
+
+1. **CI Pipeline:** GitHub Actions workflow passing cleanly on every push/PR.
+2. **Test Coverage:** Minimum **80% line coverage** enforced via JaCoCo in the Gradle build.
+3. **Static Analysis & Linting:** Zero warnings or errors from `ktlint` and `detekt`.
+4. **Architecture:** Clean separation of concerns (Domain, Infrastructure, Application, and CLI entry points).
+```
+
+* The title starts with `Story <epic>.<number>:`, the milestone names the epic.
+* The acceptance criteria are checkboxes and are checkable: a command, a label or a number.
+* A ticket that only describes the wish is not finished. Ask the questions that are open and write
+  the answers into the ticket.
+
 ## Environment quirks
 
 * **The Gradle daemon is pinned to JDK 17** (`gradle/gradle-daemon-jvm.properties`,
@@ -134,6 +221,12 @@ test of the library — delete it.
   are not legal in a Kotlin package name. The Gradle `group` id still uses the hyphenated form.
 * **The token file holds a secret.** `credentials.json` and `token.json` are git-ignored and must
   never be committed.
+* **Gmail does not expand a wildcard in a label name.** `-label:Recruiters/*` still returns the
+  messages that carry a nested label, and the parent label `Recruiters` does not cover them
+  either. Every state label is excluded by its own path, that is the only search that works.
+* **The time window is parsed once.** The ISO-8601 duration of `--since` is parsed in
+  `domain/gmail/MessageWindow.kt` and shared by `pending` and `process-inbox`; a window of zero or
+  less is rejected.
 * **The Ollama API streams by default.** The `stream` field of a chat request has no default on
   purpose: a field with a default is left out of the payload when the encoder does not write the
   defaults, and the API then answers with a stream of JSON lines that the client cannot read.
