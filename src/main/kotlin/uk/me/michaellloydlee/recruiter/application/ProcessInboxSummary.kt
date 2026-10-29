@@ -8,6 +8,8 @@ import uk.me.michaellloydlee.recruiter.domain.gmail.MessageWindow
  * @property screened how many messages were looked at.
  * @property recruiters how many of them are recruiter mails.
  * @property filteredOut how many of them were not recruiter mails.
+ * @property jobListings how many of them were job listings, a listing is not
+ *   one job and is not evaluated.
  * @property unknown how many of them the screening or the evaluation could not
  *   decide, they stay in the inbox.
  * @property worthFollowUp how many of them are worth a follow up.
@@ -21,6 +23,7 @@ data class ProcessInboxSummary(
     val recruiters: Int,
     val filteredOut: Int,
     val unknown: Int,
+    val jobListings: Int = 0,
     val worthFollowUp: Int = 0,
     val needsMoreInformation: Int = 0,
     val trashed: Int = 0,
