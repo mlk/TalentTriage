@@ -21,6 +21,7 @@ import uk.me.michaellloydlee.recruiter.application.evaluation.EvaluationService
 import uk.me.michaellloydlee.recruiter.application.screening.DecisionModelVerifier
 import uk.me.michaellloydlee.recruiter.application.screening.ScreeningService
 import uk.me.michaellloydlee.recruiter.domain.gmail.EmailMessage
+import uk.me.michaellloydlee.recruiter.domain.gmail.MessageWindow
 import uk.me.michaellloydlee.recruiter.domain.requirements.JobRequirements
 import uk.me.michaellloydlee.recruiter.infrastructure.gmail.FakeRefresher
 import uk.me.michaellloydlee.recruiter.infrastructure.gmail.FakeTokenStore
@@ -32,7 +33,10 @@ import uk.me.michaellloydlee.recruiter.infrastructure.gmail.OAuth2Token
 import uk.me.michaellloydlee.recruiter.infrastructure.gmail.RefreshingAccessTokenProvider
 import uk.me.michaellloydlee.recruiter.infrastructure.llm.OllamaDecisionClient
 import uk.me.michaellloydlee.recruiter.infrastructure.logging.StructuredLogger
+import java.time.Clock
+import java.time.Duration
 import java.time.Instant
+import java.time.ZoneOffset
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -131,6 +135,33 @@ class ProcessInboxServiceTest {
         }
 
     @Test
+    fun looksAtTheMessagesOfTheWindowOnly() =
+        runTest {
+            val gmail = gmailEngine()
+            val model = modelEngine()
+
+            service(gmail, model, window = MessageWindow(Duration.ofHours(6))).run()
+
+            val search =
+                gmail.requestHistory
+                    .first { it.url.encodedPath.endsWith("/users/me/messages") }
+                    .url.parameters["q"]
+            assertTrue(search!!.contains("after:${NOW.minusSeconds(6 * 3600).epochSecond}"))
+        }
+
+    @Test
+    fun theSummaryCarriesTheWindowOfTheRun() =
+        runTest {
+            val gmail = gmailEngine()
+            val model = modelEngine()
+            val window = MessageWindow(Duration.ofHours(6))
+
+            val summary = service(gmail, model, window = window).run()
+
+            assertEquals(window, summary.window)
+        }
+
+    @Test
     fun leavesTheMailItCouldNotDecideWithoutALabel() =
         runTest {
             val gmail = gmailEngine()
@@ -149,6 +180,7 @@ class ProcessInboxServiceTest {
         gmail: MockEngine,
         model: MockEngine,
         log: StringBuilder = StringBuilder(),
+        window: MessageWindow = MessageWindow.LAST_DAY,
     ): ProcessInboxService {
         val api =
             GmailApiClient(
@@ -160,7 +192,7 @@ class ProcessInboxServiceTest {
                     ),
                 baseUrl = "https://gmail.example/v1",
             )
-        val messages = GmailMessagesApi(api)
+        val messages = GmailMessagesApi(api, Clock.fixed(NOW, ZoneOffset.UTC))
         val stateManager = GmailLabelStateManager(messages, GmailLabelsApi(api))
         val modelClient =
             OllamaDecisionClient(
@@ -172,6 +204,7 @@ class ProcessInboxServiceTest {
             )
         return ProcessInboxService(
             messages = messages,
+            window = window,
             screening =
                 ScreeningService(
                     heuristics =
@@ -300,6 +333,8 @@ class ProcessInboxServiceTest {
     private fun jsonHeaders() = headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString())
 
     companion object {
+        private val NOW: Instant = Instant.parse("2026-10-24T08:00:00Z")
+
         private const val DECISION_ANSWER =
             """{"model":"clef:cloud","answers":{},"usage":{"input_tokens":10,"output_tokens":1}}"""
 

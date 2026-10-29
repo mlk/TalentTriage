@@ -7,6 +7,7 @@ import com.github.ajalt.clikt.parameters.options.option
 import com.github.ajalt.clikt.parameters.types.int
 import io.ktor.client.HttpClient
 import uk.me.michaellloydlee.recruiter.domain.gmail.MessageWindow
+import uk.me.michaellloydlee.recruiter.domain.gmail.messageWindow
 import uk.me.michaellloydlee.recruiter.infrastructure.gmail.FileOAuth2TokenStore
 import uk.me.michaellloydlee.recruiter.infrastructure.gmail.GmailApiException
 import uk.me.michaellloydlee.recruiter.infrastructure.gmail.GmailAuthenticationException
@@ -15,8 +16,6 @@ import uk.me.michaellloydlee.recruiter.infrastructure.gmail.GmailServices
 import uk.me.michaellloydlee.recruiter.infrastructure.gmail.GoogleClientCredentials
 import uk.me.michaellloydlee.recruiter.infrastructure.logging.StructuredLogger
 import java.nio.file.Path
-import java.time.Duration
-import java.time.format.DateTimeParseException
 
 /**
  * Lists the inbox messages that were not processed yet.
@@ -104,12 +103,9 @@ class PendingCommand(
 
     private fun window(): MessageWindow =
         try {
-            MessageWindow(Duration.parse(since))
-        } catch (error: DateTimeParseException) {
-            throw CommandFailedException(
-                "'$since' is not a duration, use an ISO-8601 duration like PT24H or P1D",
-                error,
-            )
+            messageWindow(since)
+        } catch (error: IllegalArgumentException) {
+            throw CommandFailedException(error.message.orEmpty(), error)
         }
 
     override fun help(context: Context): String = "List the inbox messages that were not processed yet."

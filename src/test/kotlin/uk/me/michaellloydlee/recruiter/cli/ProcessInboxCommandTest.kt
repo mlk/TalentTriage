@@ -152,6 +152,81 @@ class ProcessInboxCommandTest {
         }
 
     @Test
+    fun looksAtTheMessagesOfTheWindowOfTheRun() =
+        runTest {
+            val sink = StringBuilder()
+            val engine = engine()
+
+            val result =
+                cli(sink) { mockClient(engine) }
+                    .test(
+                        "process-inbox --since PT6H " +
+                            "--credentials ${credentialsFile()} " +
+                            "--token ${tokenFile()} " +
+                            "--requirements ${requirementsFile()}",
+                    )
+
+            assertEquals(0, result.statusCode)
+            val search =
+                engine.requestHistory
+                    .first { it.url.encodedPath.endsWith("/users/me/messages") }
+                    .url.parameters["q"]
+            assertTrue(search!!.contains("after:"))
+        }
+
+    @Test
+    fun theWindowOfTheRunIsInTheLog() =
+        runTest {
+            val sink = StringBuilder()
+            val engine = engine()
+
+            val result =
+                cli(sink) { mockClient(engine) }
+                    .test(
+                        "process-inbox --since PT6H " +
+                            "--credentials ${credentialsFile()} " +
+                            "--token ${tokenFile()} " +
+                            "--requirements ${requirementsFile()}",
+                    )
+
+            assertEquals(0, result.statusCode)
+            val completed = records(sink).last()
+            assertEquals("PT6H", completed.attributes["window"])
+        }
+
+    @Test
+    fun failsOnAWindowThatIsNotADuration() =
+        runTest {
+            val sink = StringBuilder()
+
+            val result =
+                cli(sink).test(
+                    "process-inbox --since 3y " +
+                        "--credentials ${credentialsFile()} " +
+                        "--token ${tokenFile()} " +
+                        "--requirements ${requirementsFile()}",
+                )
+
+            assertEquals(1, result.statusCode)
+        }
+
+    @Test
+    fun failsOnAWindowOfZero() =
+        runTest {
+            val sink = StringBuilder()
+
+            val result =
+                cli(sink).test(
+                    "process-inbox --since PT0S " +
+                        "--credentials ${credentialsFile()} " +
+                        "--token ${tokenFile()} " +
+                        "--requirements ${requirementsFile()}",
+                )
+
+            assertEquals(1, result.statusCode)
+        }
+
+    @Test
     fun failsWhenTheCredentialsAreMissing() =
         runTest {
             val sink = StringBuilder()
