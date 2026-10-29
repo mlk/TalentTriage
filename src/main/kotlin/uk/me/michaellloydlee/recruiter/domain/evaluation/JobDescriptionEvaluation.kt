@@ -8,6 +8,11 @@ import uk.me.michaellloydlee.recruiter.domain.gmail.RecruiterLabel
  */
 sealed interface JobDescriptionEvaluation {
     /**
+     * The state of the pipeline the evaluation leads to.
+     */
+    val state: RecruiterLabel
+
+    /**
      * The four criteria of the evaluation.
      *
      * @property payMatches the offer states a pay that meets the target.
@@ -29,7 +34,7 @@ sealed interface JobDescriptionEvaluation {
          * everything the job seeker needs to know - the pay, the days of
          * office - is not thrown away either: it waits for the job seeker.
          */
-        val state: RecruiterLabel
+        override val state: RecruiterLabel
             get() =
                 when {
                     !jdMatches -> RecruiterLabel.TRASH
@@ -55,13 +60,19 @@ sealed interface JobDescriptionEvaluation {
     }
 
     /**
-     * The model could not decide, the mail stays in the inbox.
+     * The model could not decide, the mail waits for the job seeker.
+     *
+     * The state of an unknown evaluation is
+     * `Recruiters/NeedsMoreInformation`: the job seeker looks at the mail, the
+     * reason of the model goes into the log.
      *
      * @property reason what went wrong, it goes into the log.
      */
     data class Unknown(
         val reason: String,
-    ) : JobDescriptionEvaluation
+    ) : JobDescriptionEvaluation {
+        override val state: RecruiterLabel = RecruiterLabel.NEEDS_MORE_INFORMATION
+    }
 
     companion object {
         /** The job description does not say how many days of office it demands. */
