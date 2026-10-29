@@ -15,8 +15,8 @@ import uk.me.michaellloydlee.recruiter.infrastructure.gmail.GmailLabelStateManag
  * below the target or the job description does not say how many days of
  * office it demands - and a mail that does not match, or that demands more
  * days of office than the job seeker allows, gets `Recruiters/Trash` and is
- * archived. A mail the model could not decide about stays in the inbox and is
- * looked at again by the next run.
+ * archived. A mail the model could not evaluate gets `Recruiters/NeedsMoreInformation`
+ * as well: it is not thrown away, the job seeker looks at it.
  *
  * @param evaluator the model that evaluates the job descriptions.
  * @param stateManager applies the state label of the mail.
@@ -39,9 +39,7 @@ class EvaluationService(
         requirements: JobRequirements,
     ): JobDescriptionEvaluation {
         val evaluation = evaluator.evaluate(message, attachments, requirements)
-        if (evaluation is JobDescriptionEvaluation.Evaluated) {
-            stateManager.apply(message.id, evaluation.state)
-        }
+        stateManager.apply(message.id, evaluation.state)
         return evaluation
     }
 }

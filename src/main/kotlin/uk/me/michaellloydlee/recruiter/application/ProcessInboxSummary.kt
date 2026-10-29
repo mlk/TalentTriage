@@ -10,11 +10,12 @@ import uk.me.michaellloydlee.recruiter.domain.gmail.MessageWindow
  * @property filteredOut how many of them were not recruiter mails.
  * @property jobListings how many of them were job listings, a listing is not
  *   one job and is not evaluated.
- * @property unknown how many of them the screening or the evaluation could not
- *   decide, they stay in the inbox.
+ * @property unknown how many of them the screening could not decide, they stay
+ *   in the inbox without a state label.
  * @property worthFollowUp how many of them are worth a follow up.
- * @property needsMoreInformation how many of them match but do not say
- *   everything the job seeker needs to know.
+ * @property needsMoreInformation how many of them the job seeker has to look
+ *   at: they match but do not say everything the job seeker needs to know, or
+ *   the model could not evaluate them.
  * @property trashed how many of them do not match at all.
  * @property window how far back the run looked for messages.
  */

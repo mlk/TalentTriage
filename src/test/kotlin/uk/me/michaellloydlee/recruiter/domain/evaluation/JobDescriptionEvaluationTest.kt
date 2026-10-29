@@ -129,6 +129,13 @@ class JobDescriptionEvaluationTest {
         assertEquals("the pay is below the target", evaluation.missing)
     }
 
+    @Test
+    fun anEvaluationTheModelCouldNotMakeNeedsMoreInformation() {
+        val evaluation = JobDescriptionEvaluation.Unknown("The decision model could not be reached")
+
+        assertEquals(RecruiterLabel.NEEDS_MORE_INFORMATION, evaluation.state)
+    }
+
     private fun evaluation(
         payMatches: Boolean,
         jdMatches: Boolean,

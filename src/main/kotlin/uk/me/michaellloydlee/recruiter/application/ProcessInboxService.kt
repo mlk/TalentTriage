@@ -112,27 +112,37 @@ class ProcessInboxService(
             attributes =
                 mapOf(
                     "id" to message.id,
-                    "state" to (stateOf(evaluation)?.name ?: "UNKNOWN"),
+                    "state" to evaluation.state.name,
                     "reason" to reasonOf(evaluation),
                 ),
         )
-        when (stateOf(evaluation)) {
+        // An evaluation leads to one of three states. The screening decides
+        // `FilteredOut` and `JobListing`, the two branches below are there
+        // for the compiler.
+        when (evaluation.state) {
             RecruiterLabel.WORTH_FOLLOW_UP -> counters.worthFollowUp++
             RecruiterLabel.NEEDS_MORE_INFORMATION -> counters.needsMoreInformation++
             RecruiterLabel.TRASH -> counters.trashed++
             RecruiterLabel.FILTERED_OUT -> counters.filteredOut++
             RecruiterLabel.JOB_LISTING -> counters.jobListings++
-            null -> counters.unknown++
         }
     }
 
-    private fun stateOf(evaluation: JobDescriptionEvaluation): RecruiterLabel? =
-        (evaluation as? JobDescriptionEvaluation.Evaluated)?.state
-
+    /**
+     * The reason of the log of an evaluation.
+     *
+     * @param evaluation the evaluation of the job description.
+     * @return the reason of the log.
+     */
     private fun reasonOf(evaluation: JobDescriptionEvaluation): String =
         when (evaluation) {
-            is JobDescriptionEvaluation.Evaluated -> reasonOf(evaluation)
-            is JobDescriptionEvaluation.Unknown -> evaluation.reason
+            is JobDescriptionEvaluation.Evaluated -> {
+                reasonOf(evaluation)
+            }
+
+            is JobDescriptionEvaluation.Unknown -> {
+                "The model could not evaluate the job description: ${evaluation.reason}"
+            }
         }
 
     /**

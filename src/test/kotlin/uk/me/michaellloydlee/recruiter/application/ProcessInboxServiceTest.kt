@@ -155,6 +155,38 @@ class ProcessInboxServiceTest {
         }
 
     @Test
+    fun tagsAMailTheModelCouldNotEvaluateForMoreInformation() =
+        runTest {
+            val gmail = gmailEngine()
+            val model = modelEngine(answered = false)
+
+            val summary = service(gmail, model).run()
+
+            assertEquals(2, summary.screened)
+            assertEquals(2, summary.recruiters)
+            assertEquals(2, summary.needsMoreInformation)
+            assertEquals(0, summary.unknown)
+            val labels = gmail.requestHistory.filter { it.url.encodedPath.endsWith("/modify") }
+            assertEquals(2, labels.size)
+            labels.forEach { label ->
+                val body = (label.body as TextContent).text
+                assertTrue(body.contains("Label_needsmoreinformation"))
+            }
+        }
+
+    @Test
+    fun theLogSaysThatTheModelCouldNotEvaluateTheJobDescription() =
+        runTest {
+            val gmail = gmailEngine()
+            val model = modelEngine(answered = false)
+            val log = StringBuilder()
+
+            service(gmail, model, log).run()
+
+            assertTrue(log.toString().contains("could not evaluate the job description"))
+        }
+
+    @Test
     fun looksAtTheMessagesOfTheWindowOnly() =
         runTest {
             val gmail = gmailEngine()
@@ -253,14 +285,17 @@ class ProcessInboxServiceTest {
      * The model answers the recruiter question and the four criteria of the
      * evaluation.
      */
-    private fun modelEngine(officeDays: String = "matches"): MockEngine =
+    private fun modelEngine(
+        officeDays: String = "matches",
+        answered: Boolean = true,
+    ): MockEngine =
         MockEngine { request ->
             val body = (request.body as TextContent).text
             val questions = Json.parseToJsonElement(body).jsonObject["questions"]!!.jsonObject
             val answer =
                 if (questions.containsKey("recruiter")) {
                     """"recruiter":{"type":"choice","choice":"from a recruiter","confidence":0.9}"""
-                } else {
+                } else if (answered) {
                     questions.keys.joinToString(",") { name ->
                         val choice =
                             when (name) {
@@ -270,6 +305,8 @@ class ProcessInboxServiceTest {
                             }
                         """"$name":{"type":"choice","choice":"$choice","confidence":0.9}"""
                     }
+                } else {
+                    ""
                 }
             respond(
                 content = DECISION_ANSWER.replace("{}", "{$answer}"),
