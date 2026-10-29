@@ -82,6 +82,10 @@ class ProcessInboxService(
                 evaluate(message, counters)
             }
 
+            ScreeningDecision.JOB_LISTING -> {
+                counters.jobListings++
+            }
+
             ScreeningDecision.NOT_RECRUITER -> {
                 counters.filteredOut++
             }

@@ -13,6 +13,8 @@ import io.ktor.http.headersOf
 import io.ktor.serialization.kotlinx.json.json
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import uk.me.michaellloydlee.recruiter.domain.gmail.EmailMessage
 import uk.me.michaellloydlee.recruiter.domain.screening.RecruiterHeuristics
 import uk.me.michaellloydlee.recruiter.domain.screening.ScreeningDecision
@@ -32,6 +34,28 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 class ScreeningServiceTest {
+    @Test
+    fun labelsAJobListingWithoutAskingTheModel() =
+        runTest {
+            val model = modelAnswering("from a recruiter")
+            val labels = labelEngine()
+            val service = service(model, labels)
+
+            val outcome =
+                service.screen(
+                    message(
+                        subject = "Lead Software Engineer job at LSEG - 1 connection",
+                        sender = "LinkedIn Job Alerts <jobalerts-noreply@linkedin.com>",
+                    ),
+                )
+
+            assertEquals(ScreeningDecision.JOB_LISTING, outcome.decision)
+            assertEquals(ScreeningStage.HEURISTICS, outcome.stage)
+            assertTrue(outcome.reason.contains("job listing"))
+            assertEquals(0, model.requestHistory.size)
+            assertTrue(labelBody(labels).contains("Label_joblisting"))
+        }
+
     @Test
     fun filtersOutAMessageThatMatchesNoRule() =
         runTest {
@@ -168,8 +192,14 @@ class ScreeningServiceTest {
                 }
 
                 request.url.encodedPath.endsWith("/users/me/labels") -> {
+                    val name =
+                        Json
+                            .parseToJsonElement((request.body as TextContent).text)
+                            .jsonObject["name"]!!
+                            .jsonPrimitive
+                            .content
                     respond(
-                        content = """{"id":"$FILTERED_OUT_LABEL_ID","name":"Recruiters/FilteredOut"}""",
+                        content = """{"id":"${idOf(name)}","name":"$name"}""",
                         status = HttpStatusCode.OK,
                         headers = jsonHeaders(),
                     )
@@ -185,16 +215,19 @@ class ScreeningServiceTest {
             }
         }
 
+    private fun idOf(label: String): String = "Label_${label.substringAfterLast('/').lowercase()}"
+
     private fun labelBody(engine: MockEngine): String = (engine.requestHistory.last().body as TextContent).text
 
     private fun message(
         subject: String = "",
         body: String = "",
+        sender: String = "someone@example.com",
     ): EmailMessage =
         EmailMessage(
             id = "message-id",
             threadId = "thread-id",
-            sender = "someone@example.com",
+            sender = sender,
             subject = subject,
             body = body,
             labelIds = listOf("INBOX"),

@@ -10,6 +10,12 @@ sealed interface RecruiterVerification {
     data object Recruiter : RecruiterVerification
 
     /**
+     * The message is a job listing, it offers many jobs at once and it is not
+     * one job.
+     */
+    data object JobListing : RecruiterVerification
+
+    /**
      * The message is not from a recruiter.
      */
     data object NotRecruiter : RecruiterVerification

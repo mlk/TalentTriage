@@ -3,7 +3,7 @@ package uk.me.michaellloydlee.recruiter.application.screening
 import uk.me.michaellloydlee.recruiter.domain.gmail.EmailMessage
 
 /**
- * Decides whether a message is from a recruiter.
+ * Decides whether a message is from a recruiter or a job listing.
  *
  * The pipeline has two implementations: the decision model of Ollama, which
  * answers a typed question, and a chat model, which answers in words. The
