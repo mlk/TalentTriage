@@ -1,5 +1,7 @@
 package uk.me.michaellloydlee.recruiter.application
 
+import uk.me.michaellloydlee.recruiter.domain.gmail.MessageWindow
+
 /**
  * What a run of the pipeline did.
  *
@@ -12,6 +14,7 @@ package uk.me.michaellloydlee.recruiter.application
  * @property needsMoreInformation how many of them match but do not say
  *   everything the job seeker needs to know.
  * @property trashed how many of them do not match at all.
+ * @property window how far back the run looked for messages.
  */
 data class ProcessInboxSummary(
     val screened: Int,
@@ -21,4 +24,5 @@ data class ProcessInboxSummary(
     val worthFollowUp: Int = 0,
     val needsMoreInformation: Int = 0,
     val trashed: Int = 0,
+    val window: MessageWindow = MessageWindow.LAST_DAY,
 )
