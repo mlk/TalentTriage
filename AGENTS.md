@@ -79,13 +79,16 @@ That is what makes the code testable without a network and without a file system
 
 ### The states of a message
 
-Gmail is the state store of the pipeline: a processed message carries exactly one of the four
-state labels below `Recruiters/` — `FilteredOut`, `WorthFollowUp`, `NeedsMoreInformation` and
-`Trash`. A message without a state label is pending.
+Gmail is the state store of the pipeline: a processed message carries exactly one of the five
+state labels below `Recruiters/` — `FilteredOut`, `JobListing`, `WorthFollowUp`,
+`NeedsMoreInformation` and `Trash`. A message without a state label is pending.
 
 * `NeedsMoreInformation` is the single state for a mail that matches but is incomplete. Both gaps
   of a job description land there: the pay is not stated and the days of office are not stated
   (`OfficeDays.UNCLEAR`). It is one state, not two.
+* `JobListing` is a mail of a job board that offers many jobs at once. The rules of the sender and
+  of the subject decide it without a model, the model is the fallback for the mails the rules do
+  not catch. A listing is not evaluated — it is not one job.
 * The state is derived from the evaluation, never from the exception of the model.
 * The label carries the state, the log carries the reason. A detail that is not a state — why the
   evaluation is incomplete, for instance — belongs in the log.

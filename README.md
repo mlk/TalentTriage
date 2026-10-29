@@ -146,8 +146,9 @@ The executable is `recruiter-cli`. Every operation is a subcommand:
 
 `process-inbox` fetches the messages of the inbox that were not processed yet
 and screens them: the ones that are not recruiter mails are filtered out with
-the label `Recruiters/FilteredOut`, the recruiter mails are counted for the
-deep evaluation that comes with its own story.
+the label `Recruiters/FilteredOut`, the job listings get the label
+`Recruiters/JobListing`, the recruiter mails are counted for the deep
+evaluation that comes with its own story.
 
 The requirements of the job seeker — the pay, the profile and the number of
 days of office a job may demand — are read from `requirements.json` in the
@@ -182,6 +183,16 @@ recruiter-cli process-inbox --job-description-evaluation-model=clef:cloud
 Every step of the pipeline gets its own model, so the model of the recruiter
 verification is chosen with `--recruiter-verification-model` and the model of
 the job description evaluation with `--job-description-evaluation-model`.
+
+A job listing - an alert of a job board, it offers many jobs at once and it is
+not one job - is told apart before the model is asked: the rules of the sender
+and of the subject know the boards. `jobalerts-noreply@linkedin.com` sends the
+alerts of LinkedIn, `inmail-hit-reply@linkedin.com` sends the mails of the
+people of LinkedIn, so the rules catch the listing and not the recruiter mail.
+A message the rules do not catch is asked about once more, whether it is a job
+listing: the second question only refines the state of a message that is not a
+recruiter mail, a model that is not sure about it filters the message out. A
+listing is not evaluated - it is not one job - and stays in the inbox.
 
 The default models of both verifiers run in the cloud of Ollama (`clef:cloud`
 and `minimax-m3.1-flash:cloud`), they need a paid plan or usage credits. A
@@ -253,6 +264,7 @@ excluded by its own path:
 | Label | Meaning | Archived |
 | --- | --- | --- |
 | `Recruiters/FilteredOut` | not a recruiter mail | no, it stays in the inbox |
+| `Recruiters/JobListing` | a job listing, an alert of a job board that offers many jobs at once | no, it stays in the inbox |
 | `Recruiters/WorthFollowUp` | worth a follow up | no, it stays in the inbox |
 | `Recruiters/NeedsMoreInformation` | a recruiter mail that matches, but something is missing: the pay is not stated or the job description does not say how many days of office it demands | no, it stays in the inbox |
 | `Recruiters/Trash` | not worth any attention | yes, the message leaves the inbox |
@@ -260,8 +272,8 @@ excluded by its own path:
 A message carries exactly one state label - applying a new state removes the
 other ones - and the state labels are created in the mailbox when they do not
 exist yet. The state label is the marker of the pipeline: the search of the
-pending mails (`is:inbox -label:Recruiters/*`) skips every message that
-carries one, so a message that was processed is never looked at again.
+pending mails (`is:inbox` with every state label excluded) skips every message
+that carries one, so a message that was processed is never looked at again.
 
 The pipeline is a scheduled job, so it only processes the mail that arrived
 since the last run: the search is `is:inbox` with every state label excluded
