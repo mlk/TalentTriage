@@ -66,7 +66,7 @@ class GmailLabelStateManagerTest {
                 engine.requestHistory.filter {
                     it.method.value == "POST" && it.url.encodedPath.endsWith("/users/me/labels")
                 }
-            assertEquals(3, created.size)
+            assertEquals(4, created.size)
             val body = (created.first().body as TextContent).text
             assertTrue(body.contains("Recruiters/FilteredOut"))
         }

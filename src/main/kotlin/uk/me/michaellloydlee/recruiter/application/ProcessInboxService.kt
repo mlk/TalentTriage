@@ -52,6 +52,7 @@ class ProcessInboxService(
             recruiters = counters.recruiters,
             filteredOut = counters.filteredOut,
             unknown = counters.unknown,
+            jobListings = counters.jobListings,
             worthFollowUp = counters.worthFollowUp,
             needsMoreInformation = counters.needsMoreInformation,
             trashed = counters.trashed,
@@ -79,6 +80,10 @@ class ProcessInboxService(
             ScreeningDecision.RECRUITER -> {
                 counters.recruiters++
                 evaluate(message, counters)
+            }
+
+            ScreeningDecision.JOB_LISTING -> {
+                counters.jobListings++
             }
 
             ScreeningDecision.NOT_RECRUITER -> {
@@ -116,6 +121,7 @@ class ProcessInboxService(
             RecruiterLabel.NEEDS_MORE_INFORMATION -> counters.needsMoreInformation++
             RecruiterLabel.TRASH -> counters.trashed++
             RecruiterLabel.FILTERED_OUT -> counters.filteredOut++
+            RecruiterLabel.JOB_LISTING -> counters.jobListings++
             null -> counters.unknown++
         }
     }
@@ -145,6 +151,7 @@ class ProcessInboxService(
         var recruiters: Int = 0
         var filteredOut: Int = 0
         var unknown: Int = 0
+        var jobListings: Int = 0
         var worthFollowUp: Int = 0
         var needsMoreInformation: Int = 0
         var trashed: Int = 0

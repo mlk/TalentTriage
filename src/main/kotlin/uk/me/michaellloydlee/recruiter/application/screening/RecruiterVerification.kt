@@ -10,9 +10,20 @@ sealed interface RecruiterVerification {
     data object Recruiter : RecruiterVerification
 
     /**
-     * The message is not from a recruiter.
+     * The message is a job listing, it offers many jobs at once and it is not
+     * one job.
      */
-    data object NotRecruiter : RecruiterVerification
+    data object JobListing : RecruiterVerification
+
+    /**
+     * The message is not from a recruiter.
+     *
+     * @property reason why the message is not a recruiter mail, it goes into
+     *   the log.
+     */
+    data class NotRecruiter(
+        val reason: String,
+    ) : RecruiterVerification
 
     /**
      * The verification could not decide.

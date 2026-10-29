@@ -15,6 +15,12 @@ import java.io.IOException
  * recruiter`, `not from a recruiter` and `unknown`, and tells how likely every
  * one of them is. A model that is not sure about a mail leaves it alone.
  *
+ * The rules of the job listing decide a listing without the model, the model
+ * is the fallback for the messages the rules do not catch: a message the model
+ * does not see as a recruiter mail is asked about once more, whether it is a
+ * job listing. The second question only refines the state of the message, a
+ * model that is not sure about it filters the message out.
+ *
  * @param client the client of the decision API.
  * @param model the name of the decision model.
  * @param minimumConfidence how sure the model has to be, a model that is less
@@ -29,24 +35,42 @@ class DecisionModelVerifier(
 ) : RecruiterVerifier {
     override suspend fun verify(message: EmailMessage): RecruiterVerification =
         try {
-            val response =
-                client.decide(
-                    OllamaDecisionRequest(
-                        model = model,
-                        state = state(message),
-                        questions = mapOf(QUESTION to question()),
-                    ),
-                )
-            verdict(response.answers[QUESTION])
+            val response = client.decide(request(message, QUESTION, recruiterQuestion()))
+            val verdict = verdict(response.answers[QUESTION])
+            if (verdict is RecruiterVerification.NotRecruiter) {
+                jobListing(message)
+            } else {
+                verdict
+            }
         } catch (error: OllamaException) {
             RecruiterVerification.Unknown("The decision model answered with an error: ${error.message}")
         } catch (error: IOException) {
             RecruiterVerification.Unknown("The decision model could not be reached: ${error.message}")
         }
 
-    private fun verdict(
-        answer: uk.me.michaellloydlee.recruiter.infrastructure.llm.OllamaDecisionAnswer?,
-    ): RecruiterVerification {
+    /**
+     * The fallback of the rules: the model tells whether the message is a job
+     * listing.
+     *
+     * A model that is not sure about it filters the message out: the message
+     * is not a recruiter mail, that is what was decided before, and the
+     * question only refines that state.
+     */
+    private suspend fun jobListing(message: EmailMessage): RecruiterVerification =
+        try {
+            val response = client.decide(request(message, JOB_LISTING_QUESTION, jobListingQuestion()))
+            listingVerdict(response.answers[JOB_LISTING_QUESTION])
+        } catch (error: OllamaException) {
+            RecruiterVerification.NotRecruiter(
+                "The decision model answered with an error: ${error.message}, the message is filtered out",
+            )
+        } catch (error: IOException) {
+            RecruiterVerification.NotRecruiter(
+                "The decision model could not be reached: ${error.message}, the message is filtered out",
+            )
+        }
+
+    private fun verdict(answer: OllamaDecisionAnswer?): RecruiterVerification {
         if (answer == null) {
             return RecruiterVerification.Unknown("The decision model did not answer the question")
         }
@@ -62,7 +86,7 @@ class DecisionModelVerifier(
             }
 
             ANSWER_NOT_FROM_A_RECRUITER -> {
-                RecruiterVerification.NotRecruiter
+                RecruiterVerification.NotRecruiter("The model does not see a recruiter mail in it")
             }
 
             ANSWER_UNKNOWN -> {
@@ -77,7 +101,48 @@ class DecisionModelVerifier(
         }
     }
 
-    private fun question(): OllamaDecisionQuestion =
+    /**
+     * The verdict of the question about the job listing.
+     */
+    private fun listingVerdict(answer: OllamaDecisionAnswer?): RecruiterVerification {
+        if (answer == null) {
+            return RecruiterVerification.NotRecruiter(
+                "The decision model did not answer the question about the job listing, " +
+                    "the message is filtered out",
+            )
+        }
+        val confidence = answer.confidence ?: 0.0
+        if (confidence < minimumConfidence) {
+            return RecruiterVerification.NotRecruiter(
+                "The decision model is not sure about the job listing (confidence $confidence), " +
+                    "the message is filtered out",
+            )
+        }
+        return when (answer.choice) {
+            ANSWER_A_JOB_LISTING -> {
+                RecruiterVerification.JobListing
+            }
+
+            else -> {
+                RecruiterVerification.NotRecruiter(
+                    "The model does not see a recruiter mail or a job listing in it",
+                )
+            }
+        }
+    }
+
+    private fun request(
+        message: EmailMessage,
+        question: String,
+        asked: OllamaDecisionQuestion,
+    ): OllamaDecisionRequest =
+        OllamaDecisionRequest(
+            model = model,
+            state = state(message),
+            questions = mapOf(question to asked),
+        )
+
+    private fun recruiterQuestion(): OllamaDecisionQuestion =
         OllamaDecisionQuestion(
             type = OllamaDecisionQuestion.TYPE_CHOICE,
             instructions = INSTRUCTIONS,
@@ -88,6 +153,22 @@ class DecisionModelVerifier(
                     ANSWER_NOT_FROM_A_RECRUITER to
                         "The message is not about a position, a job application, an interview or a job offer",
                     ANSWER_UNKNOWN to "The message is too short, too unclear or too mixed to tell",
+                ),
+        )
+
+    /**
+     * The question of the fallback: is the message a job listing?
+     */
+    private fun jobListingQuestion(): OllamaDecisionQuestion =
+        OllamaDecisionQuestion(
+            type = OllamaDecisionQuestion.TYPE_CHOICE,
+            instructions = INSTRUCTIONS,
+            criteria =
+                mapOf(
+                    ANSWER_A_JOB_LISTING to
+                        "The message is an alert of a job board, it offers many jobs at once",
+                    ANSWER_NOT_A_JOB_LISTING to
+                        "The message is about one job, one position or one person",
                 ),
         )
 
@@ -112,6 +193,9 @@ class DecisionModelVerifier(
         /** The name of the question of the recruiter verification. */
         const val QUESTION: String = "recruiter"
 
+        /** The name of the question of the job listing. */
+        const val JOB_LISTING_QUESTION: String = "job_listing"
+
         /** The answer of a message that is from a recruiter. */
         const val ANSWER_FROM_A_RECRUITER: String = "from a recruiter"
 
@@ -120,6 +204,12 @@ class DecisionModelVerifier(
 
         /** The answer of a message the model cannot tell. */
         const val ANSWER_UNKNOWN: String = "unknown"
+
+        /** The answer of a message that is a job listing. */
+        const val ANSWER_A_JOB_LISTING: String = "a job listing"
+
+        /** The answer of a message that is not a job listing. */
+        const val ANSWER_NOT_A_JOB_LISTING: String = "not a job listing"
 
         private const val INSTRUCTIONS =
             "Which of the options fits the message? Answer with the option only."

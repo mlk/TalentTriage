@@ -56,6 +56,7 @@ class GmailMessagesApiTest {
             assertEquals(
                 "is:inbox " +
                     "-label:Recruiters/FilteredOut " +
+                    "-label:Recruiters/JobListing " +
                     "-label:Recruiters/WorthFollowUp " +
                     "-label:Recruiters/NeedsMoreInformation " +
                     "-label:Recruiters/Trash " +

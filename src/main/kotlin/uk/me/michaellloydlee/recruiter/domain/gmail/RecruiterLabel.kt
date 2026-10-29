@@ -20,6 +20,12 @@ enum class RecruiterLabel(
     /** The message is not a recruiter mail, it stays in the inbox. */
     FILTERED_OUT("${LABEL_PREFIX}FilteredOut", archives = false),
 
+    /**
+     * The message is a job listing - an alert of a job board - and not one
+     * job, it stays in the inbox.
+     */
+    JOB_LISTING("${LABEL_PREFIX}JobListing", archives = false),
+
     /** The message is worth a follow up, it stays in the inbox. */
     WORTH_FOLLOW_UP("${LABEL_PREFIX}WorthFollowUp", archives = false),
 
