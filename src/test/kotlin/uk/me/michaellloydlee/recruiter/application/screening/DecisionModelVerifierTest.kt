@@ -14,7 +14,6 @@ import io.ktor.serialization.kotlinx.json.json
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
 import uk.me.michaellloydlee.recruiter.domain.gmail.EmailMessage
 import uk.me.michaellloydlee.recruiter.infrastructure.llm.OllamaDecisionClient
 import java.io.IOException
@@ -37,7 +36,18 @@ class DecisionModelVerifierTest {
         runTest {
             val answer = verifier(answering("not from a recruiter")).verify(message())
 
-            assertEquals(RecruiterVerification.NotRecruiter, answer)
+            val notRecruiter = assertIs<RecruiterVerification.NotRecruiter>(answer)
+            assertTrue(notRecruiter.reason.contains("job listing"))
+        }
+
+    @Test
+    fun readsTheAnswerOfAJobListing() =
+        runTest {
+            val answer =
+                verifier(answering("not from a recruiter", listing = "a job listing"))
+                    .verify(message())
+
+            assertEquals(RecruiterVerification.JobListing, answer)
         }
 
     @Test
@@ -65,6 +75,17 @@ class DecisionModelVerifierTest {
 
             val unknown = assertIs<RecruiterVerification.Unknown>(answer)
             assertTrue(unknown.reason.contains("not sure enough"))
+        }
+
+    @Test
+    fun aModelThatIsNotSureAboutTheJobListingFiltersTheMessageOut() =
+        runTest {
+            val answer =
+                verifier(answering("not from a recruiter", listingConfidence = 0.2))
+                    .verify(message())
+
+            val notRecruiter = assertIs<RecruiterVerification.NotRecruiter>(answer)
+            assertTrue(notRecruiter.reason.contains("not sure about the job listing"))
         }
 
     @Test
@@ -99,6 +120,17 @@ class DecisionModelVerifierTest {
 
             val unknown = assertIs<RecruiterVerification.Unknown>(answer)
             assertTrue(unknown.reason.contains("could not be reached"))
+        }
+
+    @Test
+    fun aModelThatIsNotReachableForTheJobListingFiltersTheMessageOut() =
+        runTest {
+            val engine = answering("not from a recruiter", failingOnTheSecondRequest = true)
+
+            val answer = verifier(engine).verify(message())
+
+            val notRecruiter = assertIs<RecruiterVerification.NotRecruiter>(answer)
+            assertTrue(notRecruiter.reason.contains("could not be reached"))
         }
 
     @Test
@@ -137,6 +169,22 @@ class DecisionModelVerifierTest {
         }
 
     @Test
+    fun asksTheModelAboutTheJobListingOnlyWhenItIsNoRecruiterMail() =
+        runTest {
+            val recruiter = answering("from a recruiter")
+            verifier(recruiter).verify(message())
+
+            assertEquals(1, recruiter.requestHistory.size)
+
+            val listing = answering("not from a recruiter")
+            verifier(listing).verify(message())
+
+            assertEquals(2, listing.requestHistory.size)
+            val body = (listing.requestHistory.last().body as TextContent).text
+            assertTrue(body.contains("job_listing"))
+        }
+
+    @Test
     fun cutsTheBodyOfTheMessageOff() =
         runTest {
             val engine = answering("from a recruiter")
@@ -168,24 +216,41 @@ class DecisionModelVerifierTest {
     private fun answering(
         answer: String?,
         confidence: Double = 0.9,
-    ): MockEngine =
-        MockEngine {
+        listing: String = DecisionModelVerifier.ANSWER_NOT_A_JOB_LISTING,
+        listingConfidence: Double = confidence,
+        failingOnTheSecondRequest: Boolean = false,
+    ): MockEngine {
+        var request = 0
+        return MockEngine { httpRequest ->
+            request++
+            if (failingOnTheSecondRequest && request > 1) {
+                throw IOException("the network is down")
+            }
+            val body = (httpRequest.body as TextContent).text
+            val questions =
+                Json
+                    .parseToJsonElement(body)
+                    .jsonObject["questions"]!!
+                    .jsonObject.keys
             val answers =
                 if (answer == null) {
-                    "{}"
+                    ""
                 } else {
-                    """
-                    {"answers":{"recruiter":{"type":"choice","choice":"$answer",
-                    "probabilities":{"from a recruiter":0.9,"not from a recruiter":0.05,"unknown":0.05},
-                    "confidence":$confidence}}}
-                    """.trimIndent()
+                    questions.joinToString(",") { name ->
+                        val choice =
+                            if (name == DecisionModelVerifier.QUESTION) answer else listing
+                        val sure =
+                            if (name == DecisionModelVerifier.QUESTION) confidence else listingConfidence
+                        """"$name":{"type":"choice","choice":"$choice","confidence":$sure}"""
+                    }
                 }
             respond(
-                content = answers,
+                content = """{"answers":{$answers},"usage":{"input_tokens":10,"output_tokens":1}}""",
                 status = HttpStatusCode.OK,
                 headers = headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString()),
             )
         }
+    }
 
     private fun message(
         subject: String = "",

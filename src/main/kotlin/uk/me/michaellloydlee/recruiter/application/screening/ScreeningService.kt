@@ -83,13 +83,12 @@ class ScreeningService(
                 )
             }
 
-            RecruiterVerification.NotRecruiter -> {
-                val reason = "The model does not see a recruiter mail in it"
+            is RecruiterVerification.NotRecruiter -> {
                 stateManager.apply(message.id, RecruiterLabel.FILTERED_OUT)
                 ScreeningOutcome(
                     decision = ScreeningDecision.NOT_RECRUITER,
                     stage = ScreeningStage.LOCAL_MODEL,
-                    reason = reason,
+                    reason = answer.reason,
                 )
             }
 

@@ -84,7 +84,7 @@ class ScreeningServiceTest {
             assertEquals(ScreeningDecision.NOT_RECRUITER, outcome.decision)
             assertEquals(ScreeningStage.LOCAL_MODEL, outcome.stage)
             assertTrue(outcome.reason.contains("does not see a recruiter mail"))
-            assertEquals(1, model.requestHistory.size)
+            assertEquals(2, model.requestHistory.size)
             assertTrue(labelBody(labels).contains(FILTERED_OUT_LABEL_ID))
         }
 
@@ -167,12 +167,23 @@ class ScreeningServiceTest {
     }
 
     private fun modelAnswering(answer: String): MockEngine =
-        MockEngine {
+        MockEngine { request ->
+            val body = (request.body as TextContent).text
+            val questions =
+                Json
+                    .parseToJsonElement(body)
+                    .jsonObject["questions"]!!
+                    .jsonObject.keys
+            val answers =
+                questions.joinToString(",") { name ->
+                    val choice = if (name == "recruiter") answer else "not a job listing"
+                    """"$name":{"type":"choice","choice":"$choice",
+                    "probabilities":{"from a recruiter":0.9},"confidence":0.9}"""
+                }
             respond(
                 content =
                     """
-                    {"model":"clef:cloud","answers":{"recruiter":{"type":"choice","choice":"$answer",
-                    "probabilities":{"from a recruiter":0.9},"confidence":0.9}},
+                    {"model":"clef:cloud","answers":{$answers},
                     "usage":{"input_tokens":10,"output_tokens":1}}
                     """.trimIndent(),
                 status = HttpStatusCode.OK,

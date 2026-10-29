@@ -14,6 +14,12 @@ import java.io.IOException
  * The model is asked for one word, the answer is read from it. A model that
  * answers something else is no answer at all: the message is left alone.
  *
+ * The rules of the job listing decide a listing without the model, the model
+ * is the fallback for the messages the rules do not catch: a message the model
+ * does not see as a recruiter mail is asked about once more, whether it is a
+ * job listing. The second question only refines the state of the message, a
+ * model that is not sure about it filters the message out.
+ *
  * @param client the client of the chat API.
  * @param model the name of the chat model.
  * @param maxBodyLength how many characters of the body go into the prompt.
@@ -38,7 +44,12 @@ class ChatModelVerifier(
                             ),
                     ),
                 )
-            answer(response.content)
+            val verdict = answer(response.content)
+            if (verdict is RecruiterVerification.NotRecruiter) {
+                jobListing(message)
+            } else {
+                verdict
+            }
         } catch (error: OllamaException) {
             RecruiterVerification.Unknown(
                 "The model of the recruiter verification answered with an error: ${error.message}",
@@ -46,6 +57,42 @@ class ChatModelVerifier(
         } catch (error: IOException) {
             RecruiterVerification.Unknown(
                 "The model of the recruiter verification could not be reached: ${error.message}",
+            )
+        }
+
+    /**
+     * The fallback of the rules: the model tells whether the message is a job
+     * listing.
+     *
+     * A model that is not sure about it filters the message out: the message
+     * is not a recruiter mail, that is what was decided before, and the
+     * question only refines that state.
+     */
+    private suspend fun jobListing(message: EmailMessage): RecruiterVerification =
+        try {
+            val response =
+                client.chat(
+                    OllamaChatRequest(
+                        model = model,
+                        stream = false,
+                        options = OllamaOptions(temperature = 0.0),
+                        messages =
+                            listOf(
+                                OllamaMessage(role = OllamaMessage.ROLE_SYSTEM, content = LISTING_PROMPT),
+                                OllamaMessage(role = OllamaMessage.ROLE_USER, content = prompt(message)),
+                            ),
+                    ),
+                )
+            listingAnswer(response.content)
+        } catch (error: OllamaException) {
+            RecruiterVerification.NotRecruiter(
+                "The model of the recruiter verification answered with an error: ${error.message}, " +
+                    "the message is filtered out",
+            )
+        } catch (error: IOException) {
+            RecruiterVerification.NotRecruiter(
+                "The model of the recruiter verification could not be reached: ${error.message}, " +
+                    "the message is filtered out",
             )
         }
 
@@ -70,12 +117,37 @@ class ChatModelVerifier(
             }
 
             answer.startsWith(ANSWER_NO) -> {
-                RecruiterVerification.NotRecruiter
+                RecruiterVerification.NotRecruiter("The model does not see a recruiter mail in it")
             }
 
             else -> {
                 RecruiterVerification.Unknown(
                     "The model of the recruiter verification answered with '$content'",
+                )
+            }
+        }
+    }
+
+    /**
+     * Reads the answer of the model to the question about the job listing.
+     */
+    private fun listingAnswer(content: String): RecruiterVerification {
+        val answer = content.trim().lowercase()
+        return when {
+            answer.isEmpty() -> {
+                RecruiterVerification.NotRecruiter(
+                    "The model of the recruiter verification did not answer the question about " +
+                        "the job listing, the message is filtered out",
+                )
+            }
+
+            answer.startsWith(ANSWER_YES) -> {
+                RecruiterVerification.JobListing
+            }
+
+            else -> {
+                RecruiterVerification.NotRecruiter(
+                    "The model does not see a recruiter mail or a job listing in it",
                 )
             }
         }
@@ -109,6 +181,12 @@ class ChatModelVerifier(
             "You screen the inbox of a job seeker. Answer with exactly one word: " +
                 "\"yes\" if the message is a recruiter or an employer talking about a job, " +
                 "an application, an interview or a job description, and \"no\" otherwise. " +
+                "Answer with the word only, without a sentence around it."
+
+        private const val LISTING_PROMPT =
+            "You screen the inbox of a job seeker. Answer with exactly one word: " +
+                "\"yes\" if the message is an alert of a job board that offers many jobs at once, " +
+                "and \"no\" otherwise. " +
                 "Answer with the word only, without a sentence around it."
     }
 }

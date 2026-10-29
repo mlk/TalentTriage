@@ -51,7 +51,16 @@ class ChatModelVerifierTest {
         runTest {
             val answer = chatVerifier(modelAnswering("no")).verify(message())
 
-            assertEquals(RecruiterVerification.NotRecruiter, answer)
+            val notRecruiter = assertIs<RecruiterVerification.NotRecruiter>(answer)
+            assertTrue(notRecruiter.reason.contains("job listing"))
+        }
+
+    @Test
+    fun readsTheYesOfTheModelForAJobListing() =
+        runTest {
+            val answer = chatVerifier(modelAnswering("no", "yes")).verify(message())
+
+            assertEquals(RecruiterVerification.JobListing, answer)
         }
 
     @Test
@@ -97,6 +106,17 @@ class ChatModelVerifierTest {
         }
 
     @Test
+    fun aModelThatIsNotReachableForTheJobListingFiltersTheMessageOut() =
+        runTest {
+            val engine = modelAnswering("no", failingOnTheSecondRequest = true)
+
+            val answer = chatVerifier(engine).verify(message())
+
+            val notRecruiter = assertIs<RecruiterVerification.NotRecruiter>(answer)
+            assertTrue(notRecruiter.reason.contains("could not be reached"))
+        }
+
+    @Test
     fun asksTheModelWithTheSubjectAndTheBody() =
         runTest {
             val engine = modelAnswering("yes")
@@ -117,6 +137,22 @@ class ChatModelVerifierTest {
 
             val body = (engine.requestHistory.single().body as TextContent).text
             assertTrue(body.contains("\"temperature\":0.0"))
+        }
+
+    @Test
+    fun asksTheModelAboutTheJobListingOnlyWhenItIsNoRecruiterMail() =
+        runTest {
+            val recruiter = modelAnswering("yes")
+            chatVerifier(recruiter).verify(message())
+
+            assertEquals(1, recruiter.requestHistory.size)
+
+            val listing = modelAnswering("no")
+            chatVerifier(listing).verify(message())
+
+            assertEquals(2, listing.requestHistory.size)
+            val body = (listing.requestHistory.last().body as TextContent).text
+            assertTrue(body.contains("alert of a job board"))
         }
 
     @Test
@@ -148,14 +184,24 @@ class ChatModelVerifierTest {
             maxBodyLength = maxBodyLength,
         )
 
-    private fun modelAnswering(answer: String): MockEngine =
-        MockEngine {
+    private fun modelAnswering(
+        vararg answers: String,
+        failingOnTheSecondRequest: Boolean = false,
+    ): MockEngine {
+        var request = 0
+        return MockEngine {
+            request++
+            if (failingOnTheSecondRequest && request > 1) {
+                throw IOException("the network is down")
+            }
+            val answer = answers.getOrElse(request - 1) { answers.last() }
             respond(
                 content = """{"message":{"role":"assistant","content":"$answer"},"done":true}""",
                 status = HttpStatusCode.OK,
                 headers = headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString()),
             )
         }
+    }
 
     private fun message(
         subject: String = "",
