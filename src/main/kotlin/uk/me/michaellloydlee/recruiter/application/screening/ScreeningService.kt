@@ -19,6 +19,10 @@ import uk.me.michaellloydlee.recruiter.infrastructure.gmail.GmailLabelStateManag
  * `Recruiters/FilteredOut` and stays in the inbox - the label is what makes
  * the next run of the pipeline skip it.
  *
+ * The rules of the job listing come before the rules of the recruiter: a
+ * listing is not one job, so it is not evaluated, and the rules of the
+ * recruiter would send it to the evaluation.
+ *
  * A job listing is an alert of a job board, it offers many jobs at once. The
  * rules of the [jobListings] decide it without a model, and the model is the
  * fallback for the messages the rules do not catch. A listing gets the label

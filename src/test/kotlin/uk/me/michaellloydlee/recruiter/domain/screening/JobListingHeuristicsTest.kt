@@ -66,6 +66,14 @@ class JobListingHeuristicsTest {
         assertFalse(heuristics.isJobListing(message))
     }
 
+    @Test
+    fun withoutAnyRuleNoMessageIsAListing() {
+        val own = JobListingHeuristics(senderHints = emptySet(), phrases = emptySet())
+        val message = message(subject = "5 new jobs for you", sender = "LinkedIn Job Alerts <jobalerts@linkedin.com>")
+
+        assertFalse(own.isJobListing(message))
+    }
+
     private val heuristics = JobListingHeuristics()
 
     private fun message(

@@ -145,9 +145,16 @@ class ChatModelVerifier(
                 RecruiterVerification.JobListing
             }
 
-            else -> {
+            answer.startsWith(ANSWER_NO) -> {
                 RecruiterVerification.NotRecruiter(
                     "The model does not see a recruiter mail or a job listing in it",
+                )
+            }
+
+            else -> {
+                RecruiterVerification.NotRecruiter(
+                    "The model of the recruiter verification answered with '$content', " +
+                        "the message is filtered out",
                 )
             }
         }

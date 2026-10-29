@@ -214,38 +214,30 @@ class DecisionModelVerifierTest {
         )
 
     private fun answering(
-        answer: String?,
+        recruiter: String?,
         confidence: Double = 0.9,
         listing: String = DecisionModelVerifier.ANSWER_NOT_A_JOB_LISTING,
         listingConfidence: Double = confidence,
         failingOnTheSecondRequest: Boolean = false,
     ): MockEngine {
         var request = 0
-        return MockEngine { httpRequest ->
+        return MockEngine {
             request++
             if (failingOnTheSecondRequest && request > 1) {
                 throw IOException("the network is down")
             }
-            val body = (httpRequest.body as TextContent).text
-            val questions =
-                Json
-                    .parseToJsonElement(body)
-                    .jsonObject["questions"]!!
-                    .jsonObject.keys
-            val answers =
-                if (answer == null) {
+            val recruiterAnswer =
+                if (recruiter == null) {
                     ""
                 } else {
-                    questions.joinToString(",") { name ->
-                        val choice =
-                            if (name == DecisionModelVerifier.QUESTION) answer else listing
-                        val sure =
-                            if (name == DecisionModelVerifier.QUESTION) confidence else listingConfidence
-                        """"$name":{"type":"choice","choice":"$choice","confidence":$sure}"""
-                    }
+                    """"recruiter":{"type":"choice","choice":"$recruiter","confidence":$confidence},"""
                 }
+            val listingAnswer =
+                """"job_listing":{"type":"choice","choice":"$listing","confidence":$listingConfidence}"""
             respond(
-                content = """{"answers":{$answers},"usage":{"input_tokens":10,"output_tokens":1}}""",
+                content =
+                    """{"answers":{$recruiterAnswer$listingAnswer},
+                    "usage":{"input_tokens":10,"output_tokens":1}}""",
                 status = HttpStatusCode.OK,
                 headers = headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString()),
             )
