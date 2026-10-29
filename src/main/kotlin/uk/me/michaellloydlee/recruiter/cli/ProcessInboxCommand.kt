@@ -23,6 +23,7 @@ import uk.me.michaellloydlee.recruiter.application.screening.ScreeningService
 import uk.me.michaellloydlee.recruiter.domain.gmail.MessageWindow
 import uk.me.michaellloydlee.recruiter.domain.gmail.messageWindow
 import uk.me.michaellloydlee.recruiter.domain.requirements.JobRequirements
+import uk.me.michaellloydlee.recruiter.domain.screening.JobListingHeuristics
 import uk.me.michaellloydlee.recruiter.domain.screening.RecruiterHeuristics
 import uk.me.michaellloydlee.recruiter.infrastructure.gmail.FileOAuth2TokenStore
 import uk.me.michaellloydlee.recruiter.infrastructure.gmail.GmailApiException
@@ -169,6 +170,7 @@ class ProcessInboxCommand(
                         screening =
                             ScreeningService(
                                 heuristics = RecruiterHeuristics(),
+                                jobListings = JobListingHeuristics(),
                                 verifier = verifier(client),
                                 stateManager = gmail.stateManager,
                             ),

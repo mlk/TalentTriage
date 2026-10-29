@@ -57,6 +57,26 @@ class ProcessInboxServiceTest {
         }
 
     @Test
+    fun countsAJobListingAndDoesNotEvaluateIt() =
+        runTest {
+            val gmail = gmailEngine(listing = true)
+            val model = modelEngine()
+
+            val summary = service(gmail, model).run()
+
+            assertEquals(2, summary.screened)
+            assertEquals(2, summary.jobListings)
+            assertEquals(0, summary.recruiters)
+            assertEquals(0, model.requestHistory.size)
+            val labels = gmail.requestHistory.filter { it.url.encodedPath.endsWith("/modify") }
+            assertEquals(2, labels.size)
+            labels.forEach { label ->
+                val body = (label.body as TextContent).text
+                assertTrue(body.contains("Label_joblisting"))
+            }
+        }
+
+    @Test
     fun countsTheStateOfTheRecruiterMails() =
         runTest {
             val gmail = gmailEngine()
@@ -260,7 +280,7 @@ class ProcessInboxServiceTest {
 
     private fun idOf(label: String): String = "Label_${label.substringAfterLast('/').lowercase()}"
 
-    private fun gmailEngine(): MockEngine =
+    private fun gmailEngine(listing: Boolean = false): MockEngine =
         MockEngine { request ->
             when {
                 request.url.encodedPath.endsWith("/users/me/messages") -> {
@@ -295,7 +315,7 @@ class ProcessInboxServiceTest {
 
                 else -> {
                     respond(
-                        content = message(),
+                        content = message(listing),
                         status = HttpStatusCode.OK,
                         headers = jsonHeaders(),
                     )
@@ -303,7 +323,13 @@ class ProcessInboxServiceTest {
             }
         }
 
-    private fun message(): String {
+    private fun message(listing: Boolean = false): String {
+        val sender =
+            if (listing) {
+                "LinkedIn Job Alerts &lt;jobalerts-noreply@linkedin.com&gt;"
+            } else {
+                "recruiter@example.com"
+            }
         val text =
             """
             {
@@ -313,7 +339,7 @@ class ProcessInboxServiceTest {
               "payload": {
                 "mimeType": "text/plain",
                 "headers": [
-                  {"name": "From", "value": "recruiter@example.com"},
+                  {"name": "From", "value": "$sender"},
                   {"name": "Subject", "value": "Your CV"}
                 ],
                 "body": {"data": "WWUgbG9va2luZyBmb3IgYSBkZXZlbG9wZXI="}
