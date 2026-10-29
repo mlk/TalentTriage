@@ -86,6 +86,9 @@ state labels below `Recruiters/` — `FilteredOut`, `JobListing`, `WorthFollowUp
 * `NeedsMoreInformation` is the single state for a mail that matches but is incomplete. Both gaps
   of a job description land there: the pay is not stated and the days of office are not stated
   (`OfficeDays.UNCLEAR`). It is one state, not two.
+* A job description the model could not evaluate is `NeedsMoreInformation` as well: the mail waits
+  for the job seeker instead of being asked again by every run. The reason of the model goes into
+  the log.
 * `JobListing` is a mail of a job board that offers many jobs at once. The rules of the sender and
   of the subject decide it without a model, the model is the fallback for the mails the rules do
   not catch. A listing is not evaluated — it is not one job.
