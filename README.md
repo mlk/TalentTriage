@@ -285,8 +285,8 @@ java -jar recruiter-cli.jar authenticate
 ### 2. Install the launchd job
 
 The sample of the job is `config/launchd/com.user.recruiter-checker.plist`. It
-runs `java -jar … process-inbox` every hour, the structured log of the run
-goes to `logs/recruiter-cli.out.log` and the errors go to
+runs `java -jar … process-inbox` at the start of every hour, the structured
+log of the run goes to `logs/recruiter-cli.out.log` and the errors go to
 `logs/recruiter-cli.err.log`.
 
 ```bash
@@ -302,6 +302,13 @@ The job runs once an hour:
 launchctl list | grep recruiter-checker
 ```
 
+The job does not run when it is loaded, it waits for the next hour. To check
+the setup right away, start it by hand:
+
+```bash
+launchctl start com.user.recruiter-checker
+```
+
 To stop it:
 
 ```bash
@@ -311,6 +318,25 @@ launchctl unload ~/Library/LaunchAgents/com.user.recruiter-checker.plist
 The job is a user agent, it runs as the user that installed it. The
 `--enable-native-access=ALL-UNNAMED` argument of the plist keeps the error log
 free of the warning that Clikt prints on JDK 24 and newer.
+
+The plist only passes the files of the run to the command, everything else
+takes the default of the command: the models, their endpoints and their
+timeouts. Add the arguments to the `ProgramArguments` array of the plist to
+change them:
+
+```xml
+<string>--recruiter-verification-model</string>
+<string>nimble</string>
+```
+
+The window of a run is 24 hours by default (`--since PT24H`), so a job that
+was stopped for longer than a day misses the mail that arrived in between. A
+larger window covers a longer outage:
+
+```xml
+<string>--since</string>
+<string>P7D</string>
+```
 
 ---
 

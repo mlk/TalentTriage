@@ -7,6 +7,10 @@
     the run to the standard output of the job, the errors go to the standard
     error of the job.
 
+    The job runs at the start of every hour: the calendar interval names the
+    minute, a missing hour is a wildcard. An hour in the interval would pin
+    the job to that hour of the day.
+
     Install it as a user agent:
 
         cp config/launchd/com.user.recruiter-checker.plist ~/Library/LaunchAgents/
@@ -41,8 +45,8 @@
 
     <key>StartCalendarInterval</key>
     <dict>
-        <key>Hour</key>
-        <integer>1</integer>
+        <key>Minute</key>
+        <integer>0</integer>
     </dict>
 
     <key>RunAtLoad</key>

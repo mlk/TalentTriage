@@ -5,6 +5,7 @@ import org.w3c.dom.Node
 import javax.xml.parsers.DocumentBuilderFactory
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
@@ -30,6 +31,11 @@ class LaunchdConfigurationTest {
     }
 
     @Test
+    fun silencesTheWarningOfTheTerminalDetection() {
+        assertTrue(arguments().contains("--enable-native-access=ALL-UNNAMED"))
+    }
+
+    @Test
     fun passesTheFilesOfTheRunToTheCommand() {
         val arguments = arguments()
 
@@ -52,7 +58,9 @@ class LaunchdConfigurationTest {
     fun runsTheJobEveryHour() {
         val interval = requireNotNull(value("StartCalendarInterval"))
 
-        assertEquals("1", text(interval, "Hour"))
+        assertEquals("0", text(interval, "Minute"))
+        // An hour in the interval pins the job to that hour of the day.
+        assertNull(value(interval, "Hour"))
     }
 
     private fun arguments(): List<String> = strings(requireNotNull(value("ProgramArguments")))
