@@ -237,6 +237,10 @@ A story has to be readable on its own, so a ticket follows a fixed shape:
 * **The time window is parsed once.** The ISO-8601 duration of `--since` is parsed in
   `domain/gmail/MessageWindow.kt` and shared by `pending` and `process-inbox`; a window of zero or
   less is rejected.
+* **The window of a run is the gap since the last successful run.** The moment of the last
+  successful run is kept next to the token (`token.json.last-run`) and is written after a
+  successful run only. The run looks back to that moment, so every mail is looked at once and the
+  mail of an outage is not lost. A window on the command line wins over the gap.
 * **The Ollama API streams by default.** The `stream` field of a chat request has no default on
   purpose: a field with a default is left out of the payload when the encoder does not write the
   defaults, and the API then answers with a stream of JSON lines that the client cannot read.

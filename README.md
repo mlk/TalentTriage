@@ -216,12 +216,12 @@ decision models, they need Ollama v0.35.0 or later.
 | `authenticate` | `--token`, `-t` | The file the OAuth2 token is stored in | `token.json` |
 | `pending` | `--credentials`, `-c` | The file with the OAuth2 client credentials | `credentials.json` |
 | `pending` | `--token`, `-t` | The file the OAuth2 token is stored in | `token.json` |
-| `pending` | `--since` | How far back the messages are looked for, an ISO-8601 duration | `PT24H` |
+| `pending` | `--since` | How far back the messages are looked for, an ISO-8601 duration | the gap since the last successful run |
 | `pending` | `--limit`, `-l` | The number of messages that are shown | `20` |
 | `process-inbox` | `--credentials`, `-c` | The file with the OAuth2 client credentials | `credentials.json` |
 | `process-inbox` | `--token`, `-t` | The file the OAuth2 token is stored in | `token.json` |
 | `process-inbox` | `--requirements`, `-q` | The file with the requirements of the job seeker | `requirements.json` |
-| `process-inbox` | `--since` | How far back the messages are looked for, an ISO-8601 duration | `PT24H` |
+| `process-inbox` | `--since` | How far back the messages are looked for, an ISO-8601 duration | the gap since the last successful run |
 | `process-inbox` | `--recruiter-verification` | How the recruiter mails are verified: a decision model or a chat model | `decision` |
 | `process-inbox` | `--recruiter-verification-model`, `-m` | The model that verifies the recruiter mails | `clef:cloud` |
 | `process-inbox` | `--recruiter-verification-endpoint` | The endpoint of the model that verifies the recruiter mails | `http://localhost:11434` |
@@ -282,6 +282,10 @@ cd /usr/local/lib/recruiter-cli
 java -jar recruiter-cli.jar authenticate
 ```
 
+The moment of the last successful run is written next to the token
+(`token.json.last-run`), the directory has to be writable by the user that runs
+the job.
+
 ### 2. Install the launchd job
 
 The sample of the job is `config/launchd/com.user.recruiter-checker.plist`. It
@@ -336,23 +340,27 @@ thing that keeps the pipeline away from the mail that was screened out: the
 mail that was evaluated carries a label and the search skips it, the mail that
 was screened out carries none.
 
-The window therefore has to be **longer than the longest gap between two
-runs**, and it decides how often the screened out mail is looked at again. A
-window of one hour is looked at once, a window of 24 hours is looked at 24
-times a day.
+The window of a run is the **gap since the last successful run**: the run
+looks back to the moment of that run and no further. The moment is kept next
+to the token (`token.json.last-run`) and it is written after a successful run
+only — a run that failed looks back further, so the mail of the failed run is
+picked up again.
 
-The sample uses six hours:
+That is why the sample does not pass a window:
 
-```xml
-<string>--since</string>
-<string>PT6H</string>
+* every mail is looked at once, the screened out mail is not looked at again
+  and again,
+* the mail of an outage is never lost: `launchd` coalesces the runs that were
+  missed into one when the machine wakes up, and that run looks back to the
+  last run before the sleep,
+* the window does not have to be tuned for the machine it runs on.
+
+A window on the command line wins over the gap, it is the way to look at more
+mail than the last run:
+
+```bash
+recruiter-cli process-inbox --since P7D   # the last seven days
 ```
-
-Six hours covers a laptop that is closed for a night — `launchd` coalesces
-the runs that were missed into one when the machine wakes up, so the run after
-the sleep has to cover the whole sleep. A machine that never sleeps can lower
-the window to two hours, a longer outage than that loses the mail of the
-outage.
 
 ---
 
@@ -383,16 +391,17 @@ and the window of the run is what stops the next run from looking at it again.
 
 The pipeline is a scheduled job, so it only processes the mail that arrived
 since the last run: the search is `is:inbox` with every state label excluded
-and `after:<time>` added. The window is 24 hours by default, `--since` says
-how far back the run looks: `PT24H` or `P1D` are the same, `P7D` looks a week
-back. The window of the run is in the log of the run.
+and `after:<time>` added. The time is the moment of the last successful run,
+so the run looks at every mail exactly once. `--since` says how far back the
+run looks instead: `PT24H` or `P1D` are the same, `P7D` looks a week back.
+The window of the run is in the log of the run.
 
 `recruiter-cli pending` lists the messages that were not processed yet, it is
-the quickest way to check that the credentials work. It takes the same
-`--since` window, so both commands look at the same mails:
+the quickest way to check that the credentials work. It takes the same window
+as the run, so both commands look at the same mails:
 
 ```bash
-recruiter-cli pending            # the last 24 hours
+recruiter-cli pending              # the mail since the last run
 recruiter-cli pending --since P7D  # the last seven days
 ```
 
@@ -492,6 +501,8 @@ src/main/kotlin/uk/me/michaellloydlee/recruiter/
     ├── llm/           # Ollama chat client (local models and the AirLLM wrapper)
     ├── logging/       # Structured (JSON lines) logger
     ├── parser/        # Text extraction of the attached documents (PDFBox)
+    ├── requirements/  # The requirements of the job seeker
+    ├── run/           # The moment of the last successful run
     └── serialization/ # Shared kotlinx.serialization helpers
 config/
 ├── detekt/            # The rules of the static analysis
