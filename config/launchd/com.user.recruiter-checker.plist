@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+    The launchd job of TalentTriage on macOS.
+
+    It runs one inbox triage pass every hour and writes the structured log of
+    the run to the standard output of the job, the errors go to the standard
+    error of the job.
+
+    Install it as a user agent:
+
+        cp config/launchd/com.user.recruiter-checker.plist ~/Library/LaunchAgents/
+        launchctl load ~/Library/LaunchAgents/com.user.recruiter-checker.plist
+
+    The paths of the jar and of the files are the ones of the installation
+    described in the README, change them if the installation lives somewhere
+    else.
+-->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.user.recruiter-checker</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/usr/bin/java</string>
+        <string>--enable-native-access=ALL-UNNAMED</string>
+        <string>-jar</string>
+        <string>/usr/local/lib/recruiter-cli/recruiter-cli.jar</string>
+        <string>process-inbox</string>
+        <string>--credentials</string>
+        <string>/usr/local/lib/recruiter-cli/credentials.json</string>
+        <string>--token</string>
+        <string>/usr/local/lib/recruiter-cli/token.json</string>
+        <string>--requirements</string>
+        <string>/usr/local/lib/recruiter-cli/requirements.json</string>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>/usr/local/lib/recruiter-cli</string>
+
+    <key>StartCalendarInterval</key>
+    <dict>
+        <key>Hour</key>
+        <integer>1</integer>
+    </dict>
+
+    <key>RunAtLoad</key>
+    <false/>
+
+    <key>ProcessType</key>
+    <string>Background</string>
+
+    <key>StandardOutPath</key>
+    <string>/usr/local/lib/recruiter-cli/logs/recruiter-cli.out.log</string>
+
+    <key>StandardErrorPath</key>
+    <string>/usr/local/lib/recruiter-cli/logs/recruiter-cli.err.log</string>
+</dict>
+</plist>
