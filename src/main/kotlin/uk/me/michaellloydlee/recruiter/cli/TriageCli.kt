@@ -29,6 +29,7 @@ class TriageCli(
             AuthenticateCommand(logger, httpClientFactory),
             PendingCommand(logger, httpClientFactory, clock),
             ProcessInboxCommand(logger, httpClientFactory, clock),
+            RequirementsCommand(logger, httpClientFactory),
         )
     }
 
