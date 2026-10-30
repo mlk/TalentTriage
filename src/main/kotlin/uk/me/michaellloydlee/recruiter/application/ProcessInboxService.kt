@@ -5,12 +5,12 @@ import uk.me.michaellloydlee.recruiter.application.evaluation.EvaluationService
 import uk.me.michaellloydlee.recruiter.application.screening.ScreeningService
 import uk.me.michaellloydlee.recruiter.domain.evaluation.JobDescriptionEvaluation
 import uk.me.michaellloydlee.recruiter.domain.gmail.EmailMessage
-import uk.me.michaellloydlee.recruiter.domain.gmail.MessageWindow
 import uk.me.michaellloydlee.recruiter.domain.gmail.RecruiterLabel
 import uk.me.michaellloydlee.recruiter.domain.requirements.JobRequirements
 import uk.me.michaellloydlee.recruiter.domain.screening.ScreeningDecision
 import uk.me.michaellloydlee.recruiter.infrastructure.gmail.GmailMessagesApi
 import uk.me.michaellloydlee.recruiter.infrastructure.logging.StructuredLogger
+import java.time.Instant
 
 /**
  * Runs one pass of the pipeline over the messages of the inbox.
@@ -20,7 +20,8 @@ import uk.me.michaellloydlee.recruiter.infrastructure.logging.StructuredLogger
  * end in one of the states of the pipeline.
  *
  * @param messages the message endpoints of the Gmail API.
- * @param window how far back the run looks for messages.
+ * @param since the moment the run looks back to, the messages that arrived
+ *   after it are looked at.
  * @param screening the screening of the messages.
  * @param evaluation the evaluation of the job descriptions.
  * @param attachments reads the text of the attached documents.
@@ -29,7 +30,7 @@ import uk.me.michaellloydlee.recruiter.infrastructure.logging.StructuredLogger
  */
 class ProcessInboxService(
     private val messages: GmailMessagesApi,
-    private val window: MessageWindow = MessageWindow.LAST_DAY,
+    private val since: Instant,
     private val screening: ScreeningService,
     private val evaluation: EvaluationService,
     private val attachments: AttachmentTextReader,
@@ -42,7 +43,7 @@ class ProcessInboxService(
      * @return what the run did.
      */
     suspend fun run(): ProcessInboxSummary {
-        val pending = messages.listUnprocessed(window)
+        val pending = messages.listUnprocessed(since)
         val counters = Counters()
         pending.forEach { summary ->
             screen(messages.getMessage(summary.id), counters)
@@ -56,7 +57,7 @@ class ProcessInboxService(
             worthFollowUp = counters.worthFollowUp,
             needsMoreInformation = counters.needsMoreInformation,
             trashed = counters.trashed,
-            window = window,
+            since = since,
         )
     }
 

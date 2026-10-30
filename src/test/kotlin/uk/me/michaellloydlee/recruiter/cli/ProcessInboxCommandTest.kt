@@ -263,6 +263,25 @@ class ProcessInboxCommandTest {
         }
 
     @Test
+    fun warnsWhenTheMomentOfTheLastRunIsInTheFuture() =
+        runTest {
+            val sink = StringBuilder()
+            val engine = engine()
+            val token = tokenFile()
+            FileLastRunStore.nextTo(token).save(NOW.plusSeconds(60))
+
+            val result =
+                cli(sink, Clock.fixed(NOW, ZoneOffset.UTC)) { mockClient(engine) }
+                    .test(
+                        "process-inbox --credentials ${credentialsFile()} " +
+                            "--token $token --requirements ${requirementsFile()}",
+                    )
+
+            assertEquals(0, result.statusCode)
+            assertTrue(records(sink).any { it.event == "process-inbox.window_fallback" })
+        }
+
+    @Test
     fun doesNotRememberTheMomentOfAFailedRun() =
         runTest {
             val sink = StringBuilder()

@@ -21,7 +21,6 @@ import uk.me.michaellloydlee.recruiter.application.evaluation.EvaluationService
 import uk.me.michaellloydlee.recruiter.application.screening.DecisionModelVerifier
 import uk.me.michaellloydlee.recruiter.application.screening.ScreeningService
 import uk.me.michaellloydlee.recruiter.domain.gmail.EmailMessage
-import uk.me.michaellloydlee.recruiter.domain.gmail.MessageWindow
 import uk.me.michaellloydlee.recruiter.domain.requirements.JobRequirements
 import uk.me.michaellloydlee.recruiter.infrastructure.gmail.GmailApiClient
 import uk.me.michaellloydlee.recruiter.infrastructure.gmail.GmailLabelStateManager
@@ -34,7 +33,6 @@ import uk.me.michaellloydlee.recruiter.infrastructure.gmail.temporaryTokenStore
 import uk.me.michaellloydlee.recruiter.infrastructure.llm.OllamaDecisionClient
 import uk.me.michaellloydlee.recruiter.infrastructure.logging.StructuredLogger
 import java.time.Clock
-import java.time.Duration
 import java.time.Instant
 import java.time.ZoneOffset
 import kotlin.test.Test
@@ -192,7 +190,7 @@ class ProcessInboxServiceTest {
             val gmail = gmailEngine()
             val model = modelEngine()
 
-            service(gmail, model, window = MessageWindow(Duration.ofHours(6))).run()
+            service(gmail, model, since = NOW.minusSeconds(6 * 3600)).run()
 
             val search =
                 gmail.requestHistory
@@ -202,15 +200,15 @@ class ProcessInboxServiceTest {
         }
 
     @Test
-    fun theSummaryCarriesTheWindowOfTheRun() =
+    fun theSummaryCarriesTheMomentTheRunLookedBackTo() =
         runTest {
             val gmail = gmailEngine()
             val model = modelEngine()
-            val window = MessageWindow(Duration.ofHours(6))
+            val since = NOW.minusSeconds(6 * 3600)
 
-            val summary = service(gmail, model, window = window).run()
+            val summary = service(gmail, model, since = since).run()
 
-            assertEquals(window, summary.window)
+            assertEquals(since, summary.since)
         }
 
     @Test
@@ -232,7 +230,7 @@ class ProcessInboxServiceTest {
         gmail: MockEngine,
         model: MockEngine,
         log: StringBuilder = StringBuilder(),
-        window: MessageWindow = MessageWindow.LAST_DAY,
+        since: Instant = NOW.minusSeconds(86400),
     ): ProcessInboxService {
         val api =
             GmailApiClient(
@@ -244,7 +242,7 @@ class ProcessInboxServiceTest {
                     ),
                 baseUrl = "https://gmail.example/v1",
             )
-        val messages = GmailMessagesApi(api, Clock.fixed(NOW, ZoneOffset.UTC))
+        val messages = GmailMessagesApi(api)
         val stateManager = GmailLabelStateManager(messages, GmailLabelsApi(api))
         val modelClient =
             OllamaDecisionClient(
@@ -256,7 +254,7 @@ class ProcessInboxServiceTest {
             )
         return ProcessInboxService(
             messages = messages,
-            window = window,
+            since = since,
             screening =
                 ScreeningService(
                     heuristics =

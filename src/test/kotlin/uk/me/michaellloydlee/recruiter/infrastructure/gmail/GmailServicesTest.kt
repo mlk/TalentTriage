@@ -28,7 +28,7 @@ class GmailServicesTest {
                     httpClient = HttpClient(engine),
                 )
 
-            val summaries = services.messages.listUnprocessed()
+            val summaries = services.messages.listUnprocessed(SINCE)
             assertEquals(listOf("message-id"), summaries.map { it.id })
             services.close()
         }
@@ -39,4 +39,9 @@ class GmailServicesTest {
             refreshToken = "refresh-token",
             expiresAt = Instant.now().plusSeconds(600),
         )
+
+    companion object {
+        /** The moment the messages are looked for. */
+        private val SINCE: Instant = Instant.parse("2026-10-24T08:00:00Z")
+    }
 }

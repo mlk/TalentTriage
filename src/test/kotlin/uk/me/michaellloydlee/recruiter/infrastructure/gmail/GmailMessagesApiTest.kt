@@ -6,10 +6,8 @@ import io.ktor.client.engine.mock.respond
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.content.TextContent
 import kotlinx.coroutines.test.runTest
-import uk.me.michaellloydlee.recruiter.domain.gmail.MessageWindow
 import uk.me.michaellloydlee.recruiter.domain.gmail.RecruiterLabel
 import java.time.Clock
-import java.time.Duration
 import java.time.Instant
 import java.time.ZoneOffset
 import kotlin.test.Test
@@ -36,7 +34,7 @@ class GmailMessagesApiTest {
                     }
                 }
 
-            val summaries = api(engine).listUnprocessed()
+            val summaries = api(engine).listUnprocessed(SINCE)
 
             assertEquals(listOf("first", "second"), summaries.map { it.id })
             assertEquals(listOf("thread-1", "thread-2"), summaries.map { it.threadId })
@@ -50,7 +48,7 @@ class GmailMessagesApiTest {
                     respond(content = """{"messages":[]}""", status = HttpStatusCode.OK)
                 }
 
-            api(engine).listUnprocessed()
+            api(engine).listUnprocessed(NOW.minusSeconds(86400))
 
             val request = engine.requestHistory.single()
             assertEquals(
@@ -78,7 +76,7 @@ class GmailMessagesApiTest {
                     respond(content = EMPTY_MESSAGE_LIST, status = HttpStatusCode.OK)
                 }
 
-            api(engine).listUnprocessed(MessageWindow(Duration.ofHours(6)))
+            api(engine).listUnprocessed(NOW.minusSeconds(6 * 3600))
 
             assertEquals(
                 "${RecruiterLabel.UNPROCESSED_QUERY} after:${NOW.minusSeconds(6 * 3600).epochSecond}",
@@ -201,7 +199,7 @@ class GmailMessagesApiTest {
                     ),
                 baseUrl = "https://gmail.example/v1",
             )
-        return GmailMessagesApi(client, clock = Clock.fixed(NOW, ZoneOffset.UTC))
+        return GmailMessagesApi(client)
     }
 
     private fun token(accessToken: String): OAuth2Token =
@@ -215,5 +213,7 @@ class GmailMessagesApiTest {
         private const val EMPTY_MESSAGE_LIST = "{\"messages\":[]}"
 
         private val NOW: Instant = Instant.parse("2026-10-24T08:00:00Z")
+
+        private val SINCE: Instant = NOW.minusSeconds(86400)
     }
 }

@@ -81,12 +81,12 @@ class PendingCommand(
                     credentials = credentials,
                     tokenStore = FileOAuth2TokenStore(Path.of(tokenFile)),
                     httpClient = client,
-                    clock = clock,
                 )
-            val window = window(clock.instant())
+            val now = clock.instant()
+            val window = window(now)
             val summaries =
                 try {
-                    services.messages.listUnprocessed(window)
+                    services.messages.listUnprocessed(now.minus(window.duration))
                 } catch (error: GmailApiException) {
                     throw CommandFailedException(error.message.orEmpty(), error)
                 }

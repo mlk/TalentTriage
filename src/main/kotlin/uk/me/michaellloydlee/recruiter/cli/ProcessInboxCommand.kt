@@ -164,6 +164,7 @@ class ProcessInboxCommand(
         )
         val startedAt = clock.instant()
         val window = window(startedAt)
+        val since = startedAt.minus(window.duration)
         val credentials = credentials()
         val requirements = requirements()
         httpClientFactory().use { client ->
@@ -172,13 +173,12 @@ class ProcessInboxCommand(
                     credentials = credentials,
                     tokenStore = FileOAuth2TokenStore(Path.of(tokenFile)),
                     httpClient = client,
-                    clock = clock,
                 )
             val summary =
                 try {
                     ProcessInboxService(
                         messages = gmail.messages,
-                        window = window,
+                        since = since,
                         screening =
                             ScreeningService(
                                 heuristics = RecruiterHeuristics(),
@@ -206,7 +206,7 @@ class ProcessInboxCommand(
             logger.info(
                 event = "$COMMAND_NAME.completed",
                 message = "Inbox triage run completed",
-                attributes = summary.attributes(startedAt.minus(window.duration)),
+                attributes = summary.attributes(window),
             )
         }
     }
@@ -267,16 +267,27 @@ class ProcessInboxCommand(
      *
      * @param now the moment of the run.
      */
-    private suspend fun window(now: Instant): MessageWindow =
-        try {
+    private suspend fun window(now: Instant): MessageWindow {
+        val lastRun = lastRunStore().load()
+        if (lastRun != null && !lastRun.isBefore(now)) {
+            logger.warn(
+                event = "$COMMAND_NAME.window_fallback",
+                message =
+                    "The moment of the last run is not in the past, " +
+                        "the run looks back as far as the default window",
+                attributes = mapOf("last_run" to lastRun.toString()),
+            )
+        }
+        return try {
             runWindow(
-                lastRun = lastRunStore().load(),
+                lastRun = lastRun,
                 now = now,
                 given = since?.let { messageWindow(it) },
             )
         } catch (error: IllegalArgumentException) {
             throw CommandFailedException(error.message.orEmpty(), error)
         }
+    }
 
     /**
      * The store of the moment of the last successful run, next to the token.
@@ -307,9 +318,9 @@ class ProcessInboxCommand(
     /**
      * The counters of the run, they go into the log.
      *
-     * @param since the moment the run looked back to.
+     * @param window how far back the run looked for messages.
      */
-    private fun ProcessInboxSummary.attributes(since: Instant): Map<String, String> =
+    private fun ProcessInboxSummary.attributes(window: MessageWindow): Map<String, String> =
         mapOf(
             "screened" to screened.toString(),
             "recruiters" to recruiters.toString(),
