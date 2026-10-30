@@ -136,6 +136,64 @@ class JobDescriptionEvaluationTest {
         assertEquals(RecruiterLabel.NEEDS_MORE_INFORMATION, evaluation.state)
     }
 
+    @Test
+    fun aJobThatIsWorthAFollowUpMissesNothing() {
+        val evaluation = evaluation(payMatches = true, jdMatches = true, officeDays = AT_MOST, payMissing = false)
+
+        assertEquals(PayInformation.KNOWN, evaluation.missingInformation.pay)
+        assertEquals(false, evaluation.missingInformation.officeDays)
+        assertEquals(false, evaluation.missingInformation.asksAboutPay)
+        assertEquals(false, evaluation.missingInformation.asksAboutOfficeDays)
+    }
+
+    @Test
+    fun aJobWithoutAPayMissesThePay() {
+        val evaluation = evaluation(payMatches = false, jdMatches = true, officeDays = AT_MOST, payMissing = true)
+
+        assertEquals(PayInformation.MISSING, evaluation.missingInformation.pay)
+        assertEquals(true, evaluation.missingInformation.asksAboutPay)
+        assertEquals(false, evaluation.missingInformation.asksAboutOfficeDays)
+    }
+
+    @Test
+    fun aJobWithATooLowPayMissesThePay() {
+        val evaluation = evaluation(payMatches = false, jdMatches = true, officeDays = AT_MOST, payMissing = false)
+
+        assertEquals(PayInformation.BELOW_THE_TARGET, evaluation.missingInformation.pay)
+        assertEquals(true, evaluation.missingInformation.asksAboutPay)
+    }
+
+    @Test
+    fun aJobWithUnclearOfficeDaysMissesTheOfficeDays() {
+        val evaluation =
+            evaluation(
+                payMatches = true,
+                jdMatches = true,
+                officeDays = OfficeDays.UNCLEAR,
+                payMissing = false,
+            )
+
+        assertEquals(PayInformation.KNOWN, evaluation.missingInformation.pay)
+        assertEquals(true, evaluation.missingInformation.officeDays)
+        assertEquals(true, evaluation.missingInformation.asksAboutOfficeDays)
+    }
+
+    @Test
+    fun aJobThatMissesThePayAndTheOfficeDaysMissesBoth() {
+        val evaluation =
+            evaluation(
+                payMatches = false,
+                jdMatches = true,
+                officeDays = OfficeDays.UNCLEAR,
+                payMissing = true,
+            )
+
+        assertEquals(PayInformation.MISSING, evaluation.missingInformation.pay)
+        assertEquals(true, evaluation.missingInformation.officeDays)
+        assertEquals(true, evaluation.missingInformation.asksAboutPay)
+        assertEquals(true, evaluation.missingInformation.asksAboutOfficeDays)
+    }
+
     private fun evaluation(
         payMatches: Boolean,
         jdMatches: Boolean,

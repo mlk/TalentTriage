@@ -47,14 +47,32 @@ sealed interface JobDescriptionEvaluation {
         /**
          * What the job seeker still has to find out about the job.
          *
+         * The mail can miss the pay and the days of office at the same time,
+         * the recruiter is asked about both.
+         */
+        val missingInformation: MissingInformation
+            get() =
+                MissingInformation(
+                    pay =
+                        when {
+                            payMissing -> PayInformation.MISSING
+                            !payMatches -> PayInformation.BELOW_THE_TARGET
+                            else -> PayInformation.KNOWN
+                        },
+                    officeDays = officeDays == OfficeDays.UNCLEAR,
+                )
+
+        /**
+         * What the job seeker still has to find out about the job.
+         *
          * @return what is missing, `null` when nothing is missing.
          */
         val missing: String?
             get() =
                 when {
-                    officeDays == OfficeDays.UNCLEAR -> MISSING_OFFICE_DAYS
-                    payMissing -> MISSING_PAY
-                    !payMatches -> PAY_BELOW_THE_TARGET
+                    missingInformation.officeDays -> MISSING_OFFICE_DAYS
+                    missingInformation.pay == PayInformation.MISSING -> MISSING_PAY
+                    missingInformation.pay == PayInformation.BELOW_THE_TARGET -> PAY_BELOW_THE_TARGET
                     else -> null
                 }
     }
