@@ -17,9 +17,9 @@ class RefreshingAccessTokenProviderTest {
     fun returnsTheStoredTokenWhenItIsStillValid() =
         runTest {
             val store = FakeTokenStore(token(NOW.plusSeconds(600)))
-            val refresher = FakeRefresher(refreshedToken())
+            val refresher = refresher()
 
-            val token = provider(store, refresher).accessToken()
+            val token = provider(store, refresher.client).accessToken()
 
             assertEquals("access-token", token)
             assertEquals(0, refresher.refreshCount)
@@ -29,9 +29,9 @@ class RefreshingAccessTokenProviderTest {
     fun refreshesTheTokenWhenItIsExpired() =
         runTest {
             val store = FakeTokenStore(token(NOW.minusSeconds(10)))
-            val refresher = FakeRefresher(refreshedToken())
+            val refresher = refresher()
 
-            val token = provider(store, refresher).accessToken()
+            val token = provider(store, refresher.client).accessToken()
 
             assertEquals("refreshed-access-token", token)
             assertEquals(1, refresher.refreshCount)
@@ -42,9 +42,9 @@ class RefreshingAccessTokenProviderTest {
     fun refreshesTheTokenBeforeItExpires() =
         runTest {
             val store = FakeTokenStore(token(NOW.plusSeconds(30)))
-            val refresher = FakeRefresher(refreshedToken())
+            val refresher = refresher()
 
-            provider(store, refresher).accessToken()
+            provider(store, refresher.client).accessToken()
 
             assertEquals(1, refresher.refreshCount)
         }
@@ -52,7 +52,7 @@ class RefreshingAccessTokenProviderTest {
     @Test
     fun failsWhenNoTokenIsStored() =
         runTest {
-            val provider = provider(FakeTokenStore(null), FakeRefresher(refreshedToken()))
+            val provider = provider(FakeTokenStore(null), refresher().client)
 
             val error = assertFailsWith<GmailAuthenticationException> { provider.accessToken() }
 
@@ -66,7 +66,7 @@ class RefreshingAccessTokenProviderTest {
 
             val error =
                 assertFailsWith<GmailAuthenticationException> {
-                    provider(store, FakeRefresher(refreshedToken())).accessToken()
+                    provider(store, refresher().client).accessToken()
                 }
 
             assertTrue(error.message!!.contains("no refresh token"))
@@ -76,9 +76,9 @@ class RefreshingAccessTokenProviderTest {
     fun forcesARefresh() =
         runTest {
             val store = FakeTokenStore(token(NOW.plusSeconds(600)))
-            val refresher = FakeRefresher(refreshedToken())
+            val refresher = refresher()
 
-            val token = provider(store, refresher).refresh()
+            val token = provider(store, refresher.client).refresh()
 
             assertEquals("refreshed-access-token", token)
             assertEquals(1, refresher.refreshCount)
@@ -88,8 +88,8 @@ class RefreshingAccessTokenProviderTest {
     fun keepsTheTokenInMemoryAfterTheFirstRefresh() =
         runTest {
             val store = FakeTokenStore(token(NOW.minusSeconds(10)))
-            val refresher = FakeRefresher(refreshedToken())
-            val provider = provider(store, refresher)
+            val refresher = refresher()
+            val provider = provider(store, refresher.client)
 
             provider.accessToken()
             provider.accessToken()
@@ -101,8 +101,8 @@ class RefreshingAccessTokenProviderTest {
     fun refreshesOnlyOnceForConcurrentCallers() =
         runTest {
             val store = FakeTokenStore(token(NOW.minusSeconds(10)))
-            val refresher = FakeRefresher(refreshedToken())
-            val provider = provider(store, refresher)
+            val refresher = refresher(answerDelay = Duration.ofMillis(1))
+            val provider = provider(store, refresher.client)
 
             val tokens = listOf(async { provider.accessToken() }, async { provider.accessToken() })
             tokens.awaitAll()
@@ -113,7 +113,7 @@ class RefreshingAccessTokenProviderTest {
 
     private fun provider(
         store: OAuth2TokenStore,
-        refresher: OAuth2TokenRefresher,
+        refresher: GmailOAuth2Client,
     ): RefreshingAccessTokenProvider =
         RefreshingAccessTokenProvider(
             refresher = refresher,
@@ -122,18 +122,18 @@ class RefreshingAccessTokenProviderTest {
             refreshLeeway = Duration.ofSeconds(60),
         )
 
+    private fun refresher(answerDelay: Duration = Duration.ZERO): TestOAuth2Client =
+        TestOAuth2Client(
+            accessToken = "refreshed-access-token",
+            answerDelay = answerDelay,
+            clock = Clock.fixed(NOW, ZoneOffset.UTC),
+        )
+
     private fun token(expiry: Instant): OAuth2Token =
         OAuth2Token(
             accessToken = "access-token",
             refreshToken = "refresh-token",
             expiresAt = expiry,
-        )
-
-    private fun refreshedToken(): OAuth2Token =
-        OAuth2Token(
-            accessToken = "refreshed-access-token",
-            refreshToken = "refresh-token",
-            expiresAt = NOW.plusSeconds(600),
         )
 
     companion object {

@@ -195,7 +195,7 @@ class GmailMessagesApiTest {
                 httpClient = HttpClient(engine),
                 tokens =
                     RefreshingAccessTokenProvider(
-                        refresher = FakeRefresher(token("refreshed-access-token")),
+                        refresher = TestOAuth2Client(clock = Clock.fixed(NOW, ZoneOffset.UTC)).client,
                         tokenStore = FakeTokenStore(token("access-token")),
                         clock = Clock.fixed(NOW, ZoneOffset.UTC),
                     ),

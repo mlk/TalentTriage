@@ -23,7 +23,6 @@ import uk.me.michaellloydlee.recruiter.application.screening.ScreeningService
 import uk.me.michaellloydlee.recruiter.domain.gmail.EmailMessage
 import uk.me.michaellloydlee.recruiter.domain.gmail.MessageWindow
 import uk.me.michaellloydlee.recruiter.domain.requirements.JobRequirements
-import uk.me.michaellloydlee.recruiter.infrastructure.gmail.FakeRefresher
 import uk.me.michaellloydlee.recruiter.infrastructure.gmail.FakeTokenStore
 import uk.me.michaellloydlee.recruiter.infrastructure.gmail.GmailApiClient
 import uk.me.michaellloydlee.recruiter.infrastructure.gmail.GmailLabelStateManager
@@ -31,6 +30,7 @@ import uk.me.michaellloydlee.recruiter.infrastructure.gmail.GmailLabelsApi
 import uk.me.michaellloydlee.recruiter.infrastructure.gmail.GmailMessagesApi
 import uk.me.michaellloydlee.recruiter.infrastructure.gmail.OAuth2Token
 import uk.me.michaellloydlee.recruiter.infrastructure.gmail.RefreshingAccessTokenProvider
+import uk.me.michaellloydlee.recruiter.infrastructure.gmail.TestOAuth2Client
 import uk.me.michaellloydlee.recruiter.infrastructure.llm.OllamaDecisionClient
 import uk.me.michaellloydlee.recruiter.infrastructure.logging.StructuredLogger
 import java.time.Clock
@@ -239,7 +239,7 @@ class ProcessInboxServiceTest {
                 httpClient = HttpClient(gmail) { install(ContentNegotiation) { json(JSON) } },
                 tokens =
                     RefreshingAccessTokenProvider(
-                        refresher = FakeRefresher(token()),
+                        refresher = TestOAuth2Client().client,
                         tokenStore = FakeTokenStore(token()),
                     ),
                 baseUrl = "https://gmail.example/v1",

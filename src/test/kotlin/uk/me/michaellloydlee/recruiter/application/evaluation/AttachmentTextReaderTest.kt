@@ -13,12 +13,12 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
 import uk.me.michaellloydlee.recruiter.domain.gmail.EmailAttachment
 import uk.me.michaellloydlee.recruiter.domain.gmail.EmailMessage
-import uk.me.michaellloydlee.recruiter.infrastructure.gmail.FakeRefresher
 import uk.me.michaellloydlee.recruiter.infrastructure.gmail.FakeTokenStore
 import uk.me.michaellloydlee.recruiter.infrastructure.gmail.GmailApiClient
 import uk.me.michaellloydlee.recruiter.infrastructure.gmail.GmailMessagesApi
 import uk.me.michaellloydlee.recruiter.infrastructure.gmail.OAuth2Token
 import uk.me.michaellloydlee.recruiter.infrastructure.gmail.RefreshingAccessTokenProvider
+import uk.me.michaellloydlee.recruiter.infrastructure.gmail.TestOAuth2Client
 import uk.me.michaellloydlee.recruiter.infrastructure.parser.TestDocuments
 import uk.me.michaellloydlee.recruiter.infrastructure.parser.TestWordDocuments
 import java.time.Instant
@@ -91,7 +91,7 @@ class AttachmentTextReaderTest {
                 httpClient = HttpClient(engine) { install(ContentNegotiation) { json(JSON) } },
                 tokens =
                     RefreshingAccessTokenProvider(
-                        refresher = FakeRefresher(token()),
+                        refresher = TestOAuth2Client().client,
                         tokenStore = FakeTokenStore(token()),
                     ),
                 baseUrl = "https://gmail.example/v1",

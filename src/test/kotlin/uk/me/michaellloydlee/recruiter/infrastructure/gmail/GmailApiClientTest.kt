@@ -55,7 +55,7 @@ class GmailApiClientTest {
                         )
                     }
                 }
-            val refresher = FakeRefresher(refreshedToken())
+            val refresher = TestOAuth2Client(clock = Clock.fixed(NOW, ZoneOffset.UTC))
 
             val message = apiClient(engine, refresher).get("messages/message-id", TestMessage.serializer())
 
@@ -109,13 +109,13 @@ class GmailApiClientTest {
 
     private fun apiClient(
         engine: MockEngine,
-        refresher: FakeRefresher = FakeRefresher(refreshedToken()),
+        refresher: TestOAuth2Client = TestOAuth2Client(clock = Clock.fixed(NOW, ZoneOffset.UTC)),
     ): GmailApiClient =
         GmailApiClient(
             httpClient = HttpClient(engine),
             tokens =
                 RefreshingAccessTokenProvider(
-                    refresher = refresher,
+                    refresher = refresher.client,
                     tokenStore = FakeTokenStore(storedToken()),
                     clock = Clock.fixed(NOW, ZoneOffset.UTC),
                 ),
@@ -125,13 +125,6 @@ class GmailApiClientTest {
     private fun storedToken(): OAuth2Token =
         OAuth2Token(
             accessToken = "access-token",
-            refreshToken = "refresh-token",
-            expiresAt = NOW.plusSeconds(600),
-        )
-
-    private fun refreshedToken(): OAuth2Token =
-        OAuth2Token(
-            accessToken = "refreshed-access-token",
             refreshToken = "refresh-token",
             expiresAt = NOW.plusSeconds(600),
         )
