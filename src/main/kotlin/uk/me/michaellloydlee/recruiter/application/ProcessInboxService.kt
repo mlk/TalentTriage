@@ -117,13 +117,11 @@ class ProcessInboxService(
                 ),
         )
         // An evaluation leads to one of three states. The screening decides
-        // `FilteredOut` and `JobListing`, the two branches below are there
-        // for the compiler.
+        // `JobListing`, the branch below is there for the compiler.
         when (evaluation.state) {
             RecruiterLabel.WORTH_FOLLOW_UP -> counters.worthFollowUp++
             RecruiterLabel.NEEDS_MORE_INFORMATION -> counters.needsMoreInformation++
             RecruiterLabel.TRASH -> counters.trashed++
-            RecruiterLabel.FILTERED_OUT -> counters.filteredOut++
             RecruiterLabel.JOB_LISTING -> counters.jobListings++
         }
     }

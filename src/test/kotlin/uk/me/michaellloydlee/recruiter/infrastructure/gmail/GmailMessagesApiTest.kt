@@ -55,7 +55,6 @@ class GmailMessagesApiTest {
             val request = engine.requestHistory.single()
             assertEquals(
                 "is:inbox " +
-                    "-label:Recruiters/FilteredOut " +
                     "-label:Recruiters/JobListing " +
                     "-label:Recruiters/WorthFollowUp " +
                     "-label:Recruiters/NeedsMoreInformation " +

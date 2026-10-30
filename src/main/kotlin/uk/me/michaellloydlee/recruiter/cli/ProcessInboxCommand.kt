@@ -42,9 +42,10 @@ import java.nio.file.Path
  * Runs a single inbox triage pass.
  *
  * The command fetches the messages of the inbox that were not processed yet
- * and screens them: the ones that are not recruiter mails are filtered out
- * with the label `Recruiters/FilteredOut`. The deep evaluation of the
- * attachments of the recruiter mails comes with its own story.
+ * and screens them: the ones that are not recruiter mails are reported and
+ * stay unlabelled, the window of the run is what keeps the next run from
+ * looking at them again. The deep evaluation of the attachments of the
+ * recruiter mails comes with its own story.
  *
  * @param logger sink for the structured log output of the run.
  * @param httpClientFactory creates the client used to talk to Google and to

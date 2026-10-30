@@ -17,9 +17,6 @@ enum class RecruiterLabel(
     val path: String,
     val archives: Boolean,
 ) {
-    /** The message is not a recruiter mail, it stays in the inbox. */
-    FILTERED_OUT("${LABEL_PREFIX}FilteredOut", archives = false),
-
     /**
      * The message is a job listing - an alert of a job board - and not one
      * job, it stays in the inbox.

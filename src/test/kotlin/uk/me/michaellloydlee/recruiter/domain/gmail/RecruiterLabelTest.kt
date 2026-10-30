@@ -11,7 +11,6 @@ class RecruiterLabelTest {
         assertTrue(RecruiterLabel.entries.all { it.path.startsWith("Recruiters/") })
         assertEquals(
             listOf(
-                "Recruiters/FilteredOut",
                 "Recruiters/JobListing",
                 "Recruiters/WorthFollowUp",
                 "Recruiters/NeedsMoreInformation",
@@ -24,7 +23,6 @@ class RecruiterLabelTest {
     @Test
     fun onlyTheTrashLabelArchivesTheMessage() {
         assertTrue(RecruiterLabel.TRASH.archives)
-        assertFalse(RecruiterLabel.FILTERED_OUT.archives)
         assertFalse(RecruiterLabel.JOB_LISTING.archives)
         assertFalse(RecruiterLabel.WORTH_FOLLOW_UP.archives)
         assertFalse(RecruiterLabel.NEEDS_MORE_INFORMATION.archives)
@@ -34,7 +32,6 @@ class RecruiterLabelTest {
     fun theSearchMatchesTheInboxMessagesWithoutAStateLabel() {
         assertEquals(
             "is:inbox " +
-                "-label:Recruiters/FilteredOut " +
                 "-label:Recruiters/JobListing " +
                 "-label:Recruiters/WorthFollowUp " +
                 "-label:Recruiters/NeedsMoreInformation " +
@@ -62,7 +59,6 @@ class RecruiterLabelTest {
     fun aTransitionAddsTheNewStateAndRemovesTheOtherStates() {
         val ids =
             mapOf(
-                RecruiterLabel.FILTERED_OUT to "id-filtered",
                 RecruiterLabel.JOB_LISTING to "id-listing",
                 RecruiterLabel.WORTH_FOLLOW_UP to "id-worth",
                 RecruiterLabel.NEEDS_MORE_INFORMATION to "id-more",
@@ -72,7 +68,7 @@ class RecruiterLabelTest {
         val transition = RecruiterLabel.WORTH_FOLLOW_UP.transition(ids, inboxLabelId = "INBOX")
 
         assertEquals(listOf("id-worth"), transition.add)
-        assertEquals(listOf("id-filtered", "id-listing", "id-more", "id-trash"), transition.remove)
+        assertEquals(listOf("id-listing", "id-more", "id-trash"), transition.remove)
     }
 
     @Test

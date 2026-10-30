@@ -53,7 +53,7 @@ class ScreeningServiceTest {
             assertEquals(ScreeningStage.HEURISTICS, outcome.stage)
             assertTrue(outcome.reason.contains("job listing"))
             assertEquals(0, model.requestHistory.size)
-            assertTrue(labelBody(labels).contains("Label_joblisting"))
+            assertTrue(labelBody(labels).contains(JOB_LISTING_LABEL_ID))
         }
 
     @Test
@@ -69,7 +69,7 @@ class ScreeningServiceTest {
             assertEquals(ScreeningStage.HEURISTICS, outcome.stage)
             assertTrue(outcome.reason.contains("recruiter rules"))
             assertEquals(0, model.requestHistory.size)
-            assertTrue(labelBody(labels).contains(FILTERED_OUT_LABEL_ID))
+            assertTrue(labels.requestHistory.isEmpty())
         }
 
     @Test
@@ -85,7 +85,7 @@ class ScreeningServiceTest {
             assertEquals(ScreeningStage.LOCAL_MODEL, outcome.stage)
             assertTrue(outcome.reason.contains("does not see a recruiter mail"))
             assertEquals(2, model.requestHistory.size)
-            assertTrue(labelBody(labels).contains(FILTERED_OUT_LABEL_ID))
+            assertTrue(labels.requestHistory.isEmpty())
         }
 
     @Test
@@ -186,7 +186,7 @@ class ScreeningServiceTest {
             when {
                 request.url.encodedPath.endsWith("/users/me/labels") && request.method.value == "GET" -> {
                     respond(
-                        content = """{"labels":[{"id":"$FILTERED_OUT_LABEL_ID","name":"Recruiters/FilteredOut"}]}""",
+                        content = """{"labels":[{"id":"$JOB_LISTING_LABEL_ID","name":"Recruiters/JobListing"}]}""",
                         status = HttpStatusCode.OK,
                         headers = jsonHeaders(),
                     )
@@ -244,7 +244,7 @@ class ScreeningServiceTest {
     private fun jsonHeaders() = headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString())
 
     companion object {
-        private const val FILTERED_OUT_LABEL_ID = "Label_filteredout"
+        private const val JOB_LISTING_LABEL_ID = "Label_joblisting"
 
         private val JSON: Json =
             Json {
