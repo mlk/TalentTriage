@@ -345,10 +345,10 @@ class ProcessInboxCommandTest {
             """{"messages":[{"id":"message-id","threadId":"thread-id"}]}"""
 
         private const val LABEL_LIST =
-            """{"labels":[{"id":"Label_filteredout","name":"Recruiters/FilteredOut"}]}"""
+            """{"labels":[{"id":"Label_joblisting","name":"Recruiters/JobListing"}]}"""
 
         private const val LABEL =
-            """{"id":"Label_filteredout","name":"Recruiters/FilteredOut"}"""
+            """{"id":"Label_joblisting","name":"Recruiters/JobListing"}"""
 
         private val MESSAGE =
             """
