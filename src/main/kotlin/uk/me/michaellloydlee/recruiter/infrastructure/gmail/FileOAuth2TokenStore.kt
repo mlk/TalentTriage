@@ -30,8 +30,8 @@ class FileOAuth2TokenStore(
             encodeDefaults = true
             explicitNulls = false
         },
-) : OAuth2TokenStore {
-    override suspend fun load(): OAuth2Token? =
+) {
+    suspend fun load(): OAuth2Token? =
         withContext(Dispatchers.IO) {
             if (!Files.exists(path)) {
                 null
@@ -40,7 +40,7 @@ class FileOAuth2TokenStore(
             }
         }
 
-    override suspend fun save(token: OAuth2Token) {
+    suspend fun save(token: OAuth2Token) {
         withContext(Dispatchers.IO) {
             val directory = path.toAbsolutePath().parent
             Files.createDirectories(directory)

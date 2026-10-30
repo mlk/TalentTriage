@@ -24,7 +24,7 @@ class GmailServicesTest {
             val services =
                 GmailServices.create(
                     credentials = GoogleClientCredentials(clientId = "client-id", clientSecret = "client-secret"),
-                    tokenStore = FakeTokenStore(token()),
+                    tokenStore = temporaryTokenStore(token()),
                     httpClient = HttpClient(engine),
                 )
 

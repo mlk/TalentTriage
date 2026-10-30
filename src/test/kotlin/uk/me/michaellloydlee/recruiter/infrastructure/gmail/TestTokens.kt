@@ -10,26 +10,7 @@ import io.ktor.http.headersOf
 import kotlinx.coroutines.delay
 import java.time.Clock
 import java.time.Duration
-
-/**
- * A token store that keeps the token in memory.
- *
- * @param token the token the store starts with.
- */
-class FakeTokenStore(
-    private var token: OAuth2Token?,
-) : OAuth2TokenStore {
-    /** The token of the last [save]. */
-    var saved: OAuth2Token? = null
-        private set
-
-    override suspend fun load(): OAuth2Token? = token
-
-    override suspend fun save(token: OAuth2Token) {
-        this.token = token
-        saved = token
-    }
-}
+import kotlin.io.path.createTempDirectory
 
 /**
  * The OAuth2 client of a test, with a mocked token endpoint.
@@ -69,4 +50,19 @@ class TestOAuth2Client(
 
     /** How often the token endpoint was asked for a token. */
     val refreshCount: Int get() = engine.requestHistory.size
+}
+
+/**
+ * A token store that keeps the token in a temporary file.
+ *
+ * The store is the real one, the token file is a temporary file of the test.
+ *
+ * @param token the token the store starts with.
+ */
+suspend fun temporaryTokenStore(token: OAuth2Token? = null): FileOAuth2TokenStore {
+    val store = FileOAuth2TokenStore(createTempDirectory("token-store").resolve("token.json"))
+    if (token != null) {
+        store.save(token)
+    }
+    return store
 }

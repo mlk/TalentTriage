@@ -107,7 +107,7 @@ class GmailApiClientTest {
             assertEquals(ContentType.Application.Json.toString(), request.body.contentType?.toString())
         }
 
-    private fun apiClient(
+    private suspend fun apiClient(
         engine: MockEngine,
         refresher: TestOAuth2Client = TestOAuth2Client(clock = Clock.fixed(NOW, ZoneOffset.UTC)),
     ): GmailApiClient =
@@ -116,7 +116,7 @@ class GmailApiClientTest {
             tokens =
                 RefreshingAccessTokenProvider(
                     refresher = refresher.client,
-                    tokenStore = FakeTokenStore(storedToken()),
+                    tokenStore = temporaryTokenStore(storedToken()),
                     clock = Clock.fixed(NOW, ZoneOffset.UTC),
                 ),
             baseUrl = "https://gmail.example/v1",

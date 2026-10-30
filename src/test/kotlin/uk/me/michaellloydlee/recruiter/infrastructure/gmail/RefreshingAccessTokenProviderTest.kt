@@ -16,7 +16,7 @@ class RefreshingAccessTokenProviderTest {
     @Test
     fun returnsTheStoredTokenWhenItIsStillValid() =
         runTest {
-            val store = FakeTokenStore(token(NOW.plusSeconds(600)))
+            val store = temporaryTokenStore(token(NOW.plusSeconds(600)))
             val refresher = refresher()
 
             val token = provider(store, refresher.client).accessToken()
@@ -28,20 +28,20 @@ class RefreshingAccessTokenProviderTest {
     @Test
     fun refreshesTheTokenWhenItIsExpired() =
         runTest {
-            val store = FakeTokenStore(token(NOW.minusSeconds(10)))
+            val store = temporaryTokenStore(token(NOW.minusSeconds(10)))
             val refresher = refresher()
 
             val token = provider(store, refresher.client).accessToken()
 
             assertEquals("refreshed-access-token", token)
             assertEquals(1, refresher.refreshCount)
-            assertEquals("refreshed-access-token", store.saved?.accessToken)
+            assertEquals("refreshed-access-token", store.load()?.accessToken)
         }
 
     @Test
     fun refreshesTheTokenBeforeItExpires() =
         runTest {
-            val store = FakeTokenStore(token(NOW.plusSeconds(30)))
+            val store = temporaryTokenStore(token(NOW.plusSeconds(30)))
             val refresher = refresher()
 
             provider(store, refresher.client).accessToken()
@@ -52,7 +52,7 @@ class RefreshingAccessTokenProviderTest {
     @Test
     fun failsWhenNoTokenIsStored() =
         runTest {
-            val provider = provider(FakeTokenStore(null), refresher().client)
+            val provider = provider(temporaryTokenStore(null), refresher().client)
 
             val error = assertFailsWith<GmailAuthenticationException> { provider.accessToken() }
 
@@ -62,7 +62,7 @@ class RefreshingAccessTokenProviderTest {
     @Test
     fun failsWhenTheStoredTokenHasNoRefreshToken() =
         runTest {
-            val store = FakeTokenStore(token(NOW.minusSeconds(10)).copy(refreshToken = null))
+            val store = temporaryTokenStore(token(NOW.minusSeconds(10)).copy(refreshToken = null))
 
             val error =
                 assertFailsWith<GmailAuthenticationException> {
@@ -75,7 +75,7 @@ class RefreshingAccessTokenProviderTest {
     @Test
     fun forcesARefresh() =
         runTest {
-            val store = FakeTokenStore(token(NOW.plusSeconds(600)))
+            val store = temporaryTokenStore(token(NOW.plusSeconds(600)))
             val refresher = refresher()
 
             val token = provider(store, refresher.client).refresh()
@@ -87,7 +87,7 @@ class RefreshingAccessTokenProviderTest {
     @Test
     fun keepsTheTokenInMemoryAfterTheFirstRefresh() =
         runTest {
-            val store = FakeTokenStore(token(NOW.minusSeconds(10)))
+            val store = temporaryTokenStore(token(NOW.minusSeconds(10)))
             val refresher = refresher()
             val provider = provider(store, refresher.client)
 
@@ -100,7 +100,7 @@ class RefreshingAccessTokenProviderTest {
     @Test
     fun refreshesOnlyOnceForConcurrentCallers() =
         runTest {
-            val store = FakeTokenStore(token(NOW.minusSeconds(10)))
+            val store = temporaryTokenStore(token(NOW.minusSeconds(10)))
             val refresher = refresher(answerDelay = Duration.ofMillis(1))
             val provider = provider(store, refresher.client)
 
@@ -112,7 +112,7 @@ class RefreshingAccessTokenProviderTest {
         }
 
     private fun provider(
-        store: OAuth2TokenStore,
+        store: FileOAuth2TokenStore,
         refresher: GmailOAuth2Client,
     ): RefreshingAccessTokenProvider =
         RefreshingAccessTokenProvider(

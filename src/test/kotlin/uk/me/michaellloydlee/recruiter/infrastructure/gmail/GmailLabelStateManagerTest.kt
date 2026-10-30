@@ -116,14 +116,14 @@ class GmailLabelStateManagerTest {
 
     private fun idOf(label: String): String = "Label_${label.substringAfterLast('/').lowercase()}"
 
-    private fun stateManager(engine: MockEngine): GmailLabelStateManager {
+    private suspend fun stateManager(engine: MockEngine): GmailLabelStateManager {
         val client =
             GmailApiClient(
                 httpClient = HttpClient(engine),
                 tokens =
                     RefreshingAccessTokenProvider(
                         refresher = TestOAuth2Client(clock = Clock.fixed(NOW, ZoneOffset.UTC)).client,
-                        tokenStore = FakeTokenStore(token("access-token")),
+                        tokenStore = temporaryTokenStore(token("access-token")),
                         clock = Clock.fixed(NOW, ZoneOffset.UTC),
                     ),
                 baseUrl = "https://gmail.example/v1",

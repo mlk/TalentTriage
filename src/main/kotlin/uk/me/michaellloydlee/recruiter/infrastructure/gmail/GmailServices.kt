@@ -34,7 +34,7 @@ class GmailServices private constructor(
          */
         fun create(
             credentials: GoogleClientCredentials,
-            tokenStore: OAuth2TokenStore,
+            tokenStore: FileOAuth2TokenStore,
             httpClient: HttpClient,
         ): GmailServices {
             val tokens =

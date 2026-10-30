@@ -23,7 +23,7 @@ import java.time.Duration
  */
 class RefreshingAccessTokenProvider(
     private val refresher: GmailOAuth2Client,
-    private val tokenStore: OAuth2TokenStore,
+    private val tokenStore: FileOAuth2TokenStore,
     private val clock: Clock = Clock.systemUTC(),
     private val refreshLeeway: Duration = DEFAULT_REFRESH_LEEWAY,
 ) {

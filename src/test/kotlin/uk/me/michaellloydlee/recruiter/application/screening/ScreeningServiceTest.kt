@@ -19,7 +19,6 @@ import uk.me.michaellloydlee.recruiter.domain.gmail.EmailMessage
 import uk.me.michaellloydlee.recruiter.domain.screening.RecruiterHeuristics
 import uk.me.michaellloydlee.recruiter.domain.screening.ScreeningDecision
 import uk.me.michaellloydlee.recruiter.domain.screening.ScreeningStage
-import uk.me.michaellloydlee.recruiter.infrastructure.gmail.FakeTokenStore
 import uk.me.michaellloydlee.recruiter.infrastructure.gmail.GmailApiClient
 import uk.me.michaellloydlee.recruiter.infrastructure.gmail.GmailLabelStateManager
 import uk.me.michaellloydlee.recruiter.infrastructure.gmail.GmailLabelsApi
@@ -27,6 +26,7 @@ import uk.me.michaellloydlee.recruiter.infrastructure.gmail.GmailMessagesApi
 import uk.me.michaellloydlee.recruiter.infrastructure.gmail.OAuth2Token
 import uk.me.michaellloydlee.recruiter.infrastructure.gmail.RefreshingAccessTokenProvider
 import uk.me.michaellloydlee.recruiter.infrastructure.gmail.TestOAuth2Client
+import uk.me.michaellloydlee.recruiter.infrastructure.gmail.temporaryTokenStore
 import uk.me.michaellloydlee.recruiter.infrastructure.llm.OllamaDecisionClient
 import java.time.Instant
 import kotlin.test.Test
@@ -135,7 +135,7 @@ class ScreeningServiceTest {
             assertTrue(body.contains("We are looking for a developer in Berlin"))
         }
 
-    private fun service(
+    private suspend fun service(
         model: MockEngine,
         labels: MockEngine,
     ): ScreeningService {
@@ -154,7 +154,7 @@ class ScreeningServiceTest {
                 tokens =
                     RefreshingAccessTokenProvider(
                         refresher = TestOAuth2Client().client,
-                        tokenStore = FakeTokenStore(token()),
+                        tokenStore = temporaryTokenStore(token()),
                     ),
                 baseUrl = "https://gmail.example/v1",
             )

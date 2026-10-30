@@ -12,7 +12,7 @@ package uk.me.michaellloydlee.recruiter.infrastructure.gmail
  */
 class GmailAuthenticator(
     private val oauth2Client: GmailOAuth2Client,
-    private val tokenStore: OAuth2TokenStore,
+    private val tokenStore: FileOAuth2TokenStore,
 ) {
     /**
      * Builds the URL the user has to open in order to authorise the application.
