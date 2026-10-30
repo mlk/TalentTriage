@@ -1,6 +1,7 @@
 package uk.me.michaellloydlee.recruiter.domain.gmail
 
 import java.time.Duration
+import java.time.Instant
 import java.time.format.DateTimeParseException
 
 /**
@@ -19,6 +20,33 @@ data class MessageWindow(
         val LAST_DAY: MessageWindow = MessageWindow(Duration.ofHours(24))
     }
 }
+
+/**
+ * The window of a run of the pipeline.
+ *
+ * The window is the gap since the last successful run: the run looks back to
+ * the moment of that run and no further. The mail that was screened out is
+ * looked at once and the mail of an outage is not lost.
+ *
+ * The command line wins over the state of the last run: a window that was
+ * given on the command line is the window of the run.
+ *
+ * @param lastRun the moment of the last successful run, `null` when no run
+ *   succeeded yet.
+ * @param now the moment of the run.
+ * @param given the window of the command line, `null` when it was not given.
+ * @return the window of the run.
+ */
+fun runWindow(
+    lastRun: Instant?,
+    now: Instant,
+    given: MessageWindow?,
+): MessageWindow =
+    when {
+        given != null -> given
+        lastRun != null && lastRun.isBefore(now) -> MessageWindow(Duration.between(lastRun, now))
+        else -> MessageWindow.LAST_DAY
+    }
 
 /**
  * Reads the window of a run from an ISO-8601 duration.

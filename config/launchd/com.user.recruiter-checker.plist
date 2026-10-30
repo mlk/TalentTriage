@@ -11,12 +11,9 @@
     minute, a missing hour is a wildcard. An hour in the interval would pin
     the job to that hour of the day.
 
-    The window of a run is six hours. It has to be longer than the longest gap
-    between two runs: the job is the only thing that keeps the pipeline away
-    from the mail that was screened out, so a window that is too short loses
-    the mail of an outage. Six hours covers a laptop that is closed for a
-    night and it keeps every screened out mail from being looked at again and
-    again.
+    The job does not pass a window: the run looks back to the moment of the
+    last successful run, so it looks at every mail exactly once and it never
+    misses the mail of an outage.
 
     Install it as a user agent:
 
@@ -45,8 +42,6 @@
         <string>/usr/local/lib/recruiter-cli/token.json</string>
         <string>--requirements</string>
         <string>/usr/local/lib/recruiter-cli/requirements.json</string>
-        <string>--since</string>
-        <string>PT6H</string>
     </array>
 
     <key>WorkingDirectory</key>

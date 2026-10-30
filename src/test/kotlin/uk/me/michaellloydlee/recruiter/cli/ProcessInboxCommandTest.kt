@@ -18,12 +18,16 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
 import uk.me.michaellloydlee.recruiter.infrastructure.logging.LogRecord
 import uk.me.michaellloydlee.recruiter.infrastructure.logging.StructuredLogger
+import uk.me.michaellloydlee.recruiter.infrastructure.run.FileLastRunStore
 import java.nio.file.Path
+import java.time.Clock
 import java.time.Instant
+import java.time.ZoneOffset
 import kotlin.io.path.createTempDirectory
 import kotlin.io.path.writeText
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class ProcessInboxCommandTest {
@@ -195,6 +199,107 @@ class ProcessInboxCommandTest {
         }
 
     @Test
+    fun looksBackToTheLastSuccessfulRun() =
+        runTest {
+            val sink = StringBuilder()
+            val engine = engine()
+            val token = tokenFile()
+            FileLastRunStore.nextTo(token).save(LAST_RUN)
+
+            val result =
+                cli(sink, Clock.fixed(NOW, ZoneOffset.UTC)) { mockClient(engine) }
+                    .test(
+                        "process-inbox --credentials ${credentialsFile()} " +
+                            "--token $token --requirements ${requirementsFile()}",
+                    )
+
+            assertEquals(0, result.statusCode)
+            val search =
+                engine.requestHistory
+                    .first { it.url.encodedPath.endsWith("/users/me/messages") }
+                    .url.parameters["q"]
+            assertTrue(search!!.contains("after:${LAST_RUN.epochSecond}"))
+            val completed = records(sink).last()
+            assertEquals("PT1H", completed.attributes["window"])
+            assertEquals(LAST_RUN.toString(), completed.attributes["since"])
+        }
+
+    @Test
+    fun theWindowOfTheCommandLineWinsOverTheLastRun() =
+        runTest {
+            val sink = StringBuilder()
+            val engine = engine()
+            val token = tokenFile()
+            FileLastRunStore.nextTo(token).save(LAST_RUN)
+
+            val result =
+                cli(sink, Clock.fixed(NOW, ZoneOffset.UTC)) { mockClient(engine) }
+                    .test(
+                        "process-inbox --since PT6H " +
+                            "--credentials ${credentialsFile()} " +
+                            "--token $token --requirements ${requirementsFile()}",
+                    )
+
+            assertEquals(0, result.statusCode)
+            assertEquals("PT6H", records(sink).last().attributes["window"])
+        }
+
+    @Test
+    fun remembersTheMomentOfTheRun() =
+        runTest {
+            val sink = StringBuilder()
+            val engine = engine()
+            val token = tokenFile()
+
+            val result =
+                cli(sink, Clock.fixed(NOW, ZoneOffset.UTC)) { mockClient(engine) }
+                    .test(
+                        "process-inbox --credentials ${credentialsFile()} " +
+                            "--token $token --requirements ${requirementsFile()}",
+                    )
+
+            assertEquals(0, result.statusCode)
+            assertEquals(NOW, FileLastRunStore.nextTo(token).load())
+        }
+
+    @Test
+    fun warnsWhenTheMomentOfTheLastRunIsInTheFuture() =
+        runTest {
+            val sink = StringBuilder()
+            val engine = engine()
+            val token = tokenFile()
+            FileLastRunStore.nextTo(token).save(NOW.plusSeconds(60))
+
+            val result =
+                cli(sink, Clock.fixed(NOW, ZoneOffset.UTC)) { mockClient(engine) }
+                    .test(
+                        "process-inbox --credentials ${credentialsFile()} " +
+                            "--token $token --requirements ${requirementsFile()}",
+                    )
+
+            assertEquals(0, result.statusCode)
+            assertTrue(records(sink).any { it.event == "process-inbox.window_fallback" })
+        }
+
+    @Test
+    fun doesNotRememberTheMomentOfAFailedRun() =
+        runTest {
+            val sink = StringBuilder()
+            val token = tokenFile()
+            val engine = MockEngine { respond(content = "boom", status = HttpStatusCode.InternalServerError) }
+
+            val result =
+                cli(sink, Clock.fixed(NOW, ZoneOffset.UTC)) { mockClient(engine) }
+                    .test(
+                        "process-inbox --credentials ${credentialsFile()} " +
+                            "--token $token --requirements ${requirementsFile()}",
+                    )
+
+            assertEquals(1, result.statusCode)
+            assertNull(FileLastRunStore.nextTo(token).load())
+        }
+
+    @Test
     fun failsOnAWindowThatIsNotADuration() =
         runTest {
             val sink = StringBuilder()
@@ -296,8 +401,9 @@ class ProcessInboxCommandTest {
 
     private fun cli(
         sink: StringBuilder,
+        clock: Clock = Clock.systemUTC(),
         httpClientFactory: () -> HttpClient = { HttpClient(MockEngine { respond("{}", HttpStatusCode.OK) }) },
-    ): TriageCli = TriageCli(StructuredLogger(sink), httpClientFactory)
+    ): TriageCli = TriageCli(StructuredLogger(sink), httpClientFactory, clock)
 
     private fun credentialsFile(): Path {
         val file = createTempDirectory("credentials").resolve("credentials.json")
@@ -332,6 +438,10 @@ class ProcessInboxCommandTest {
     private fun jsonHeaders() = headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString())
 
     companion object {
+        private val NOW: Instant = Instant.parse("2026-10-30T19:00:00Z")
+
+        private val LAST_RUN: Instant = Instant.parse("2026-10-30T18:00:00Z")
+
         private val JSON: Json =
             Json {
                 ignoreUnknownKeys = true

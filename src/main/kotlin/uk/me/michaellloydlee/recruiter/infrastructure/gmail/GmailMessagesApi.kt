@@ -2,11 +2,9 @@ package uk.me.michaellloydlee.recruiter.infrastructure.gmail
 
 import uk.me.michaellloydlee.recruiter.domain.gmail.EmailMessage
 import uk.me.michaellloydlee.recruiter.domain.gmail.EmailSummary
-import uk.me.michaellloydlee.recruiter.domain.gmail.MessageWindow
 import uk.me.michaellloydlee.recruiter.domain.gmail.RecruiterLabel
 import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
-import java.time.Clock
 import java.time.Instant
 import java.util.Base64
 
@@ -14,29 +12,27 @@ import java.util.Base64
  * The message endpoints of the Gmail REST API.
  *
  * @param api the authenticated client of the API.
- * @param clock source of the current time, it decides how far back the
- *   messages are looked for.
  */
 class GmailMessagesApi(
     private val api: GmailApiClient,
-    private val clock: Clock = Clock.systemUTC(),
 ) {
     /**
      * Lists the messages of the inbox that were not processed yet.
      *
-     * The messages are the ones without a state label that arrived inside the
-     * window, the search of the domain describes them. All pages are fetched.
+     * The messages are the ones without a state label that arrived after the
+     * given moment, the search of the domain describes them. All pages are
+     * fetched.
      *
-     * @param window how far back the messages are looked for.
+     * @param since the moment the messages are looked for, the messages that
+     *   arrived after it.
      * @param maxResults the number of messages per page.
      * @return the summaries of the matching messages, the content is fetched
      *   with [getMessage].
      */
     suspend fun listUnprocessed(
-        window: MessageWindow = MessageWindow.LAST_DAY,
+        since: Instant,
         maxResults: Int = DEFAULT_MAX_RESULTS,
     ): List<EmailSummary> {
-        val since = clock.instant().minus(window.duration)
         val summaries = mutableListOf<EmailSummary>()
         var pageToken: String? = null
         do {

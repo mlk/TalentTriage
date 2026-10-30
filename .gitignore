@@ -17,6 +17,7 @@ out/
 # Local credentials / secrets
 credentials.json
 token.json
+token.json.last-run
 client_secret.json
 requirements.json
 *.keystore

@@ -1,6 +1,6 @@
 package uk.me.michaellloydlee.recruiter.application
 
-import uk.me.michaellloydlee.recruiter.domain.gmail.MessageWindow
+import java.time.Instant
 
 /**
  * What a run of the pipeline did.
@@ -18,9 +18,11 @@ import uk.me.michaellloydlee.recruiter.domain.gmail.MessageWindow
  *   at: they match but do not say everything the job seeker needs to know, or
  *   the model could not evaluate them.
  * @property trashed how many of them do not match at all.
- * @property window how far back the run looked for messages.
+ * @property since the moment the run looked back to, the messages that
+ *   arrived after it are the ones the run looked at.
  */
 data class ProcessInboxSummary(
+    val since: Instant,
     val screened: Int,
     val recruiters: Int,
     val filteredOut: Int,
@@ -29,5 +31,4 @@ data class ProcessInboxSummary(
     val worthFollowUp: Int = 0,
     val needsMoreInformation: Int = 0,
     val trashed: Int = 0,
-    val window: MessageWindow = MessageWindow.LAST_DAY,
 )
