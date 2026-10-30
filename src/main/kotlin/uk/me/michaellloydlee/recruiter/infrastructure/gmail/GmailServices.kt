@@ -2,6 +2,7 @@ package uk.me.michaellloydlee.recruiter.infrastructure.gmail
 
 import io.ktor.client.HttpClient
 import java.io.Closeable
+import java.time.Clock
 
 /**
  * The Gmail components of the application, assembled for a run.
@@ -31,11 +32,14 @@ class GmailServices private constructor(
          * @param credentials the OAuth2 client credentials of the application.
          * @param tokenStore store the OAuth2 token is read from and written to.
          * @param httpClient the client the API calls are sent with.
+         * @param clock source of the current time, it decides how far back the
+         *   run looks for messages.
          */
         fun create(
             credentials: GoogleClientCredentials,
             tokenStore: FileOAuth2TokenStore,
             httpClient: HttpClient,
+            clock: Clock = Clock.systemUTC(),
         ): GmailServices {
             val tokens =
                 RefreshingAccessTokenProvider(
@@ -43,7 +47,7 @@ class GmailServices private constructor(
                     tokenStore = tokenStore,
                 )
             val api = GmailApiClient(httpClient, tokens)
-            val messages = GmailMessagesApi(api)
+            val messages = GmailMessagesApi(api, clock)
             val labels = GmailLabelsApi(api)
             return GmailServices(
                 httpClient = httpClient,

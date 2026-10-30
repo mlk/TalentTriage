@@ -9,8 +9,11 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
 import uk.me.michaellloydlee.recruiter.infrastructure.logging.LogRecord
 import uk.me.michaellloydlee.recruiter.infrastructure.logging.StructuredLogger
+import uk.me.michaellloydlee.recruiter.infrastructure.run.FileLastRunStore
 import java.nio.file.Path
+import java.time.Clock
 import java.time.Instant
+import java.time.ZoneOffset
 import kotlin.io.path.createTempDirectory
 import kotlin.io.path.writeText
 import kotlin.test.Test
@@ -91,6 +94,34 @@ class PendingCommandTest {
         }
 
     @Test
+    fun looksBackToTheLastSuccessfulRun() =
+        runTest {
+            val sink = StringBuilder()
+            val engine =
+                MockEngine { request ->
+                    if (request.url.encodedPath.endsWith("/messages")) {
+                        respond(
+                            content = """{"messages":[{"id":"message-id","threadId":"thread-id"}]}""",
+                            status = HttpStatusCode.OK,
+                        )
+                    } else {
+                        respond(content = """{"id":"message-id"}""", status = HttpStatusCode.OK)
+                    }
+                }
+            val token = tokenFile()
+            FileLastRunStore.nextTo(token).save(LAST_RUN)
+
+            cli(sink, Clock.fixed(NOW, ZoneOffset.UTC)) { HttpClient(engine) }
+                .test("pending --credentials ${credentialsFile()} --token $token")
+
+            val search =
+                engine.requestHistory
+                    .first { it.url.encodedPath.endsWith("/messages") }
+                    .url.parameters["q"]
+            assertTrue(search!!.contains("after:${LAST_RUN.epochSecond}"))
+        }
+
+    @Test
     fun failsOnAnInvalidWindow() =
         runTest {
             val sink = StringBuilder()
@@ -116,8 +147,9 @@ class PendingCommandTest {
 
     private fun cli(
         sink: StringBuilder,
+        clock: Clock = Clock.systemUTC(),
         httpClientFactory: () -> HttpClient = { HttpClient(MockEngine { respond("{}", HttpStatusCode.OK) }) },
-    ): TriageCli = TriageCli(StructuredLogger(sink), httpClientFactory)
+    ): TriageCli = TriageCli(StructuredLogger(sink), httpClientFactory, clock)
 
     private fun tokenFile(): Path {
         val file = createTempDirectory("token").resolve("token.json")
@@ -142,6 +174,10 @@ class PendingCommandTest {
             .map { Json.decodeFromString<LogRecord>(it) }
 
     companion object {
+        private val NOW: Instant = Instant.parse("2026-10-30T19:00:00Z")
+
+        private val LAST_RUN: Instant = Instant.parse("2026-10-30T18:00:00Z")
+
         private const val LIST_OF_TWO_MESSAGES =
             """{"messages":[{"id":"first","threadId":"thread-1"},{"id":"second","threadId":"thread-2"}]}"""
     }

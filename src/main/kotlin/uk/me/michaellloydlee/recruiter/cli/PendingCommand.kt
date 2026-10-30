@@ -8,6 +8,7 @@ import com.github.ajalt.clikt.parameters.types.int
 import io.ktor.client.HttpClient
 import uk.me.michaellloydlee.recruiter.domain.gmail.MessageWindow
 import uk.me.michaellloydlee.recruiter.domain.gmail.messageWindow
+import uk.me.michaellloydlee.recruiter.domain.gmail.runWindow
 import uk.me.michaellloydlee.recruiter.infrastructure.gmail.FileOAuth2TokenStore
 import uk.me.michaellloydlee.recruiter.infrastructure.gmail.GmailApiException
 import uk.me.michaellloydlee.recruiter.infrastructure.gmail.GmailAuthenticationException
@@ -15,7 +16,10 @@ import uk.me.michaellloydlee.recruiter.infrastructure.gmail.GmailHttpClientFacto
 import uk.me.michaellloydlee.recruiter.infrastructure.gmail.GmailServices
 import uk.me.michaellloydlee.recruiter.infrastructure.gmail.GoogleClientCredentials
 import uk.me.michaellloydlee.recruiter.infrastructure.logging.StructuredLogger
+import uk.me.michaellloydlee.recruiter.infrastructure.run.FileLastRunStore
 import java.nio.file.Path
+import java.time.Clock
+import java.time.Instant
 
 /**
  * Lists the inbox messages that were not processed yet.
@@ -27,10 +31,13 @@ import java.nio.file.Path
  * @param httpClientFactory creates the client used to talk to Google. It is
  *   called once per invocation and the client is closed when the command is
  *   done, so the factory must return a fresh client every time.
+ * @param clock source of the current time, it decides how far back the
+ *   command looks for messages.
  */
 class PendingCommand(
     private val logger: StructuredLogger,
     private val httpClientFactory: () -> HttpClient = { GmailHttpClientFactory.create() },
+    private val clock: Clock = Clock.systemUTC(),
 ) : SuspendingCliktCommand(name = COMMAND_NAME) {
     private val credentialsFile: String by
         option(
@@ -46,11 +53,13 @@ class PendingCommand(
             help = "The file the OAuth2 token is stored in",
         ).default(AuthenticateCommand.DEFAULT_TOKEN_FILE)
 
-    private val since: String by
+    private val since: String? by
         option(
             "--since",
-            help = "How far back the messages are looked for, an ISO-8601 duration like PT24H or P1D",
-        ).default(DEFAULT_SINCE)
+            help =
+                "How far back the messages are looked for, an ISO-8601 duration like PT24H or P1D. " +
+                    "The default is the gap since the last successful run",
+        )
 
     private val limit: Int by
         option(
@@ -72,8 +81,9 @@ class PendingCommand(
                     credentials = credentials,
                     tokenStore = FileOAuth2TokenStore(Path.of(tokenFile)),
                     httpClient = client,
+                    clock = clock,
                 )
-            val window = window()
+            val window = window(clock.instant())
             val summaries =
                 try {
                     services.messages.listUnprocessed(window)
@@ -101,12 +111,30 @@ class PendingCommand(
         }
     }
 
-    private fun window(): MessageWindow =
+    /**
+     * The window of the command, the messages that arrived before it are not
+     * looked at.
+     *
+     * The window is the gap since the last successful run, a window on the
+     * command line wins over it.
+     *
+     * @param now the moment of the command.
+     */
+    private suspend fun window(now: Instant): MessageWindow =
         try {
-            messageWindow(since)
+            runWindow(
+                lastRun = lastRunStore().load(),
+                now = now,
+                given = since?.let { messageWindow(it) },
+            )
         } catch (error: IllegalArgumentException) {
             throw CommandFailedException(error.message.orEmpty(), error)
         }
+
+    /**
+     * The store of the moment of the last successful run, next to the token.
+     */
+    private fun lastRunStore(): FileLastRunStore = FileLastRunStore.nextTo(Path.of(tokenFile))
 
     override fun help(context: Context): String = "List the inbox messages that were not processed yet."
 
@@ -116,8 +144,5 @@ class PendingCommand(
 
         /** The number of messages the command shows by default. */
         const val DEFAULT_LIMIT: Int = 20
-
-        /** The window the messages are looked for in by default. */
-        const val DEFAULT_SINCE: String = "PT24H"
     }
 }

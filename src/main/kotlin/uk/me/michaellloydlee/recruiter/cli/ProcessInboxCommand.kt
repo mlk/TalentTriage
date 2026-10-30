@@ -22,6 +22,7 @@ import uk.me.michaellloydlee.recruiter.application.screening.RecruiterVerifier
 import uk.me.michaellloydlee.recruiter.application.screening.ScreeningService
 import uk.me.michaellloydlee.recruiter.domain.gmail.MessageWindow
 import uk.me.michaellloydlee.recruiter.domain.gmail.messageWindow
+import uk.me.michaellloydlee.recruiter.domain.gmail.runWindow
 import uk.me.michaellloydlee.recruiter.domain.requirements.JobRequirements
 import uk.me.michaellloydlee.recruiter.domain.screening.JobListingHeuristics
 import uk.me.michaellloydlee.recruiter.domain.screening.RecruiterHeuristics
@@ -36,7 +37,10 @@ import uk.me.michaellloydlee.recruiter.infrastructure.llm.OllamaDecisionClient
 import uk.me.michaellloydlee.recruiter.infrastructure.llm.OllamaException
 import uk.me.michaellloydlee.recruiter.infrastructure.logging.StructuredLogger
 import uk.me.michaellloydlee.recruiter.infrastructure.requirements.RequirementsFile
+import uk.me.michaellloydlee.recruiter.infrastructure.run.FileLastRunStore
 import java.nio.file.Path
+import java.time.Clock
+import java.time.Instant
 
 /**
  * Runs a single inbox triage pass.
@@ -52,10 +56,13 @@ import java.nio.file.Path
  *   the models of the pipeline. It is called once per invocation and the client is closed
  *   when the command is done, so the factory must return a fresh client every
  *   time.
+ * @param clock source of the current time, it decides how far back the run
+ *   looks for messages.
  */
 class ProcessInboxCommand(
     private val logger: StructuredLogger,
     private val httpClientFactory: () -> HttpClient = { GmailHttpClientFactory.create() },
+    private val clock: Clock = Clock.systemUTC(),
 ) : SuspendingCliktCommand(name = COMMAND_NAME) {
     private val credentialsFile: String by
         option(
@@ -106,11 +113,13 @@ class ProcessInboxCommand(
             help = "The file with the requirements of the job seeker",
         ).default(DEFAULT_REQUIREMENTS_FILE)
 
-    private val since: String by
+    private val since: String? by
         option(
             "--since",
-            help = "How far back the messages are looked for, an ISO-8601 duration like PT24H or P1D",
-        ).default(PendingCommand.DEFAULT_SINCE)
+            help =
+                "How far back the messages are looked for, an ISO-8601 duration like PT24H or P1D. " +
+                    "The default is the gap since the last successful run",
+        )
 
     private val recruiterVerificationEndpoint: String by
         option(
@@ -153,7 +162,8 @@ class ProcessInboxCommand(
             message = "Inbox triage run started",
             attributes = mapOf(TRIGGER_ATTRIBUTE to TRIGGER_CLI),
         )
-        val window = window()
+        val startedAt = clock.instant()
+        val window = window(startedAt)
         val credentials = credentials()
         val requirements = requirements()
         httpClientFactory().use { client ->
@@ -162,6 +172,7 @@ class ProcessInboxCommand(
                     credentials = credentials,
                     tokenStore = FileOAuth2TokenStore(Path.of(tokenFile)),
                     httpClient = client,
+                    clock = clock,
                 )
             val summary =
                 try {
@@ -189,10 +200,13 @@ class ProcessInboxCommand(
                 } catch (error: OllamaException) {
                     throw CommandFailedException(error.message.orEmpty(), error)
                 }
+            // The run succeeded: the next run looks back to this moment, the
+            // mail that was screened out is not looked at again.
+            lastRunStore().save(startedAt)
             logger.info(
                 event = "$COMMAND_NAME.completed",
                 message = "Inbox triage run completed",
-                attributes = summary.attributes(),
+                attributes = summary.attributes(startedAt.minus(window.duration)),
             )
         }
     }
@@ -247,13 +261,27 @@ class ProcessInboxCommand(
     /**
      * The window of the run, the messages that arrived before it are not
      * looked at.
+     *
+     * The window is the gap since the last successful run, a window on the
+     * command line wins over it.
+     *
+     * @param now the moment of the run.
      */
-    private fun window(): MessageWindow =
+    private suspend fun window(now: Instant): MessageWindow =
         try {
-            messageWindow(since)
+            runWindow(
+                lastRun = lastRunStore().load(),
+                now = now,
+                given = since?.let { messageWindow(it) },
+            )
         } catch (error: IllegalArgumentException) {
             throw CommandFailedException(error.message.orEmpty(), error)
         }
+
+    /**
+     * The store of the moment of the last successful run, next to the token.
+     */
+    private fun lastRunStore(): FileLastRunStore = FileLastRunStore.nextTo(Path.of(tokenFile))
 
     /**
      * The credentials of the Google application.
@@ -278,8 +306,10 @@ class ProcessInboxCommand(
 
     /**
      * The counters of the run, they go into the log.
+     *
+     * @param since the moment the run looked back to.
      */
-    private fun ProcessInboxSummary.attributes(): Map<String, String> =
+    private fun ProcessInboxSummary.attributes(since: Instant): Map<String, String> =
         mapOf(
             "screened" to screened.toString(),
             "recruiters" to recruiters.toString(),
@@ -289,6 +319,7 @@ class ProcessInboxCommand(
             "needs_more_information" to needsMoreInformation.toString(),
             "trashed" to trashed.toString(),
             "window" to window.duration.toString(),
+            "since" to since.toString(),
             "unknown" to unknown.toString(),
         )
 

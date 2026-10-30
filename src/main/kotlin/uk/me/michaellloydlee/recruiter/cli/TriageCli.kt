@@ -6,6 +6,7 @@ import com.github.ajalt.clikt.core.subcommands
 import io.ktor.client.HttpClient
 import uk.me.michaellloydlee.recruiter.infrastructure.gmail.GmailHttpClientFactory
 import uk.me.michaellloydlee.recruiter.infrastructure.logging.StructuredLogger
+import java.time.Clock
 
 /**
  * Root command of the `recruiter-cli` executable.
@@ -15,16 +16,19 @@ import uk.me.michaellloydlee.recruiter.infrastructure.logging.StructuredLogger
  *
  * @param logger sink for the structured log output of the invoked subcommand.
  * @param httpClientFactory creates the client used to talk to Google.
+ * @param clock source of the current time, the commands use it to decide how
+ *   far back they look for messages.
  */
 class TriageCli(
     logger: StructuredLogger,
     httpClientFactory: () -> HttpClient = { GmailHttpClientFactory.create() },
+    clock: Clock = Clock.systemUTC(),
 ) : SuspendingCliktCommand(name = COMMAND_NAME) {
     init {
         subcommands(
             AuthenticateCommand(logger, httpClientFactory),
-            PendingCommand(logger, httpClientFactory),
-            ProcessInboxCommand(logger, httpClientFactory),
+            PendingCommand(logger, httpClientFactory, clock),
+            ProcessInboxCommand(logger, httpClientFactory, clock),
         )
     }
 
