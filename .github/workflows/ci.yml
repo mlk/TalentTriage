@@ -46,6 +46,14 @@ jobs:
           build/install/recruiter-cli/bin/recruiter-cli --help
           build/install/recruiter-cli/bin/recruiter-cli process-inbox --help
 
+      # The standalone jar is the artifact of the launchd job, it has to run
+      # with nothing but a JVM.
+      - name: Verify the shadow jar
+        run: |
+          ./gradlew shadowJar
+          java -jar build/libs/recruiter-cli.jar --help
+          java -jar build/libs/recruiter-cli.jar process-inbox --help
+
       - name: Upload test reports
         if: always()
         uses: actions/upload-artifact@v7

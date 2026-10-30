@@ -5,6 +5,7 @@ plugins {
     alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.detekt)
     alias(libs.plugins.ktlint)
+    alias(libs.plugins.shadow)
     application
     jacoco
 }
@@ -15,6 +16,40 @@ version = "0.1.0"
 application {
     applicationName = "recruiter-cli"
     mainClass.set("uk.me.michaellloydlee.recruiter.cli.RecruiterCliKt")
+}
+
+// The standalone jar of the application.
+//
+// The jar carries the dependencies with it, so `java -jar` runs it without a
+// class path. The name has no version in it, the launchd configuration of
+// macOS points at the file and a new release does not move it.
+tasks.shadowJar {
+    archiveFileName.set("recruiter-cli.jar")
+    mergeServiceFiles()
+    manifest {
+        attributes(
+            "Main-Class" to application.mainClass.get(),
+        )
+    }
+    exclude(
+        "META-INF/*.SF",
+        "META-INF/*.DSA",
+        "META-INF/*.RSA",
+        "module-info.class",
+    )
+    // The service descriptors and the module metadata of the dependencies are
+    // merged into one file, so every provider and every module stays in the
+    // jar. The duplicates of the other files are dropped, the first one wins.
+    filesMatching(listOf("META-INF/services/**", "META-INF/*.kotlin_module")) {
+        duplicatesStrategy = DuplicatesStrategy.INCLUDE
+    }
+}
+
+// The launchd configuration of macOS is a sample of the repository, it is not
+// a resource of the application. The test reads it from the class path, so it
+// does not depend on the working directory of the build.
+sourceSets.named("test") {
+    resources.srcDir("config/launchd")
 }
 
 kotlin {

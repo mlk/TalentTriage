@@ -118,6 +118,7 @@ All of them run in CI, and they fail the build:
 | `./gradlew ktlintCheck` / `ktlintFormat` | Formatting, `ktlint_official` style |
 | `./gradlew detekt` | Static analysis, zero tolerated findings |
 | `./gradlew jacocoTestReport` | The coverage report, fails below 80% line coverage |
+| `./gradlew shadowJar` | The standalone jar of the application, `build/libs/recruiter-cli.jar` |
 
 * **ktlint** — the code style is `ktlint_official`, configured in `.editorconfig`.
 * **detekt** — the rules are configured in `config/detekt/detekt.yml` (`maxIssues: 0`,

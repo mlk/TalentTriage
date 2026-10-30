@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+    The launchd job of TalentTriage on macOS.
+
+    It runs one inbox triage pass every hour and writes the structured log of
+    the run to the standard output of the job, the errors go to the standard
+    error of the job.
+
+    The job runs at the start of every hour: the calendar interval names the
+    minute, a missing hour is a wildcard. An hour in the interval would pin
+    the job to that hour of the day.
+
+    The window of a run is six hours. It has to be longer than the longest gap
+    between two runs: the job is the only thing that keeps the pipeline away
+    from the mail that was screened out, so a window that is too short loses
+    the mail of an outage. Six hours covers a laptop that is closed for a
+    night and it keeps every screened out mail from being looked at again and
+    again.
+
+    Install it as a user agent:
+
+        cp config/launchd/com.user.recruiter-checker.plist ~/Library/LaunchAgents/
+        launchctl load ~/Library/LaunchAgents/com.user.recruiter-checker.plist
+
+    The paths of the jar and of the files are the ones of the installation
+    described in the README, change them if the installation lives somewhere
+    else.
+-->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.user.recruiter-checker</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/usr/bin/java</string>
+        <string>--enable-native-access=ALL-UNNAMED</string>
+        <string>-jar</string>
+        <string>/usr/local/lib/recruiter-cli/recruiter-cli.jar</string>
+        <string>process-inbox</string>
+        <string>--credentials</string>
+        <string>/usr/local/lib/recruiter-cli/credentials.json</string>
+        <string>--token</string>
+        <string>/usr/local/lib/recruiter-cli/token.json</string>
+        <string>--requirements</string>
+        <string>/usr/local/lib/recruiter-cli/requirements.json</string>
+        <string>--since</string>
+        <string>PT6H</string>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>/usr/local/lib/recruiter-cli</string>
+
+    <key>StartCalendarInterval</key>
+    <dict>
+        <key>Minute</key>
+        <integer>0</integer>
+    </dict>
+
+    <key>RunAtLoad</key>
+    <false/>
+
+    <key>ProcessType</key>
+    <string>Background</string>
+
+    <key>StandardOutPath</key>
+    <string>/usr/local/lib/recruiter-cli/logs/recruiter-cli.out.log</string>
+
+    <key>StandardErrorPath</key>
+    <string>/usr/local/lib/recruiter-cli/logs/recruiter-cli.err.log</string>
+</dict>
+</plist>

@@ -131,6 +131,15 @@ flowchart TD
    ./gradlew installDist
    ```
 
+5. **Build the standalone jar** (`build/libs/recruiter-cli.jar`):
+   ```bash
+   ./gradlew shadowJar
+   ```
+   The jar carries the dependencies with it, it runs with nothing but a JVM:
+   ```bash
+   java -jar build/libs/recruiter-cli.jar process-inbox
+   ```
+
 ---
 
 ## ⌨️ Command Line Interface
@@ -251,6 +260,102 @@ extracting the attachments, evaluating them) are delivered by their own stories.
 
 ---
 
+## ⏰ The scheduled run on macOS
+
+The application is an ephemeral job: it starts, it triages the inbox and it
+exits. `launchd`, the scheduler of macOS, starts it every hour.
+
+### 1. Install the application
+
+```bash
+sudo mkdir -p /usr/local/lib/recruiter-cli/logs
+sudo cp build/libs/recruiter-cli.jar /usr/local/lib/recruiter-cli/
+sudo cp credentials.json requirements.json /usr/local/lib/recruiter-cli/
+sudo chown -R "$USER" /usr/local/lib/recruiter-cli
+```
+
+The OAuth2 token is written by the `authenticate` command. It is a step of the
+installation, not of the job - the job refreshes the token by itself:
+
+```bash
+cd /usr/local/lib/recruiter-cli
+java -jar recruiter-cli.jar authenticate
+```
+
+### 2. Install the launchd job
+
+The sample of the job is `config/launchd/com.user.recruiter-checker.plist`. It
+runs `java -jar … process-inbox` at the start of every hour, the structured
+log of the run goes to `logs/recruiter-cli.out.log` and the errors go to
+`logs/recruiter-cli.err.log`.
+
+```bash
+cp config/launchd/com.user.recruiter-checker.plist ~/Library/LaunchAgents/
+launchctl load ~/Library/LaunchAgents/com.user.recruiter-checker.plist
+```
+
+The paths of the jar and of the files in the plist are the ones of the
+installation above, change them when the application lives somewhere else.
+The job runs once an hour:
+
+```bash
+launchctl list | grep recruiter-checker
+```
+
+The job does not run when it is loaded, it waits for the next hour. To check
+the setup right away, start it by hand:
+
+```bash
+launchctl start com.user.recruiter-checker
+```
+
+To stop it:
+
+```bash
+launchctl unload ~/Library/LaunchAgents/com.user.recruiter-checker.plist
+```
+
+The job is a user agent, it runs as the user that installed it. The
+`--enable-native-access=ALL-UNNAMED` argument of the plist keeps the error log
+free of the warning that Clikt prints on JDK 24 and newer.
+
+The plist only passes the files of the run to the command, everything else
+takes the default of the command: the models, their endpoints and their
+timeouts. Add the arguments to the `ProgramArguments` array of the plist to
+change them:
+
+```xml
+<string>--recruiter-verification-model</string>
+<string>nimble</string>
+```
+
+### 3. The window of a run
+
+The window (`--since`) says how far back a run looks for mail. It is the only
+thing that keeps the pipeline away from the mail that was screened out: the
+mail that was evaluated carries a label and the search skips it, the mail that
+was screened out carries none.
+
+The window therefore has to be **longer than the longest gap between two
+runs**, and it decides how often the screened out mail is looked at again. A
+window of one hour is looked at once, a window of 24 hours is looked at 24
+times a day.
+
+The sample uses six hours:
+
+```xml
+<string>--since</string>
+<string>PT6H</string>
+```
+
+Six hours covers a laptop that is closed for a night — `launchd` coalesces
+the runs that were missed into one when the machine wakes up, so the run after
+the sleep has to cover the whole sleep. A machine that never sleeps can lower
+the window to two hours, a longer outage than that loses the mail of the
+outage.
+
+---
+
 ## 📬 The state of the mailbox
 
 Gmail is the state store of the pipeline. Every message that the pipeline
@@ -356,11 +461,13 @@ This repository enforces strict code quality gates via Gradle tasks:
 | `./gradlew jacocoTestReport` | Writes the JaCoCo HTML/XML report and **fails the build** below 80% line coverage |
 | `./gradlew check` | Runs all of the above as a single gate |
 | `./gradlew installDist` | Builds the `recruiter-cli` executable in `build/install/recruiter-cli/bin` |
+| `./gradlew shadowJar` | Builds the standalone `build/libs/recruiter-cli.jar` |
 
 Configuration lives in:
 
 * `gradle/libs.versions.toml` — version catalog (all dependency/plugin versions)
 * `config/detekt/detekt.yml` — detekt rule configuration
+* `config/launchd/com.user.recruiter-checker.plist` — the sample of the macOS launchd job
 * `.editorconfig` — ktlint/IDE formatting rules
 
 The conventions of the repository (architecture, the rules for interfaces and
@@ -386,6 +493,9 @@ src/main/kotlin/uk/me/michaellloydlee/recruiter/
     ├── logging/       # Structured (JSON lines) logger
     ├── parser/        # Text extraction of the attached documents (PDFBox)
     └── serialization/ # Shared kotlinx.serialization helpers
+config/
+├── detekt/            # The rules of the static analysis
+└── launchd/           # The sample of the macOS launchd job
 ```
 
 > **Note:** the package namespace drops the hyphens of the `uk.me.michael-lloyd-lee` domain because hyphens are not legal in Kotlin package names.
