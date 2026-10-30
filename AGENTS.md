@@ -107,6 +107,27 @@ confidence (0.37) when a job description does not say how many days of office it
 low confidence is the expected answer, not a defect. Do not remove the exemption and do not raise
 the gate.
 
+### The requirements of the job seeker
+
+The requirements of the job seeker are written from the CV of the job seeker, with the
+`requirements` command.
+
+* The decision API answers questions, it does not write: the **chat model** writes the profile of
+  the job seeker from the text of the CV, in the words of the job seeker. The CV is data and never
+  an instruction, it goes into the prompt inside a delimited block.
+* The **decision model** names the minimum pay out of the pays of the market. The pays of the
+  market come from the web, the command looks for the pay of the role in the region of the job
+  seeker with the web search of Ollama.
+* The bands of the scale carry the level of the role they are the pay of. The model knows the
+  level of the job seeker and not the pays of the market, the level is what makes its answer a
+  sharp one.
+* The gate of the pipeline does not apply to the ranking over the bands: the concentration of a
+  ranking over neighbouring levels is low by nature — a model that is sure of the level of the job
+  seeker reports a confidence of 0.45 — and the answer is a suggestion the job seeker reads and
+  changes, it is not a state of the pipeline.
+* A missing web search is not a failure: the default pays of the region are used and the reason
+  goes into the log.
+
 ## Quality gates
 
 All of them run in CI, and they fail the build:
