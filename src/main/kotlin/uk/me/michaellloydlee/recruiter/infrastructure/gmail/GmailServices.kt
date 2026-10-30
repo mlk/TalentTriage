@@ -9,12 +9,14 @@ import java.io.Closeable
  * @param httpClient the client the API calls are sent with.
  * @param messages the message endpoints of the API.
  * @param labels the label endpoints of the API.
+ * @param drafts the draft endpoints of the API.
  * @param stateManager the state machine of the messages.
  */
 class GmailServices private constructor(
     private val httpClient: HttpClient,
     val messages: GmailMessagesApi,
     val labels: GmailLabelsApi,
+    val drafts: GmailDraftsApi,
     val stateManager: GmailLabelStateManager,
 ) : Closeable {
     /**
@@ -49,6 +51,7 @@ class GmailServices private constructor(
                 httpClient = httpClient,
                 messages = messages,
                 labels = labels,
+                drafts = GmailDraftsApi(api),
                 stateManager = GmailLabelStateManager(messages, labels),
             )
         }
