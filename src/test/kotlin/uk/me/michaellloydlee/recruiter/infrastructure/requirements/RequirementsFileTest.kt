@@ -51,6 +51,43 @@ class RequirementsFileTest {
     }
 
     @Test
+    fun doesNotShareTheMinimumPayByDefault() {
+        val file =
+            requirementsFile(
+                """
+                {
+                  "minimum_pay": {"amount": 120000, "currency": "EUR", "period": "year"},
+                  "maximum_office_days": 2,
+                  "profile": "Senior Kotlin engineer"
+                }
+                """.trimIndent(),
+            )
+
+        val requirements = RequirementsFile.load(file)
+
+        assertEquals(false, requirements.shareMinimumPay)
+    }
+
+    @Test
+    fun sharesTheMinimumPayWhenTheFileSaysSo() {
+        val file =
+            requirementsFile(
+                """
+                {
+                  "minimum_pay": {"amount": 120000, "currency": "EUR", "period": "year"},
+                  "maximum_office_days": 2,
+                  "profile": "Senior Kotlin engineer",
+                  "share_minimum_pay": true
+                }
+                """.trimIndent(),
+            )
+
+        val requirements = RequirementsFile.load(file)
+
+        assertEquals(true, requirements.shareMinimumPay)
+    }
+
+    @Test
     fun failsWhenTheFileIsMissing() {
         val missing = Path.of("/does/not/exist/requirements.json")
 

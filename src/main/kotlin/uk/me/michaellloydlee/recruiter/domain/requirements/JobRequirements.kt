@@ -9,11 +9,15 @@ package uk.me.michaellloydlee.recruiter.domain.requirements
  * @property maximumOfficeDays the number of days of office per week a job may
  *   demand, the job seeker wants the remote friendly ones.
  * @property profile what the job description is compared with.
+ * @property shareMinimumPay whether the draft that asks the recruiter for the
+ *   missing information may state the minimum pay of the job seeker. The
+ *   default is `false`: the draft asks what the pay is and nothing else.
  */
 data class JobRequirements(
     val minimumPay: PayRequirement?,
     val maximumOfficeDays: Int,
     val profile: String,
+    val shareMinimumPay: Boolean = false,
 ) {
     init {
         require(maximumOfficeDays >= 0) {

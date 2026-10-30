@@ -40,6 +40,7 @@ object RequirementsFile {
             minimumPay = file.minimumPay?.let { PayRequirement(it.amount, it.currency, it.period) },
             maximumOfficeDays = file.maximumOfficeDays,
             profile = file.profile,
+            shareMinimumPay = file.shareMinimumPay,
         )
     }
 
@@ -50,6 +51,8 @@ object RequirementsFile {
         @SerialName("maximum_office_days")
         val maximumOfficeDays: Int,
         val profile: String,
+        @SerialName("share_minimum_pay")
+        val shareMinimumPay: Boolean = false,
     )
 
     @Serializable
