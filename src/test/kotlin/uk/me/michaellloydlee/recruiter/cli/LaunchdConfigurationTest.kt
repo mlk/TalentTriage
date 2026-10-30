@@ -2,6 +2,8 @@ package uk.me.michaellloydlee.recruiter.cli
 
 import org.w3c.dom.Element
 import org.w3c.dom.Node
+import uk.me.michaellloydlee.recruiter.domain.gmail.messageWindow
+import java.time.Duration
 import javax.xml.parsers.DocumentBuilderFactory
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -42,6 +44,14 @@ class LaunchdConfigurationTest {
         assertTrue(argumentAfter(arguments, "--credentials").endsWith("credentials.json"))
         assertTrue(argumentAfter(arguments, "--token").endsWith("token.json"))
         assertTrue(argumentAfter(arguments, "--requirements").endsWith("requirements.json"))
+    }
+
+    @Test
+    fun passesAWindowOfTheRunToTheCommand() {
+        val window = messageWindow(argumentAfter(arguments(), "--since")).duration
+
+        // The window has to cover the gap between two runs, the job runs every hour.
+        assertTrue(window >= Duration.ofHours(1))
     }
 
     @Test

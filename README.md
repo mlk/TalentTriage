@@ -329,14 +329,30 @@ change them:
 <string>nimble</string>
 ```
 
-The window of a run is 24 hours by default (`--since PT24H`), so a job that
-was stopped for longer than a day misses the mail that arrived in between. A
-larger window covers a longer outage:
+### 3. The window of a run
+
+The window (`--since`) says how far back a run looks for mail. It is the only
+thing that keeps the pipeline away from the mail that was screened out: the
+mail that was evaluated carries a label and the search skips it, the mail that
+was screened out carries none.
+
+The window therefore has to be **longer than the longest gap between two
+runs**, and it decides how often the screened out mail is looked at again. A
+window of one hour is looked at once, a window of 24 hours is looked at 24
+times a day.
+
+The sample uses six hours:
 
 ```xml
 <string>--since</string>
-<string>P7D</string>
+<string>PT6H</string>
 ```
+
+Six hours covers a laptop that is closed for a night — `launchd` coalesces
+the runs that were missed into one when the machine wakes up, so the run after
+the sleep has to cover the whole sleep. A machine that never sleeps can lower
+the window to two hours, a longer outage than that loses the mail of the
+outage.
 
 ---
 
