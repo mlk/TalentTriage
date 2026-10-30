@@ -15,9 +15,9 @@ import uk.me.michaellloydlee.recruiter.infrastructure.gmail.GmailLabelStateManag
  *
  * The screening has two stages: the keyword and sender rules of the
  * [heuristics] decide first, only the messages that pass them are shown to the
- * model. A message that is not a recruiter mail gets the label
- * `Recruiters/FilteredOut` and stays in the inbox - the label is what makes
- * the next run of the pipeline skip it.
+ * model. A message that is not a recruiter mail keeps no label: the window of
+ * the run is what stops the pipeline from looking at it again, and the run
+ * reports it.
  *
  * The rules of the job listing come before the rules of the recruiter: a
  * listing is not one job, so it is not evaluated, and the rules of the
@@ -35,7 +35,7 @@ import uk.me.michaellloydlee.recruiter.infrastructure.gmail.GmailLabelStateManag
  * @param heuristics the rules of the first stage.
  * @param jobListings the rules that tell a job listing apart.
  * @param verifier the model of the second stage.
- * @param stateManager applies the state label of a filtered out message.
+ * @param stateManager applies the state label of a job listing.
  */
 class ScreeningService(
     private val heuristics: RecruiterHeuristics,
@@ -61,7 +61,6 @@ class ScreeningService(
         }
         if (!heuristics.isCandidate(message)) {
             val reason = "The message matches none of the recruiter rules"
-            stateManager.apply(message.id, RecruiterLabel.FILTERED_OUT)
             return ScreeningOutcome(
                 decision = ScreeningDecision.NOT_RECRUITER,
                 stage = ScreeningStage.HEURISTICS,
@@ -88,7 +87,6 @@ class ScreeningService(
             }
 
             is RecruiterVerification.NotRecruiter -> {
-                stateManager.apply(message.id, RecruiterLabel.FILTERED_OUT)
                 ScreeningOutcome(
                     decision = ScreeningDecision.NOT_RECRUITER,
                     stage = ScreeningStage.LOCAL_MODEL,

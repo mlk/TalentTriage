@@ -79,10 +79,13 @@ That is what makes the code testable without a network and without a file system
 
 ### The states of a message
 
-Gmail is the state store of the pipeline: a processed message carries exactly one of the five
-state labels below `Recruiters/` — `FilteredOut`, `JobListing`, `WorthFollowUp`,
+Gmail is the state store of the pipeline: a message that the pipeline evaluated carries exactly one
+of the four state labels below `Recruiters/` — `JobListing`, `WorthFollowUp`,
 `NeedsMoreInformation` and `Trash`. A message without a state label is pending.
 
+* A mail that the screening filtered out keeps **no** label: it is reported by the run and the
+  window of the run (`--since`) is what stops the next run from looking at it again. There is no
+  `FilteredOut` state — a label that only says "already looked at" is not a state.
 * `NeedsMoreInformation` is the single state for a mail that matches but is incomplete. Both gaps
   of a job description land there: the pay is not stated and the days of office are not stated
   (`OfficeDays.UNCLEAR`). It is one state, not two.

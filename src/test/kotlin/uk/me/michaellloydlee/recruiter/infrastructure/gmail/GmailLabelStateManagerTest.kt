@@ -25,7 +25,7 @@ class GmailLabelStateManagerTest {
 
             val body = bodyOf(engine)
             assertTrue(body.contains("Label_worthfollowup"))
-            assertTrue(body.contains("Label_filteredout"))
+            assertTrue(body.contains("Label_joblisting"))
             assertTrue(body.contains("Label_needsmoreinformation"))
             assertTrue(body.contains("Label_trash"))
             assertFalse(body.contains("INBOX"))
@@ -48,10 +48,10 @@ class GmailLabelStateManagerTest {
         runTest {
             val engine = engine()
 
-            stateManager(engine).apply("message-id", RecruiterLabel.FILTERED_OUT)
+            stateManager(engine).apply("message-id", RecruiterLabel.JOB_LISTING)
 
             val body = bodyOf(engine)
-            assertTrue(body.contains("Label_filteredout"))
+            assertTrue(body.contains("Label_joblisting"))
             assertFalse(body.contains("INBOX"))
         }
 
@@ -66,9 +66,9 @@ class GmailLabelStateManagerTest {
                 engine.requestHistory.filter {
                     it.method.value == "POST" && it.url.encodedPath.endsWith("/users/me/labels")
                 }
-            assertEquals(4, created.size)
+            assertEquals(3, created.size)
             val body = (created.first().body as TextContent).text
-            assertTrue(body.contains("Recruiters/FilteredOut"))
+            assertTrue(body.contains("Recruiters/JobListing"))
         }
 
     @Test
@@ -78,7 +78,7 @@ class GmailLabelStateManagerTest {
             val manager = stateManager(engine)
 
             manager.apply("message-id", RecruiterLabel.TRASH)
-            manager.apply("message-id", RecruiterLabel.FILTERED_OUT)
+            manager.apply("message-id", RecruiterLabel.JOB_LISTING)
 
             val listed =
                 engine.requestHistory.count {
@@ -144,7 +144,7 @@ class GmailLabelStateManagerTest {
 
         private val ALL_LABELS =
             listOf(
-                "Recruiters/FilteredOut",
+                "Recruiters/JobListing",
                 "Recruiters/WorthFollowUp",
                 "Recruiters/NeedsMoreInformation",
                 "Recruiters/Trash",

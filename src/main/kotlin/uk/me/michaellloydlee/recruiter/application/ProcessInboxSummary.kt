@@ -7,7 +7,8 @@ import uk.me.michaellloydlee.recruiter.domain.gmail.MessageWindow
  *
  * @property screened how many messages were looked at.
  * @property recruiters how many of them are recruiter mails.
- * @property filteredOut how many of them were not recruiter mails.
+ * @property filteredOut how many of them were not recruiter mails. They are
+ *   reported, they are not labelled.
  * @property jobListings how many of them were job listings, a listing is not
  *   one job and is not evaluated.
  * @property unknown how many of them the screening could not decide, they stay

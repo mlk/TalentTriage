@@ -48,10 +48,10 @@ flowchart TD
     Fetch --> Heuristics
 
     %% Stage 1 Branching
-    Heuristics -- "No Match" --> ApplyFilteredOut["Label: Recruiters/FilteredOut\n(Stay in Inbox)"]
+    Heuristics -- "No Match" --> Report["Reported, no label\n(the window is the guard)"]
     Heuristics -- "Candidate Recruiter" --> LocalLLM
 
-    LocalLLM -- "Not Recruiter" --> ApplyFilteredOut
+    LocalLLM -- "Not Recruiter" --> Report
     LocalLLM -- "Recruiter Confirmed" --> Stage2
 
     %% Stage 2 to Stage 3
@@ -66,7 +66,6 @@ flowchart TD
     AirLLM -- "Mismatch / Unsuitable" --> LabelTrash["Label: Recruiters/Trash"]
 
     %% Gmail Label Updates
-    ApplyFilteredOut --> ApplyLabel
     LabelFollowUp --> ApplyLabel
     LabelMoreInfo --> ApplyLabel
     LabelTrash --> ApplyLabel
@@ -79,7 +78,7 @@ flowchart TD
 
 * **Zero-Idle Memory Footprint:** Executes completely as a CLI command and terminates, returning 100% of VRAM/RAM back to macOS.
 * **Dual-Tier LLM Architecture:** Uses a fast, small model via Ollama for initial screening and routes qualified emails to an AirLLM Python wrapper (or large quantized Ollama model) for deep evaluation.
-* **Stateless Gmail Tracking:** Uses nested Gmail labels (`Recruiters/FilteredOut`, `Recruiters/JobListing`, `Recruiters/WorthFollowUp`, `Recruiters/NeedsMoreInformation`, `Recruiters/Trash`) as state flags.
+* **Stateless Gmail Tracking:** Uses nested Gmail labels (`Recruiters/JobListing`, `Recruiters/WorthFollowUp`, `Recruiters/NeedsMoreInformation`, `Recruiters/Trash`) as state flags.
 * **Document Parsing Engine:** Automatically extracts plain text/Markdown from attached `.pdf` and `.docx` job descriptions using Apache PDFBox and Apache POI. A broken attachment is reported, it never stops the run.
 * **OpenAI/Ollama Compatibility:** Leverages native Ollama REST API JSON formats across all endpoints.
 * **Dual-Tier LLM Architecture:** The same typed client talks to the local Ollama instance (short
@@ -145,10 +144,11 @@ The executable is `recruiter-cli`. Every operation is a subcommand:
 ```
 
 `process-inbox` fetches the messages of the inbox that were not processed yet
-and screens them: the ones that are not recruiter mails are filtered out with
-the label `Recruiters/FilteredOut`, the job listings get the label
-`Recruiters/JobListing`, the recruiter mails are counted for the deep
-evaluation that comes with its own story.
+and screens them: the ones that are not recruiter mails are reported and stay
+unlabelled - the window of the run is what keeps the next run from looking at
+them again -, the job listings get the label `Recruiters/JobListing`, the
+recruiter mails are counted for the deep evaluation that comes with its own
+story.
 
 The requirements of the job seeker — the pay, the profile and the number of
 days of office a job may demand — are read from `requirements.json` in the
@@ -253,17 +253,16 @@ extracting the attachments, evaluating them) are delivered by their own stories.
 
 ## 📬 The state of the mailbox
 
-Gmail is the state store of the pipeline. Every processed message carries one
-of the nested state labels, so the search `is:inbox` with every state label
-excluded (`-label:Recruiters/FilteredOut -label:Recruiters/WorthFollowUp …`)
-matches exactly the messages that were not processed yet. Gmail does not
-understand a wildcard in the name of a label: `is:inbox -label:Recruiters/*`
-still returns the messages that carry a nested label, so every state label is
-excluded by its own path:
+Gmail is the state store of the pipeline. Every message that the pipeline
+evaluated carries one of the nested state labels, so the search `is:inbox` with
+every state label excluded (`-label:Recruiters/JobListing
+-label:Recruiters/WorthFollowUp …`) matches exactly the messages that were not
+processed yet. Gmail does not understand a wildcard in the name of a label:
+`is:inbox -label:Recruiters/*` still returns the messages that carry a nested
+label, so every state label is excluded by its own path:
 
 | Label | Meaning | Archived |
 | --- | --- | --- |
-| `Recruiters/FilteredOut` | not a recruiter mail | no, it stays in the inbox |
 | `Recruiters/JobListing` | a job listing, an alert of a job board that offers many jobs at once | no, it stays in the inbox |
 | `Recruiters/WorthFollowUp` | worth a follow up | no, it stays in the inbox |
 | `Recruiters/NeedsMoreInformation` | a recruiter mail that matches, but something is missing: the pay is not stated, the job description does not say how many days of office it demands or the model could not evaluate the job description | no, it stays in the inbox |
@@ -273,7 +272,9 @@ A message carries exactly one state label - applying a new state removes the
 other ones - and the state labels are created in the mailbox when they do not
 exist yet. The state label is the marker of the pipeline: the search of the
 pending mails (`is:inbox` with every state label excluded) skips every message
-that carries one, so a message that was processed is never looked at again.
+that carries one, so a message that was evaluated is never looked at again. A
+message that was only screened out keeps no label: it is reported by the run
+and the window of the run is what stops the next run from looking at it again.
 
 The pipeline is a scheduled job, so it only processes the mail that arrived
 since the last run: the search is `is:inbox` with every state label excluded
