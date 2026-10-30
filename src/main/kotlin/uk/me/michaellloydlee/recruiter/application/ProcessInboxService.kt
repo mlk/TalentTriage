@@ -1,6 +1,7 @@
 package uk.me.michaellloydlee.recruiter.application
 
-import uk.me.michaellloydlee.recruiter.application.evaluation.AttachmentTextReader
+import uk.me.michaellloydlee.recruiter.application.draft.DraftOutcome
+import uk.me.michaellloydlee.recruiter.application.draft.DraftWriter
 import uk.me.michaellloydlee.recruiter.application.evaluation.EvaluationService
 import uk.me.michaellloydlee.recruiter.application.screening.ScreeningService
 import uk.me.michaellloydlee.recruiter.domain.evaluation.JobDescriptionEvaluation
@@ -17,14 +18,17 @@ import java.time.Instant
  *
  * The messages that were not processed yet are fetched and screened. The
  * recruiter mails are evaluated against the requirements of the job seeker and
- * end in one of the states of the pipeline.
+ * end in one of the states of the pipeline. A mail that matches but does not
+ * say everything the job seeker needs to know gets a draft that asks the
+ * recruiter about it.
  *
  * @param messages the message endpoints of the Gmail API.
  * @param since the moment the run looks back to, the messages that arrived
  *   after it are looked at.
  * @param screening the screening of the messages.
  * @param evaluation the evaluation of the job descriptions.
- * @param attachments reads the text of the attached documents.
+ * @param drafts writes the draft that asks the recruiter for the missing
+ *   information.
  * @param requirements the requirements of the job seeker.
  * @param logger sink for the log of the run.
  */
@@ -33,7 +37,7 @@ class ProcessInboxService(
     private val since: Instant,
     private val screening: ScreeningService,
     private val evaluation: EvaluationService,
-    private val attachments: AttachmentTextReader,
+    private val drafts: DraftWriter,
     private val requirements: JobRequirements,
     private val logger: StructuredLogger,
 ) {
@@ -57,6 +61,7 @@ class ProcessInboxService(
             worthFollowUp = counters.worthFollowUp,
             needsMoreInformation = counters.needsMoreInformation,
             trashed = counters.trashed,
+            drafts = counters.drafts,
             since = since,
         )
     }
@@ -104,7 +109,6 @@ class ProcessInboxService(
         val evaluation =
             evaluation.evaluate(
                 message = message,
-                attachments = attachments.textOf(message),
                 requirements = requirements,
             )
         logger.info(
@@ -120,10 +124,73 @@ class ProcessInboxService(
         // An evaluation leads to one of three states. The screening decides
         // `JobListing`, the branch below is there for the compiler.
         when (evaluation.state) {
-            RecruiterLabel.WORTH_FOLLOW_UP -> counters.worthFollowUp++
-            RecruiterLabel.NEEDS_MORE_INFORMATION -> counters.needsMoreInformation++
-            RecruiterLabel.TRASH -> counters.trashed++
-            RecruiterLabel.JOB_LISTING -> counters.jobListings++
+            RecruiterLabel.WORTH_FOLLOW_UP -> {
+                counters.worthFollowUp++
+            }
+
+            RecruiterLabel.NEEDS_MORE_INFORMATION -> {
+                counters.needsMoreInformation++
+                askForInformation(message, evaluation, counters)
+            }
+
+            RecruiterLabel.TRASH -> {
+                counters.trashed++
+            }
+
+            RecruiterLabel.JOB_LISTING -> {
+                counters.jobListings++
+            }
+        }
+    }
+
+    /**
+     * Writes the draft that asks the recruiter for the missing information.
+     *
+     * The mail keeps the label `Recruiters/NeedsMoreInformation`: the draft
+     * waits in the mailbox of the job seeker and the mail is not asked again.
+     * A mail the model could not evaluate gets no draft: the model does not
+     * know what is missing.
+     *
+     * @param message the mail of the recruiter.
+     * @param evaluation the evaluation of the job description.
+     * @param counters the counters of the run.
+     */
+    private suspend fun askForInformation(
+        message: EmailMessage,
+        evaluation: JobDescriptionEvaluation,
+        counters: Counters,
+    ) {
+        val missing =
+            when (evaluation) {
+                is JobDescriptionEvaluation.Evaluated -> evaluation.missingInformation
+                is JobDescriptionEvaluation.Unknown -> return
+            }
+        when (val outcome = drafts.write(message, missing, requirements)) {
+            is DraftOutcome.Written -> {
+                counters.drafts++
+                logger.info(
+                    event = EVENT_DRAFT_WRITTEN,
+                    message = "A draft that asks the recruiter for the missing information was written",
+                    attributes =
+                        mapOf(
+                            "id" to message.id,
+                            "draft" to outcome.draftId,
+                            "reason" to reasonOf(evaluation),
+                        ),
+                )
+            }
+
+            is DraftOutcome.Failed -> {
+                logger.warn(
+                    event = EVENT_DRAFT_FAILED,
+                    message = "The draft that asks the recruiter for the missing information was not written",
+                    attributes =
+                        mapOf(
+                            "id" to message.id,
+                            "reason" to outcome.reason,
+                        ),
+                )
+            }
         }
     }
 
@@ -164,6 +231,7 @@ class ProcessInboxService(
         var worthFollowUp: Int = 0
         var needsMoreInformation: Int = 0
         var trashed: Int = 0
+        var drafts: Int = 0
     }
 
     companion object {
@@ -172,5 +240,11 @@ class ProcessInboxService(
 
         /** The event of the log of an evaluated job description. */
         const val EVENT_EVALUATED: String = "process-inbox.evaluated"
+
+        /** The event of the log of a draft that was written. */
+        const val EVENT_DRAFT_WRITTEN: String = "process-inbox.draft_written"
+
+        /** The event of the log of a draft that could not be written. */
+        const val EVENT_DRAFT_FAILED: String = "process-inbox.draft_failed"
     }
 }

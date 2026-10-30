@@ -19,26 +19,31 @@ import uk.me.michaellloydlee.recruiter.infrastructure.gmail.GmailLabelStateManag
  * as well: it is not thrown away, the job seeker looks at it.
  *
  * @param evaluator the model that evaluates the job descriptions.
+ * @param attachments reads the text of the attached documents.
  * @param stateManager applies the state label of the mail.
  */
 class EvaluationService(
     private val evaluator: JobDescriptionEvaluator,
+    private val attachments: AttachmentTextReader,
     private val stateManager: GmailLabelStateManager,
 ) {
     /**
      * Evaluates a mail and applies its state.
      *
      * @param message the mail with the recruiter.
-     * @param attachments the text of the attached documents.
      * @param requirements the requirements of the job seeker.
      * @return the evaluation of the mail.
      */
     suspend fun evaluate(
         message: EmailMessage,
-        attachments: String,
         requirements: JobRequirements,
     ): JobDescriptionEvaluation {
-        val evaluation = evaluator.evaluate(message, attachments, requirements)
+        val evaluation =
+            evaluator.evaluate(
+                message = message,
+                attachments = attachments.textOf(message),
+                requirements = requirements,
+            )
         stateManager.apply(message.id, evaluation.state)
         return evaluation
     }

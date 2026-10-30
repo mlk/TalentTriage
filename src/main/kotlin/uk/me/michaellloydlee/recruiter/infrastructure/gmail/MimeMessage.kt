@@ -18,7 +18,8 @@ internal object MimeMessage {
      * @return the mail of the draft, encoded with base64url.
      */
     fun encode(draft: EmailDraft): String =
-        Base64.getUrlEncoder()
+        Base64
+            .getUrlEncoder()
             .withoutPadding()
             .encodeToString(build(draft).toByteArray(Charsets.UTF_8))
 
@@ -52,8 +53,7 @@ internal object MimeMessage {
     private fun header(
         name: String,
         value: String,
-    ): String =
-        "$name: ${value.replace("\r\n", " ").replace("\r", " ").replace("\n", " ")}$LINE_BREAK"
+    ): String = "$name: ${value.replace("\r\n", " ").replace("\r", " ").replace("\n", " ")}$LINE_BREAK"
 
     /** The line break of a mail, the format of RFC 2822 asks for CRLF. */
     private const val LINE_BREAK: String = "\r\n"
