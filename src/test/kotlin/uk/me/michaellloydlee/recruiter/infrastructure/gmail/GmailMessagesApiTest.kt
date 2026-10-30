@@ -189,14 +189,14 @@ class GmailMessagesApiTest {
             assertTrue(body.contains("INBOX"))
         }
 
-    private fun api(engine: MockEngine): GmailMessagesApi {
+    private suspend fun api(engine: MockEngine): GmailMessagesApi {
         val client =
             GmailApiClient(
                 httpClient = HttpClient(engine),
                 tokens =
                     RefreshingAccessTokenProvider(
-                        refresher = FakeRefresher(token("refreshed-access-token")),
-                        tokenStore = FakeTokenStore(token("access-token")),
+                        refresher = TestOAuth2Client(clock = Clock.fixed(NOW, ZoneOffset.UTC)).client,
+                        tokenStore = temporaryTokenStore(token("access-token")),
                         clock = Clock.fixed(NOW, ZoneOffset.UTC),
                     ),
                 baseUrl = "https://gmail.example/v1",

@@ -32,7 +32,7 @@ class GmailOAuth2Client(
     private val credentials: GoogleClientCredentials,
     private val clock: Clock = Clock.systemUTC(),
     private val json: Json = Json { ignoreUnknownKeys = true },
-) : OAuth2TokenRefresher {
+) {
     /**
      * Builds the URL the user has to open in order to authorise the application.
      *
@@ -85,7 +85,7 @@ class GmailOAuth2Client(
      *
      * @param refreshToken the refresh token of the application.
      */
-    override suspend fun refreshAccessToken(refreshToken: String): OAuth2Token =
+    suspend fun refreshAccessToken(refreshToken: String): OAuth2Token =
         requestToken(
             parameters =
                 Parameters.build {

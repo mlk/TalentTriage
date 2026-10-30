@@ -22,8 +22,8 @@ import java.time.Duration
  * @param refreshLeeway safety margin, a token is refreshed that much before it expires.
  */
 class RefreshingAccessTokenProvider(
-    private val refresher: OAuth2TokenRefresher,
-    private val tokenStore: OAuth2TokenStore,
+    private val refresher: GmailOAuth2Client,
+    private val tokenStore: FileOAuth2TokenStore,
     private val clock: Clock = Clock.systemUTC(),
     private val refreshLeeway: Duration = DEFAULT_REFRESH_LEEWAY,
 ) {
