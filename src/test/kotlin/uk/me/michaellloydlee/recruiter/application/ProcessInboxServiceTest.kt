@@ -357,7 +357,7 @@ class ProcessInboxServiceTest {
             evaluation =
                 EvaluationService(
                     evaluator = DecisionModelEvaluator(modelClient),
-                    attachments = AttachmentTextReader(messages),
+                    attachments = AttachmentTextReader(messages, StructuredLogger(log)),
                     stateManager = stateManager,
                 ),
             drafts = DraftWriter(client = chatClient, drafts = GmailDraftsApi(api)),
