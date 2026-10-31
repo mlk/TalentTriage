@@ -4,7 +4,7 @@
 
 > **A resource-efficient, local-first recruiter email triage engine built in Kotlin for macOS.**
 
-**TalentTriage** automatically checks your Gmail inbox, filters out recruiter noise using local heuristic rules and lightweight LLM classification, extracts attached Job Descriptions (PDF/Word), and performs deep criteria analysis (Pay, JD relevance, Days in Office) using AirLLM or local Ollama instances.
+**TalentTriage** automatically checks your Gmail inbox, filters out recruiter noise using local heuristic rules and lightweight LLM classification, extracts attached Job Descriptions (PDF/Word), and performs deep criteria analysis (Pay, JD relevance, Days in Office) with the models of Ollama — the local instance, the cloud of Ollama or an AirLLM wrapper.
 
 ---
 
@@ -30,7 +30,7 @@ flowchart TD
 
     subgraph Stage1 ["🔍 Stage 1: Screening & Filtering"]
         Heuristics{"Heuristic Pre-Filter\n(Keywords/Regex)"}
-        LocalLLM{"Local LLM Classifier\n(Ollama 1B-3B)"}
+        LocalLLM{"Decision Model of Ollama\n(clef:cloud)"}
     end
 
     subgraph Stage2 ["📄 Stage 2: Attachment Extraction"]
@@ -39,7 +39,7 @@ flowchart TD
     end
 
     subgraph Stage3 ["🧠 Stage 3: Deep Criteria Analysis"]
-        AirLLM["AirLLM / Ollama 70B\n(Extended Timeout)"]
+        AirLLM["Decision Model of Ollama\n(clef:cloud, long timeout)"]
     end
 
     %% Execution Flow
@@ -77,13 +77,12 @@ flowchart TD
 ## ✨ Key Features
 
 * **Zero-Idle Memory Footprint:** Executes completely as a CLI command and terminates, returning 100% of VRAM/RAM back to macOS.
-* **Dual-Tier LLM Architecture:** Uses a fast, small model via Ollama for initial screening and routes qualified emails to an AirLLM Python wrapper (or large quantized Ollama model) for deep evaluation.
 * **Stateless Gmail Tracking:** Uses nested Gmail labels (`Recruiters/JobListing`, `Recruiters/WorthFollowUp`, `Recruiters/NeedsMoreInformation`, `Recruiters/Trash`) as state flags.
-* **Document Parsing Engine:** Automatically extracts plain text/Markdown from attached `.pdf` and `.docx` job descriptions using Apache PDFBox and Apache POI. A broken attachment is reported, it never stops the run.
+* **Document Parsing Engine:** Automatically extracts plain text/Markdown from attached `.pdf` and `.docx` job descriptions using Apache PDFBox and Apache POI. A broken attachment is reported in the log of the run, it never stops the run.
 * **Drafts For The Recruiter:** A mail that matches but does not say everything the job seeker needs gets a draft that asks the recruiter for it — the pay, the days of office, or both. The pipeline writes the draft and never sends it.
 * **OpenAI/Ollama Compatibility:** Leverages native Ollama REST API JSON formats across all endpoints.
-* **Dual-Tier LLM Architecture:** The same typed client talks to the local Ollama instance (short
-  timeout) and to the AirLLM wrapper (long timeout) — only the base URL and the timeout differ.
+* **One Typed Client For Every Model Call:** The same typed client talks to the local Ollama instance (short
+  timeout) and to the AirLLM wrapper (long timeout) — only the base URL, the timeout and the model differ.
 
 ---
 
@@ -105,7 +104,7 @@ flowchart TD
 ### Prerequisites
 
 * JDK 17+ (the Gradle daemon is pinned to JDK 17 via `gradle/gradle-daemon-jvm.properties`)
-* [Ollama](https://ollama.ai/) installed and running locally on `http://localhost:11434` _(required from the Ollama client story onwards)_
+* [Ollama](https://ollama.ai/) running locally on `http://localhost:11434` — only for the local models (`nimble`, `tev1`, `clef`, `clef-flash`). The default models run in the cloud of Ollama, any other Ollama-compatible endpoint is set with `--recruiter-verification-endpoint` and `--job-description-evaluation-endpoint`.
 * Python 3.10+ if using the optional AirLLM FastAPI wrapper on `http://localhost:8000` _(optional)_
 * Google Cloud OAuth2 credentials (`credentials.json`) for Gmail REST API access — see [Gmail authentication](#-gmail-authentication)
 
@@ -215,10 +214,10 @@ listing: the second question only refines the state of a message that is not a
 recruiter mail, a model that is not sure about it filters the message out. A
 listing is not evaluated - it is not one job - and stays in the inbox.
 
-The default models of both verifiers run in the cloud of Ollama (`clef:cloud`
-and `minimax-m3.1-flash:cloud`), they need a paid plan or usage credits. A
-local model works as well: `nimble`, `tev1`, `clef` and `clef-flash` are the
-decision models, they need Ollama v0.35.0 or later.
+Both verifiers use the decision model `clef:cloud` by default, the chat mode
+uses `minimax-m3.1-flash:cloud`. Both of them run in the cloud of Ollama, they
+need a paid plan or usage credits. A local model works as well: `nimble`, `tev1`,
+`clef` and `clef-flash` are the decision models, they need Ollama v0.40.5 or later.
 
 ### The arguments of the commands
 
@@ -226,6 +225,9 @@ decision models, they need Ollama v0.35.0 or later.
 | --- | --- | --- | --- |
 | `authenticate` | `--credentials`, `-c` | The file with the OAuth2 client credentials | `credentials.json` |
 | `authenticate` | `--token`, `-t` | The file the OAuth2 token is stored in | `token.json` |
+| `authenticate` | `--redirect-uri` | The redirect URI registered for the Google application | `http://localhost` |
+| `authenticate` | `--scope`, `-s` | The OAuth2 scopes to request, repeatable | `https://www.googleapis.com/auth/gmail.modify` |
+| `authenticate` | `CODE` (argument) | The authorisation code Google redirects to, taken from the address bar | — |
 | `pending` | `--credentials`, `-c` | The file with the OAuth2 client credentials | `credentials.json` |
 | `pending` | `--token`, `-t` | The file the OAuth2 token is stored in | `token.json` |
 | `pending` | `--since` | How far back the messages are looked for, an ISO-8601 duration | the gap since the last successful run |
@@ -234,11 +236,11 @@ decision models, they need Ollama v0.35.0 or later.
 | `process-inbox` | `--token`, `-t` | The file the OAuth2 token is stored in | `token.json` |
 | `process-inbox` | `--requirements`, `-q` | The file with the requirements of the job seeker | `requirements.json` |
 | `process-inbox` | `--since` | How far back the messages are looked for, an ISO-8601 duration | the gap since the last successful run |
-| `process-inbox` | `--recruiter-verification` | How the recruiter mails are verified: a decision model or a chat model | `decision` |
+| `process-inbox` | `--recruiter-verification`, `-r` | How the recruiter mails are verified: a decision model or a chat model | `decision` |
 | `process-inbox` | `--recruiter-verification-model`, `-m` | The model that verifies the recruiter mails | `clef:cloud` |
 | `process-inbox` | `--recruiter-verification-endpoint` | The endpoint of the model that verifies the recruiter mails | `http://localhost:11434` |
 | `process-inbox` | `--recruiter-verification-timeout` | How long the verification of a recruiter mail may take, in milliseconds | `120000` |
-| `process-inbox` | `--job-description-evaluation` | How the job descriptions are evaluated: a decision model or a chat model | `decision` |
+| `process-inbox` | `--job-description-evaluation`, `-e` | How the job descriptions are evaluated: a decision model or a chat model | `decision` |
 | `process-inbox` | `--job-description-evaluation-model`, `-j` | The model that evaluates the job descriptions | `clef:cloud` |
 | `process-inbox` | `--job-description-evaluation-endpoint` | The endpoint of the model that evaluates the job descriptions | `http://localhost:11434` |
 | `process-inbox` | `--job-description-evaluation-timeout` | How long the evaluation of a job description may take, in milliseconds | `600000` |
@@ -256,7 +258,7 @@ decision models, they need Ollama v0.35.0 or later.
 
 The models with the suffix `:cloud` run in the cloud of Ollama and need a paid plan or usage
 credits. The local decision models are `nimble`, `tev1`, `clef` and `clef-flash`, they need
-Ollama v0.35.0 or later.
+Ollama v0.40.5 or later.
 
 ### The requirements of the job seeker
 
@@ -314,20 +316,37 @@ object per line — to standard output:
 
 ```json
 {"timestamp":"2026-10-24T07:57:23.916683Z","level":"INFO","event":"process-inbox.started","message":"Inbox triage run started","attributes":{"trigger":"cli"}}
-{"timestamp":"2026-10-24T07:57:23.926923Z","level":"INFO","event":"process-inbox.completed","message":"Inbox triage run completed"}
+{"timestamp":"2026-10-24T07:57:23.926923Z","level":"INFO","event":"process-inbox.completed","message":"Inbox triage run completed","attributes":{"screened":"3","recruiters":"1","filtered_out":"1","job_listings":"1","worth_follow_up":"0","needs_more_information":"1","trashed":"0","drafts":"1","window":"PT1H","since":"2026-10-24T06:57:23.916683Z","unknown":"0"}}
 ```
 
-The command exits with status code `0` when the run succeeded and `1` when the command line
-could not be parsed. The pipeline stages behind the run (fetching the mail, screening it,
-extracting the attachments, evaluating them) are delivered by their own stories.
-
-A failure that nobody expected is a record of the log and not a stack trace on standard
-error. The message of the record holds the stack trace, the log of a run stays one JSON
-object per line:
+The command exits with status code `0` when the run succeeded and with `1` when it failed:
+the command line could not be parsed or the run failed. A failure the command knows - a
+missing credentials file, an error of the API - prints its message on standard error. A
+failure nobody expected is a record of the log and not a stack trace on standard error: the
+message of the record holds the stack trace, the log of a run stays one JSON object per
+line:
 
 ```json
 {"timestamp":"2026-10-24T07:57:23.926923Z","level":"ERROR","event":"recruiter-cli.failed","message":"java.io.IOException: The state file cannot be written\n\tat …"}
 ```
+
+Every event of the log has a stable name, the machine reads them and the human reads the
+message:
+
+| Event | Level | What it says |
+| --- | --- | --- |
+| `process-inbox.started` | INFO | the run begins |
+| `process-inbox.screened` | INFO | a message was screened (`id`, `decision`, `stage`, `reason`) |
+| `process-inbox.evaluated` | INFO | a job description was evaluated (`id`, `state`, `reason`) |
+| `process-inbox.attachment_failed` | INFO | an attachment could not be read (`id`, `file`, `reason`) |
+| `process-inbox.draft_written` | INFO | a draft was written (`id`, `draft`, `reason`) |
+| `process-inbox.draft_failed` | WARN | no draft could be written (`id`, `reason`) |
+| `process-inbox.window_fallback` | WARN | the moment of the last run is not in the past (`last_run`) |
+| `process-inbox.completed` | INFO | the run is done, the attributes are the counters of the run |
+| `pending.listed` / `pending.message` | INFO | the messages that were not processed yet |
+| `requirements.started` / `requirements.completed` | INFO | the requirements were written from the CV |
+| `authenticate.authorisation_required` / `authenticate.completed` | INFO | the authorisation of the mailbox |
+| `recruiter-cli.failed` | ERROR | a failure nobody expected, the message holds the stack trace |
 
 > **Note:** on JDK 24 and newer, Clikt's terminal detection prints a `native-access` warning
 > to standard error. Standard output stays clean JSON; add `--enable-native-access=ALL-UNNAMED`
@@ -430,6 +449,11 @@ That is why the sample does not pass a window:
   last run before the sleep,
 * the window does not have to be tuned for the machine it runs on.
 
+When no run succeeded yet - the first run - the window is the last 24 hours
+(`PT24H`). The same is true when the moment of the last run is not in the
+past, a changed clock for example: the run warns about it
+(`process-inbox.window_fallback`) and looks back as far as the default window.
+
 A window on the command line wins over the gap, it is the way to look at more
 mail than the last run:
 
@@ -463,6 +487,9 @@ pending mails (`is:inbox` with every state label excluded) skips every message
 that carries one, so a message that was evaluated is never looked at again. A
 message that was only screened out keeps no label: it is reported by the run
 and the window of the run is what stops the next run from looking at it again.
+A message the screening could not decide - the model was not reachable or not
+sure - keeps no label as well and is counted as `unknown` in the log of the
+run.
 
 ### The draft that asks the recruiter
 
@@ -570,7 +597,7 @@ This repository enforces strict code quality gates via Gradle tasks:
 | `./gradlew ktlintFormat` | Auto-formats the sources |
 | `./gradlew detekt` | Runs static analysis (zero warnings allowed) |
 | `./gradlew jacocoTestReport` | Writes the JaCoCo HTML/XML report and **fails the build** below 80% line coverage |
-| `./gradlew check` | Runs all of the above as a single gate |
+| `./gradlew check` | Runs the tests, `ktlintCheck`, `detekt` and the 80 % coverage verification. It does not write the JaCoCo report, `./gradlew check jacocoTestReport` does |
 | `./gradlew installDist` | Builds the `recruiter-cli` executable in `build/install/recruiter-cli/bin` |
 | `./gradlew shadowJar` | Builds the standalone `build/libs/recruiter-cli.jar` |
 

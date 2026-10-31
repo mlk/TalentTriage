@@ -29,8 +29,9 @@ import uk.me.michaellloydlee.recruiter.infrastructure.gmail.GmailLabelStateManag
  * `Recruiters/JobListing` and stays in the inbox, it is not evaluated: it is
  * not one job.
  *
- * A message the model could not answer about is not filtered out: it
- * stays in the inbox and is looked at again by the next run.
+ * A message the model could not answer about is not filtered out: it stays in
+ * the inbox, it keeps no label and the run counts it as `unknown`. It is
+ * looked at again only by a run whose window still reaches it.
  *
  * @param heuristics the rules of the first stage.
  * @param jobListings the rules that tell a job listing apart.
