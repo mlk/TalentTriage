@@ -105,6 +105,10 @@ of the four state labels below `Recruiters/` — `JobListing`, `WorthFollowUp`,
 * The state is derived from the evaluation, never from the exception of the model.
 * The label carries the state, the log carries the reason. A detail that is not a state — why the
   evaluation is incomplete, for instance — belongs in the log.
+* A message the job seeker asks for by its id (`process-inbox --id`) is looked at as if it were
+  pending: the state of an earlier run is removed before it is screened and the run decides the
+  state again. Such a run does not move the moment of the last successful run — the mail of the
+  window is still waiting for the next run.
 
 ### The confidence gate of the decision model
 
