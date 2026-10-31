@@ -188,6 +188,20 @@ class DraftWriterTest {
         }
 
     @Test
+    fun cutsALongMailShort() =
+        runTest {
+            val model = modelEngine()
+            val gmail = gmailEngine()
+
+            writer(model, gmail, maxBodyLength = 10)
+                .write(message(body = "a body that is longer than ten characters"), missingPay(), REQUIREMENTS)
+
+            val mail = mailOf(model)
+            assertTrue(mail.contains("a body tha"))
+            assertTrue(!mail.contains("longer than ten characters"))
+        }
+
+    @Test
     fun anErrorOfTheModelLeavesTheMailWithoutADraft() =
         runTest {
             val gmail = gmailEngine()
@@ -273,6 +287,7 @@ class DraftWriterTest {
     private suspend fun writer(
         model: MockEngine,
         gmail: MockEngine,
+        maxBodyLength: Int = DraftWriter.DEFAULT_MAX_BODY_LENGTH,
     ): DraftWriter =
         DraftWriter(
             client =
@@ -284,6 +299,7 @@ class DraftWriterTest {
                         },
                 ),
             drafts = GmailDraftsApi(gmailApi(gmail)),
+            maxBodyLength = maxBodyLength,
         )
 
     private suspend fun gmailApi(gmail: MockEngine): GmailApiClient =
@@ -350,13 +366,16 @@ class DraftWriterTest {
         return String(Base64.getUrlDecoder().decode(raw), Charsets.UTF_8)
     }
 
-    private fun message(sender: String = "recruiter@example.com"): EmailMessage =
+    private fun message(
+        sender: String = "recruiter@example.com",
+        body: String = "the body of the mail",
+    ): EmailMessage =
         EmailMessage(
             id = "message-id",
             threadId = "thread-id",
             sender = sender,
             subject = "Your CV",
-            body = "the body of the mail",
+            body = body,
             labelIds = listOf("INBOX"),
         )
 
