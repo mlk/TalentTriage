@@ -341,6 +341,86 @@ class ProcessInboxCommandTest {
             assertEquals(1, result.statusCode)
         }
 
+    @Test
+    fun processesTheMessageWithTheGivenIdOnly() =
+        runTest {
+            val sink = StringBuilder()
+            val engine = engine()
+
+            val result =
+                cli(sink) { mockClient(engine) }
+                    .test(
+                        "process-inbox --id message-id " +
+                            "--credentials ${credentialsFile()} " +
+                            "--token ${tokenFile()} " +
+                            "--requirements ${requirementsFile()}",
+                    )
+
+            assertEquals(0, result.statusCode)
+            val list = engine.requestHistory.filter { it.url.encodedPath.endsWith("/users/me/messages") }
+            assertTrue(list.isEmpty())
+            val completed = records(sink).last()
+            assertEquals("1", completed.attributes["screened"])
+            assertEquals("message-id", completed.attributes["id"])
+        }
+
+    @Test
+    fun aRunOfAMessageDoesNotRememberTheMomentOfTheRun() =
+        runTest {
+            val sink = StringBuilder()
+            val engine = engine()
+            val token = tokenFile()
+
+            val result =
+                cli(sink, Clock.fixed(NOW, ZoneOffset.UTC)) { mockClient(engine) }
+                    .test(
+                        "process-inbox --id message-id " +
+                            "--credentials ${credentialsFile()} " +
+                            "--token $token --requirements ${requirementsFile()}",
+                    )
+
+            assertEquals(0, result.statusCode)
+            assertNull(FileLastRunStore.nextTo(token).load())
+        }
+
+    @Test
+    fun aRunOfAMessageHasNoWindowInTheLog() =
+        runTest {
+            val sink = StringBuilder()
+            val engine = engine()
+
+            val result =
+                cli(sink, Clock.fixed(NOW, ZoneOffset.UTC)) { mockClient(engine) }
+                    .test(
+                        "process-inbox --id message-id " +
+                            "--credentials ${credentialsFile()} " +
+                            "--token ${tokenFile()} --requirements ${requirementsFile()}",
+                    )
+
+            assertEquals(0, result.statusCode)
+            val completed = records(sink).last()
+            assertNull(completed.attributes["window"])
+            assertNull(completed.attributes["since"])
+        }
+
+    @Test
+    fun failsOnAnIdThatIsEmpty() =
+        runTest {
+            val sink = StringBuilder()
+
+            val result =
+                cli(sink)
+                    .test(
+                        "process-inbox --id= " +
+                            "--credentials ${credentialsFile()} " +
+                            "--token ${tokenFile()} " +
+                            "--requirements ${requirementsFile()}",
+                    )
+
+            assertEquals(1, result.statusCode)
+            assertTrue(result.output.contains("The id of a message is not empty"))
+        }
+
     private fun engine(): MockEngine =
         MockEngine { request ->
             respond(

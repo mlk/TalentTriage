@@ -6,6 +6,7 @@ import io.ktor.client.engine.mock.respond
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.content.TextContent
 import kotlinx.coroutines.test.runTest
+import uk.me.michaellloydlee.recruiter.domain.gmail.EmailMessage
 import uk.me.michaellloydlee.recruiter.domain.gmail.RecruiterLabel
 import java.time.Clock
 import java.time.Instant
@@ -86,6 +87,39 @@ class GmailLabelStateManagerTest {
                 }
             assertEquals(1, listed)
         }
+
+    @Test
+    fun removesTheStateOfAMessageAndPutsItIntoTheInbox() =
+        runTest {
+            val engine = engine()
+
+            stateManager(engine).clear(message("Label_trash"))
+
+            val body = bodyOf(engine)
+            assertTrue(body.contains("Label_trash"))
+            assertTrue(body.contains("INBOX"))
+        }
+
+    @Test
+    fun leavesAMessageWithoutAStateAlone() =
+        runTest {
+            val engine = engine()
+
+            stateManager(engine).clear(message("INBOX"))
+
+            val modifies = engine.requestHistory.filter { it.url.encodedPath.endsWith("/modify") }
+            assertTrue(modifies.isEmpty())
+        }
+
+    private fun message(labelId: String): EmailMessage =
+        EmailMessage(
+            id = "message-id",
+            threadId = "thread-id",
+            sender = "recruiter@example.com",
+            subject = "Your CV",
+            body = "the body",
+            labelIds = listOf("INBOX", labelId),
+        )
 
     private fun bodyOf(engine: MockEngine): String = (engine.requestHistory.last().body as TextContent).text
 

@@ -5,6 +5,7 @@ import io.ktor.client.engine.mock.MockEngine
 import io.ktor.client.engine.mock.respond
 import io.ktor.client.plugins.HttpTimeout
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
+import io.ktor.client.request.HttpRequestData
 import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
@@ -22,6 +23,7 @@ import uk.me.michaellloydlee.recruiter.application.evaluation.EvaluationService
 import uk.me.michaellloydlee.recruiter.application.screening.DecisionModelVerifier
 import uk.me.michaellloydlee.recruiter.application.screening.ScreeningService
 import uk.me.michaellloydlee.recruiter.domain.gmail.EmailMessage
+import uk.me.michaellloydlee.recruiter.domain.gmail.RunTarget
 import uk.me.michaellloydlee.recruiter.domain.requirements.JobRequirements
 import uk.me.michaellloydlee.recruiter.infrastructure.gmail.GmailApiClient
 import uk.me.michaellloydlee.recruiter.infrastructure.gmail.GmailDraftsApi
@@ -38,6 +40,7 @@ import uk.me.michaellloydlee.recruiter.infrastructure.logging.StructuredLogger
 import java.time.Clock
 import java.time.Instant
 import java.time.ZoneOffset
+import java.util.Base64
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -49,7 +52,7 @@ class ProcessInboxServiceTest {
             val gmail = gmailEngine()
             val model = modelEngine()
 
-            val summary = service(gmail, model).run()
+            val summary = service(gmail, model).run(WINDOW)
 
             assertEquals(2, summary.screened)
             assertEquals(2, summary.recruiters)
@@ -63,7 +66,7 @@ class ProcessInboxServiceTest {
             val gmail = gmailEngine(listing = true)
             val model = modelEngine()
 
-            val summary = service(gmail, model).run()
+            val summary = service(gmail, model).run(WINDOW)
 
             assertEquals(2, summary.screened)
             assertEquals(2, summary.jobListings)
@@ -83,7 +86,7 @@ class ProcessInboxServiceTest {
             val gmail = gmailEngine()
             val model = modelEngine()
 
-            val summary = service(gmail, model).run()
+            val summary = service(gmail, model).run(WINDOW)
 
             assertEquals(2, summary.screened)
             assertEquals(2, summary.recruiters)
@@ -101,7 +104,7 @@ class ProcessInboxServiceTest {
                     respond(content = """{"error":"model not found"}""", status = HttpStatusCode.NotFound)
                 }
 
-            val summary = service(gmail, model).run()
+            val summary = service(gmail, model).run(WINDOW)
 
             assertEquals(2, summary.screened)
             assertEquals(0, summary.recruiters)
@@ -115,7 +118,7 @@ class ProcessInboxServiceTest {
             val gmail = gmailEngine()
             val model = modelEngine()
 
-            service(gmail, model).run()
+            service(gmail, model).run(WINDOW)
 
             val labels = gmail.requestHistory.filter { it.url.encodedPath.endsWith("/modify") }
             assertEquals(2, labels.size)
@@ -131,7 +134,7 @@ class ProcessInboxServiceTest {
             val gmail = gmailEngine()
             val model = modelEngine(officeDays = "unclear")
 
-            val summary = service(gmail, model).run()
+            val summary = service(gmail, model).run(WINDOW)
 
             assertEquals(2, summary.needsMoreInformation)
             assertEquals(0, summary.worthFollowUp)
@@ -150,7 +153,7 @@ class ProcessInboxServiceTest {
             val model = modelEngine(officeDays = "unclear")
             val log = StringBuilder()
 
-            service(gmail, model, log).run()
+            service(gmail, model, log).run(WINDOW)
 
             assertTrue(log.toString().contains("does not say how many days of office"))
         }
@@ -161,7 +164,7 @@ class ProcessInboxServiceTest {
             val gmail = gmailEngine()
             val model = modelEngine(answered = false)
 
-            val summary = service(gmail, model).run()
+            val summary = service(gmail, model).run(WINDOW)
 
             assertEquals(2, summary.screened)
             assertEquals(2, summary.recruiters)
@@ -182,7 +185,7 @@ class ProcessInboxServiceTest {
             val model = modelEngine(answered = false)
             val log = StringBuilder()
 
-            service(gmail, model, log).run()
+            service(gmail, model, log).run(WINDOW)
 
             assertTrue(log.toString().contains("could not evaluate the job description"))
         }
@@ -193,7 +196,7 @@ class ProcessInboxServiceTest {
             val gmail = gmailEngine()
             val model = modelEngine()
 
-            service(gmail, model, since = NOW.minusSeconds(6 * 3600)).run()
+            service(gmail, model).run(RunTarget.Window(NOW.minusSeconds(6 * 3600)))
 
             val search =
                 gmail.requestHistory
@@ -209,9 +212,9 @@ class ProcessInboxServiceTest {
             val model = modelEngine()
             val since = NOW.minusSeconds(6 * 3600)
 
-            val summary = service(gmail, model, since = since).run()
+            val summary = service(gmail, model).run(RunTarget.Window(since))
 
-            assertEquals(since, summary.since)
+            assertEquals(RunTarget.Window(since), summary.target)
         }
 
     @Test
@@ -223,7 +226,7 @@ class ProcessInboxServiceTest {
                     respond(content = """{"error":"model not found"}""", status = HttpStatusCode.NotFound)
                 }
 
-            service(gmail, model).run()
+            service(gmail, model).run(WINDOW)
 
             val labels = gmail.requestHistory.filter { it.url.encodedPath.endsWith("/modify") }
             assertTrue(labels.isEmpty())
@@ -235,7 +238,7 @@ class ProcessInboxServiceTest {
             val gmail = gmailEngine()
             val model = modelEngine(jdMatches = "does not match")
 
-            val summary = service(gmail, model).run()
+            val summary = service(gmail, model).run(WINDOW)
 
             assertEquals(2, summary.trashed)
             assertEquals(0, summary.drafts)
@@ -247,7 +250,7 @@ class ProcessInboxServiceTest {
             val gmail = gmailEngine()
             val model = modelEngine(officeDays = "unclear")
 
-            val summary = service(gmail, model).run()
+            val summary = service(gmail, model).run(WINDOW)
 
             assertEquals(2, summary.needsMoreInformation)
             assertEquals(2, summary.drafts)
@@ -261,7 +264,7 @@ class ProcessInboxServiceTest {
             val gmail = gmailEngine()
             val model = modelEngine(answered = false)
 
-            val summary = service(gmail, model).run()
+            val summary = service(gmail, model).run(WINDOW)
 
             assertEquals(2, summary.needsMoreInformation)
             assertEquals(0, summary.drafts)
@@ -275,7 +278,7 @@ class ProcessInboxServiceTest {
             val gmail = gmailEngine()
             val model = modelEngine()
 
-            val summary = service(gmail, model).run()
+            val summary = service(gmail, model).run(WINDOW)
 
             assertEquals(2, summary.worthFollowUp)
             assertEquals(0, summary.drafts)
@@ -290,7 +293,7 @@ class ProcessInboxServiceTest {
             val model = modelEngine(officeDays = "unclear")
             val log = StringBuilder()
 
-            service(gmail, model, log).run()
+            service(gmail, model, log).run(WINDOW)
 
             assertTrue(log.toString().contains("process-inbox.draft_written"))
         }
@@ -302,7 +305,7 @@ class ProcessInboxServiceTest {
             val model = modelEngine(officeDays = "unclear", chatAnswers = false)
             val log = StringBuilder()
 
-            val summary = service(gmail, model, log).run()
+            val summary = service(gmail, model, log).run(WINDOW)
 
             assertEquals(2, summary.needsMoreInformation)
             assertEquals(0, summary.drafts)
@@ -313,7 +316,6 @@ class ProcessInboxServiceTest {
         gmail: MockEngine,
         model: MockEngine,
         log: StringBuilder = StringBuilder(),
-        since: Instant = NOW.minusSeconds(86400),
     ): ProcessInboxService {
         val api =
             GmailApiClient(
@@ -345,7 +347,6 @@ class ProcessInboxServiceTest {
             )
         return ProcessInboxService(
             messages = messages,
-            since = since,
             screening =
                 ScreeningService(
                     heuristics =
@@ -367,6 +368,7 @@ class ProcessInboxServiceTest {
                     maximumOfficeDays = 2,
                     profile = "Senior Kotlin engineer",
                 ),
+            stateManager = stateManager,
             logger = StructuredLogger(log),
         )
     }
@@ -417,7 +419,10 @@ class ProcessInboxServiceTest {
 
     private fun idOf(label: String): String = "Label_${label.substringAfterLast('/').lowercase()}"
 
-    private fun gmailEngine(listing: Boolean = false): MockEngine =
+    private fun gmailEngine(
+        listing: Boolean = false,
+        labels: List<String> = listOf("INBOX"),
+    ): MockEngine =
         MockEngine { request ->
             when {
                 request.url.encodedPath.endsWith("/users/me/messages") -> {
@@ -460,7 +465,7 @@ class ProcessInboxServiceTest {
 
                 else -> {
                     respond(
-                        content = message(listing),
+                        content = message(idOf(request), listing, labels),
                         status = HttpStatusCode.OK,
                         headers = jsonHeaders(),
                     )
@@ -468,7 +473,19 @@ class ProcessInboxServiceTest {
             }
         }
 
-    private fun message(listing: Boolean = false): String {
+    /**
+     * The id of the message the request asks for.
+     */
+    private fun idOf(request: HttpRequestData): String =
+        request.url.encodedPath
+            .substringAfterLast("/users/me/messages/")
+            .substringBefore("/")
+
+    private fun message(
+        id: String,
+        listing: Boolean = false,
+        labels: List<String> = listOf("INBOX"),
+    ): String {
         val sender =
             if (listing) {
                 "LinkedIn Job Alerts &lt;jobalerts-noreply@linkedin.com&gt;"
@@ -478,21 +495,28 @@ class ProcessInboxServiceTest {
         val text =
             """
             {
-              "id": "first",
-              "threadId": "thread-1",
-              "labelIds": ["INBOX"],
+              "id": "$id",
+              "threadId": "thread-$id",
+              "labelIds": [${labels.joinToString(",") { label -> "\"$label\"" }}],
               "payload": {
                 "mimeType": "text/plain",
                 "headers": [
                   {"name": "From", "value": "$sender"},
                   {"name": "Subject", "value": "Your CV"}
                 ],
-                "body": {"data": "WWUgbG9va2luZyBmb3IgYSBkZXZlbG9wZXI="}
+                "body": {"data": "${bodyOf(id)}"}
               }
             }
             """.trimIndent()
         return text
     }
+
+    /**
+     * The body of a message, it names the message it belongs to, so a test
+     * that fetches two messages can tell them apart.
+     */
+    private fun bodyOf(id: String): String =
+        Base64.getUrlEncoder().encodeToString("Looking for a developer $id".toByteArray())
 
     private fun token(): OAuth2Token =
         OAuth2Token(
@@ -513,14 +537,92 @@ class ProcessInboxServiceTest {
                     respond(content = """{"error":"model not found"}""", status = HttpStatusCode.NotFound)
                 }
 
-            service(gmail, model, log = log).run()
+            service(gmail, model, log = log).run(WINDOW)
 
             assertTrue(log.toString().contains("process-inbox.screened"))
             assertTrue(log.toString().contains("Your CV"), "Log should contain email subject when decision is UNKNOWN")
         }
 
+    @Test
+    fun processesTheMessageWithTheGivenIdOnly() =
+        runTest {
+            val gmail = gmailEngine()
+            val model = modelEngine()
+
+            val summary = service(gmail, model).run(RunTarget.Message("specific-id"))
+
+            assertEquals(1, summary.screened)
+            assertEquals(1, summary.recruiters)
+            assertEquals(1, summary.worthFollowUp)
+        }
+
+    @Test
+    fun doesNotLookAtTheInboxWhenAMessageIsGiven() =
+        runTest {
+            val gmail = gmailEngine()
+            val model = modelEngine()
+
+            service(gmail, model).run(RunTarget.Message("specific-id"))
+
+            val list = gmail.requestHistory.filter { it.url.encodedPath.endsWith("/users/me/messages") }
+            assertTrue(list.isEmpty())
+        }
+
+    @Test
+    fun removesTheStateOfTheMessageItLooksAtAgain() =
+        runTest {
+            val gmail = gmailEngine(labels = listOf("INBOX", "Label_trash"))
+            val model = modelEngine()
+
+            service(gmail, model).run(RunTarget.Message("specific-id"))
+
+            val modifies = gmail.requestHistory.filter { it.url.encodedPath.endsWith("/modify") }
+            assertEquals(2, modifies.size)
+            val cleared = (modifies.first().body as TextContent).text
+            assertTrue(cleared.contains("Label_trash"))
+            assertTrue(cleared.contains("INBOX"))
+        }
+
+    @Test
+    fun leavesAMessageWithoutAStateAlone() =
+        runTest {
+            val gmail = gmailEngine()
+            val model = modelEngine()
+
+            service(gmail, model).run(RunTarget.Message("specific-id"))
+
+            val modifies = gmail.requestHistory.filter { it.url.encodedPath.endsWith("/modify") }
+            assertEquals(1, modifies.size)
+        }
+
+    @Test
+    fun theLogSaysWhichMessageWasScreened() =
+        runTest {
+            val gmail = gmailEngine()
+            val model = modelEngine()
+            val log = StringBuilder()
+
+            service(gmail, model, log).run(RunTarget.Message("specific-id"))
+
+            assertTrue(log.toString().contains("process-inbox.screened"))
+            assertTrue(log.toString().contains("specific-id"))
+        }
+
+    @Test
+    fun theSummaryOfAMessageHasNoWindow() =
+        runTest {
+            val gmail = gmailEngine()
+            val model = modelEngine()
+
+            val summary = service(gmail, model).run(RunTarget.Message("specific-id"))
+
+            assertEquals(RunTarget.Message("specific-id"), summary.target)
+        }
+
     companion object {
         private val NOW: Instant = Instant.parse("2026-10-24T08:00:00Z")
+
+        private val WINDOW: RunTarget = RunTarget.Window(NOW.minusSeconds(86400))
 
         private const val DECISION_ANSWER =
             """{"model":"clef:cloud","answers":{},"usage":{"input_tokens":10,"output_tokens":1}}"""

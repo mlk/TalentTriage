@@ -160,6 +160,9 @@ them again -, the job listings get the label `Recruiters/JobListing`, the
 recruiter mails are counted for the deep evaluation that comes with its own
 story.
 
+`process-inbox --id <id>` looks at one message instead of the inbox, see
+[processing a message again](#processing-a-message-again).
+
 The requirements of the job seeker — the pay, the profile and the number of
 days of office a job may demand — are read from `requirements.json` in the
 working directory (`--requirements` changes the file):
@@ -236,6 +239,7 @@ need a paid plan or usage credits. A local model works as well: `nimble`, `tev1`
 | `process-inbox` | `--token`, `-t` | The file the OAuth2 token is stored in | `token.json` |
 | `process-inbox` | `--requirements`, `-q` | The file with the requirements of the job seeker | `requirements.json` |
 | `process-inbox` | `--since` | How far back the messages are looked for, an ISO-8601 duration | the gap since the last successful run |
+| `process-inbox` | `--id` | The id of the message to process, the run looks at that message only | — |
 | `process-inbox` | `--recruiter-verification`, `-r` | How the recruiter mails are verified: a decision model or a chat model | `decision` |
 | `process-inbox` | `--recruiter-verification-model`, `-m` | The model that verifies the recruiter mails | `clef:cloud` |
 | `process-inbox` | `--recruiter-verification-endpoint` | The endpoint of the model that verifies the recruiter mails | `http://localhost:11434` |
@@ -342,7 +346,7 @@ message:
 | `process-inbox.draft_written` | INFO | a draft was written (`id`, `draft`, `reason`) |
 | `process-inbox.draft_failed` | WARN | no draft could be written (`id`, `reason`) |
 | `process-inbox.window_fallback` | WARN | the moment of the last run is not in the past (`last_run`) |
-| `process-inbox.completed` | INFO | the run is done, the attributes are the counters of the run |
+| `process-inbox.completed` | INFO | the run is done, the attributes are the counters of the run, the id of the message instead of the window for a run of one message |
 | `pending.listed` / `pending.message` | INFO | the messages that were not processed yet |
 | `requirements.started` / `requirements.completed` | INFO | the requirements were written from the CV |
 | `authenticate.authorisation_required` / `authenticate.completed` | INFO | the authorisation of the mailbox |
@@ -351,6 +355,28 @@ message:
 > **Note:** on JDK 24 and newer, Clikt's terminal detection prints a `native-access` warning
 > to standard error. Standard output stays clean JSON; add `--enable-native-access=ALL-UNNAMED`
 > to the JVM arguments to silence it.
+
+### Processing a message again
+
+`process-inbox --id <id>` processes one message of the mailbox instead of the
+inbox: the run looks at that message alone, so the rules of the pipeline can be
+tried on a known mail without touching the labels in Gmail by hand.
+
+```bash
+recruiter-cli process-inbox --id 18f2c1a4b3d5e6f7
+```
+
+The message is looked at as if it were pending: the state of an earlier run is
+removed first - the message is put into the inbox again and it carries no
+state label - and the run decides the state of the message again. A message
+that needs more information gets a new draft, the draft of the earlier run
+waits in the mailbox until it is sent or deleted.
+
+Such a run is a run of one mail, not a run of the inbox:
+
+* the window of the run is not used and the moment of the run is not
+  remembered, the mail of the window is still waiting for the next run,
+* the log of the run carries the id of the message instead of the window.
 
 ---
 

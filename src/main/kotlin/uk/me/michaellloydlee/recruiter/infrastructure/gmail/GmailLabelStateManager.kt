@@ -1,5 +1,6 @@
 package uk.me.michaellloydlee.recruiter.infrastructure.gmail
 
+import uk.me.michaellloydlee.recruiter.domain.gmail.EmailMessage
 import uk.me.michaellloydlee.recruiter.domain.gmail.RecruiterLabel
 import uk.me.michaellloydlee.recruiter.domain.gmail.transition
 
@@ -33,6 +34,27 @@ class GmailLabelStateManager(
     ) {
         val transition = label.transition(stateLabelIds(), INBOX_LABEL_ID)
         messages.modifyLabels(messageId, transition.add, transition.remove)
+    }
+
+    /**
+     * Removes the state of a message.
+     *
+     * The message carries no state label afterwards and it is in the inbox
+     * again: it is pending, the run that looks at it decides its state. A
+     * message that carries no state label is left alone.
+     *
+     * @param message the message to clear.
+     */
+    suspend fun clear(message: EmailMessage) {
+        val state = stateLabelIds().filterValues { it in message.labelIds }.values.toList()
+        if (state.isEmpty()) {
+            return
+        }
+        messages.modifyLabels(
+            message.id,
+            add = listOf(INBOX_LABEL_ID),
+            remove = state,
+        )
     }
 
     /**

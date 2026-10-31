@@ -7,11 +7,12 @@ import uk.me.michaellloydlee.recruiter.application.screening.ScreeningService
 import uk.me.michaellloydlee.recruiter.domain.evaluation.JobDescriptionEvaluation
 import uk.me.michaellloydlee.recruiter.domain.gmail.EmailMessage
 import uk.me.michaellloydlee.recruiter.domain.gmail.RecruiterLabel
+import uk.me.michaellloydlee.recruiter.domain.gmail.RunTarget
 import uk.me.michaellloydlee.recruiter.domain.requirements.JobRequirements
 import uk.me.michaellloydlee.recruiter.domain.screening.ScreeningDecision
+import uk.me.michaellloydlee.recruiter.infrastructure.gmail.GmailLabelStateManager
 import uk.me.michaellloydlee.recruiter.infrastructure.gmail.GmailMessagesApi
 import uk.me.michaellloydlee.recruiter.infrastructure.logging.StructuredLogger
-import java.time.Instant
 
 /**
  * Runs one pass of the pipeline over the messages of the inbox.
@@ -22,37 +23,41 @@ import java.time.Instant
  * say everything the job seeker needs to know gets a draft that asks the
  * recruiter about it.
  *
+ * The run looks at what its target says: the messages of the inbox that
+ * arrived after a moment, or one message the job seeker asks for by its id.
+ *
  * @param messages the message endpoints of the Gmail API.
- * @param since the moment the run looks back to, the messages that arrived
- *   after it are looked at.
  * @param screening the screening of the messages.
  * @param evaluation the evaluation of the job descriptions.
  * @param drafts writes the draft that asks the recruiter for the missing
  *   information.
  * @param requirements the requirements of the job seeker.
+ * @param stateManager keeps the state of the messages.
  * @param logger sink for the log of the run.
  */
 class ProcessInboxService(
     private val messages: GmailMessagesApi,
-    private val since: Instant,
     private val screening: ScreeningService,
     private val evaluation: EvaluationService,
     private val drafts: DraftWriter,
     private val requirements: JobRequirements,
+    private val stateManager: GmailLabelStateManager,
     private val logger: StructuredLogger,
 ) {
     /**
      * Runs one pass of the pipeline.
      *
+     * @param target what the run looks at.
      * @return what the run did.
      */
-    suspend fun run(): ProcessInboxSummary {
-        val pending = messages.listUnprocessed(since)
+    suspend fun run(target: RunTarget): ProcessInboxSummary {
+        val pending = messagesForTarget(target)
         val counters = Counters()
-        pending.forEach { summary ->
-            screen(messages.getMessage(summary.id), counters)
+        pending.forEach { message ->
+            screen(message, counters)
         }
         return ProcessInboxSummary(
+            target = target,
             screened = pending.size,
             recruiters = counters.recruiters,
             filteredOut = counters.filteredOut,
@@ -62,9 +67,32 @@ class ProcessInboxService(
             needsMoreInformation = counters.needsMoreInformation,
             trashed = counters.trashed,
             drafts = counters.drafts,
-            since = since,
         )
     }
+
+    /**
+     * The messages the run looks at.
+     *
+     * A run of the inbox looks at the messages of the window that were not
+     * processed yet. A run of a message looks at that message only: the
+     * message is looked at as if it were pending, the state of an earlier run
+     * is removed before it is screened.
+     *
+     * @param target what the run looks at.
+     * @return the messages of the run.
+     */
+    private suspend fun messagesForTarget(target: RunTarget): List<EmailMessage> =
+        when (target) {
+            is RunTarget.Window -> {
+                messages.listUnprocessed(target.since).map { messages.getMessage(it.id) }
+            }
+
+            is RunTarget.Message -> {
+                val message = messages.getMessage(target.id)
+                stateManager.clear(message)
+                listOf(message)
+            }
+        }
 
     private suspend fun screen(
         message: EmailMessage,
