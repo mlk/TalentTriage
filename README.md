@@ -150,6 +150,7 @@ The executable is `recruiter-cli`. Every operation is a subcommand:
 # build/install/recruiter-cli/bin/recruiter-cli process-inbox
 # build/install/recruiter-cli/bin/recruiter-cli authenticate
 # build/install/recruiter-cli/bin/recruiter-cli pending
+# build/install/recruiter-cli/bin/recruiter-cli requirements cv.pdf
 ```
 
 `process-inbox` fetches the messages of the inbox that were not processed yet
@@ -170,6 +171,9 @@ working directory (`--requirements` changes the file):
   "profile": "Senior Kotlin engineer, distributed systems, 8+ years, fintech"
 }
 ```
+
+The `requirements` command writes that file from the CV of the job seeker, see
+[the requirements of the job seeker](#-the-requirements-of-the-job-seeker).
 
 The screening asks a model of the local Ollama instance. By default it is a
 **decision model** (`clef:cloud`), which answers a typed question on the
@@ -230,10 +234,60 @@ decision models, they need Ollama v0.35.0 or later.
 | `process-inbox` | `--job-description-evaluation-model`, `-j` | The model that evaluates the job descriptions | `clef:cloud` |
 | `process-inbox` | `--job-description-evaluation-endpoint` | The endpoint of the model that evaluates the job descriptions | `http://localhost:11434` |
 | `process-inbox` | `--job-description-evaluation-timeout` | How long the evaluation of a job description may take, in milliseconds | `600000` |
+| `requirements` | `CV` | The CV of the job seeker, a PDF or a Word document | — |
+| `requirements` | `--requirements`, `-q` | The file the requirements of the job seeker are written to | `requirements.json` |
+| `requirements` | `--force`, `-f` | Overwrite the file of the requirements when it exists | off |
+| `requirements` | `--max-office-days` | The number of days of office a job may demand | `2` |
+| `requirements` | `--model`, `-m` | The chat model that writes the profile of the job seeker | `minimax-m3.1-flash:cloud` |
+| `requirements` | `--decision-model`, `-d` | The decision model that names the minimum pay | `clef:cloud` |
+| `requirements` | `--endpoint` | The endpoint of the models | `http://localhost:11434` |
+| `requirements` | `--timeout` | How long a call to a model may take, in milliseconds | `600000` |
 
 The models with the suffix `:cloud` run in the cloud of Ollama and need a paid plan or usage
 credits. The local decision models are `nimble`, `tev1`, `clef` and `clef-flash`, they need
 Ollama v0.35.0 or later.
+
+### The requirements of the job seeker
+
+The `requirements` command writes the requirements of the job seeker from the CV of the job
+seeker, a PDF or a Word document:
+
+```bash
+recruiter-cli requirements cv.pdf                       # writes requirements.json
+recruiter-cli requirements cv.docx --requirements my.json --max-office-days 3
+```
+
+The command reads the CV with the extractors of the documents, a chat model writes the profile
+of the job seeker from it - in the words of the job seeker, so that the same text is used for
+the evaluation of the job descriptions - and the decision model of Ollama names the minimum pay
+out of the pays of the market for the role of the job seeker. The days of office a job may
+demand are not in the CV, the job seeker says them on the command line (`--max-office-days`,
+the default is 2).
+
+The pays of the market come from the web: the command looks for the pay of the role in the
+region of the job seeker with the web search of Ollama. The search needs an API key of Ollama
+in the environment:
+
+```bash
+export OLLAMA_API_KEY="…"
+```
+
+The web search exists only in the cloud of Ollama, it always goes to `https://ollama.com` — the
+`--endpoint` of the command is the endpoint of the models. Without the key the command cannot
+look at the web, it uses the default pays of the region instead and says so in the log. The
+command prints what it suggests and it does not overwrite an existing file without `--force`:
+
+```
+The requirements of the job seeker:
+  profile: Senior Kotlin engineer of the payment team, twelve years of experience…
+  minimum pay: 83000 GBP per year
+  maximum office days: 2
+  file: requirements.json
+```
+
+The file holds the personal data of the job seeker, it is git-ignored like the credentials and
+the token. The suggestion is a suggestion: read it, change what is wrong and keep the file -
+the run of the inbox reads it as it is.
 
 
 or, without installing the distribution:
@@ -498,18 +552,21 @@ error handling, the testing conventions) are documented in
 ```
 src/main/kotlin/uk/me/michaellloydlee/recruiter/
 ├── application/       # Use cases / orchestration
+│   ├── evaluation/    # The evaluation of the job descriptions
+│   ├── requirements/  # The requirements of the job seeker, written from the CV
 │   └── screening/     # The heuristic pre-filter and the local classifier
 │                      # (the pipeline of the process-inbox command)
 ├── cli/               # Command line entry point (Clikt commands)
 ├── domain/            # Pure domain model, no infrastructure dependencies
 │   ├── gmail/         # The state labels of the pipeline
+│   ├── requirements/  # The requirements of the job seeker and the pays of the market
 │   └── screening/     # The rules of the screening
 └── infrastructure/    # Gmail, Ollama, PDF/Word adapters, logging
     ├── gmail/         # OAuth2 credentials, token store, Gmail REST client, label state
-    ├── llm/           # Ollama chat client (local models and the AirLLM wrapper)
+    ├── llm/           # Ollama chat client, decision client and web search
     ├── logging/       # Structured (JSON lines) logger
     ├── parser/        # Text extraction of the attached documents (PDFBox)
-    ├── requirements/  # The requirements of the job seeker
+    ├── requirements/  # The file of the requirements of the job seeker
     ├── run/           # The moment of the last successful run
     └── serialization/ # Shared kotlinx.serialization helpers
 config/

@@ -18,17 +18,21 @@ import java.time.Clock
  * @param httpClientFactory creates the client used to talk to Google.
  * @param clock source of the current time, the commands use it to decide how
  *   far back they look for messages.
+ * @param environment the environment of the commands, it holds the API key of
+ *   the web search of Ollama.
  */
 class TriageCli(
     logger: StructuredLogger,
     httpClientFactory: () -> HttpClient = { GmailHttpClientFactory.create() },
     clock: Clock = Clock.systemUTC(),
+    environment: Map<String, String> = System.getenv(),
 ) : SuspendingCliktCommand(name = COMMAND_NAME) {
     init {
         subcommands(
             AuthenticateCommand(logger, httpClientFactory),
             PendingCommand(logger, httpClientFactory, clock),
             ProcessInboxCommand(logger, httpClientFactory, clock),
+            RequirementsCommand(logger, httpClientFactory, environment),
         )
     }
 

@@ -1,5 +1,7 @@
 package uk.me.michaellloydlee.recruiter.infrastructure.requirements
 
+import uk.me.michaellloydlee.recruiter.domain.requirements.JobRequirements
+import uk.me.michaellloydlee.recruiter.domain.requirements.PayRequirement
 import java.nio.file.Path
 import kotlin.io.path.createTempDirectory
 import kotlin.io.path.writeText
@@ -96,6 +98,60 @@ class RequirementsFileTest {
             )
 
         assertFailsWith<IllegalArgumentException> { RequirementsFile.load(file) }
+    }
+
+    @Test
+    fun savesTheRequirements() {
+        val file = createTempDirectory("requirements").resolve("requirements.json")
+
+        RequirementsFile.save(
+            file,
+            JobRequirements(
+                minimumPay = PayRequirement(120_000.0, "EUR"),
+                maximumOfficeDays = 2,
+                profile = "Senior Kotlin engineer",
+            ),
+        )
+
+        val requirements = RequirementsFile.load(file)
+        assertEquals(120_000.0, requirements.minimumPay?.amount)
+        assertEquals("EUR", requirements.minimumPay?.currency)
+        assertEquals("year", requirements.minimumPay?.period)
+        assertEquals(2, requirements.maximumOfficeDays)
+        assertEquals("Senior Kotlin engineer", requirements.profile)
+    }
+
+    @Test
+    fun savesRequirementsWithoutAPay() {
+        val file = createTempDirectory("requirements").resolve("requirements.json")
+
+        RequirementsFile.save(
+            file,
+            JobRequirements(
+                minimumPay = null,
+                maximumOfficeDays = 3,
+                profile = "Senior Kotlin engineer",
+            ),
+        )
+
+        val requirements = RequirementsFile.load(file)
+        assertNull(requirements.minimumPay)
+        assertEquals(3, requirements.maximumOfficeDays)
+    }
+
+    @Test
+    fun failsWhenTheFileCannotBeWritten() {
+        val file = Path.of("/does/not/exist/requirements.json")
+
+        val error =
+            assertFailsWith<IllegalArgumentException> {
+                RequirementsFile.save(
+                    file,
+                    JobRequirements(minimumPay = null, maximumOfficeDays = 2, profile = "Senior Kotlin engineer"),
+                )
+            }
+
+        assertTrue(error.message!!.contains("could not be written"))
     }
 
     private fun requirementsFile(content: String): Path {
