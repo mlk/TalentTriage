@@ -6,6 +6,7 @@ import uk.me.michaellloydlee.recruiter.application.evaluation.EvaluationService
 import uk.me.michaellloydlee.recruiter.application.screening.ScreeningService
 import uk.me.michaellloydlee.recruiter.domain.evaluation.JobDescriptionEvaluation
 import uk.me.michaellloydlee.recruiter.domain.gmail.EmailMessage
+import uk.me.michaellloydlee.recruiter.domain.gmail.EmailSummary
 import uk.me.michaellloydlee.recruiter.domain.gmail.RecruiterLabel
 import uk.me.michaellloydlee.recruiter.domain.requirements.JobRequirements
 import uk.me.michaellloydlee.recruiter.domain.screening.ScreeningDecision
@@ -50,10 +51,7 @@ class ProcessInboxService(
     suspend fun run(messageId: String? = null): ProcessInboxSummary {
         val pending =
             if (messageId != null) {
-                listOf(
-                    uk.me.michaellloydlee.recruiter.domain.gmail
-                        .EmailSummary(messageId, ""),
-                )
+                listOf(EmailSummary(messageId, ""))
             } else {
                 messages.listUnprocessed(since)
             }
