@@ -70,8 +70,13 @@ interface over a base class with a flag, and a function over an object with one 
 ### Errors are values, not exceptions
 
 A failure that the pipeline can recover from is returned, not thrown. A broken attachment is a
-`ExtractionResult.Failed`, a broken token is a `GmailAuthenticationException` that the command
-turns into an exit code. Throwing is for the cases the caller cannot do anything about.
+`ExtractionResult.Failed` that the pipeline reports in the log and moves on, a broken token is a
+`GmailAuthenticationException` that the command turns into an exit code. Throwing is for the cases
+the caller cannot do anything about.
+
+A failure nobody expected is a record of the log at the entry point: the `recruiter-cli.failed`
+record holds the stack trace in its message, the log of a run stays one JSON object per line. The
+entry point catches what the pipeline throws at it and logs it — the exception is not hidden.
 
 ### Everything is injected
 
@@ -85,8 +90,9 @@ of the four state labels below `Recruiters/` — `JobListing`, `WorthFollowUp`,
 `NeedsMoreInformation` and `Trash`. A message without a state label is pending.
 
 * A mail that the screening filtered out keeps **no** label: it is reported by the run and the
-  window of the run (`--since`) is what stops the next run from looking at it again. There is no
-  `FilteredOut` state — a label that only says "already looked at" is not a state.
+  window of the run is what stops the next run from looking at it again. The window is the gap
+  since the last successful run, `--since` wins over it. There is no `FilteredOut` state — a
+  label that only says "already looked at" is not a state.
 * `NeedsMoreInformation` is the single state for a mail that matches but is incomplete. Both gaps
   of a job description land there: the pay is not stated and the days of office are not stated
   (`OfficeDays.UNCLEAR`). It is one state, not two.
@@ -204,7 +210,8 @@ test of the library — delete it.
 The work is reviewed before it is merged, so it is done in the open.
 
 * **A branch per issue.** `feat/issue-<number>-<slug>` for a story, `fix/issue-<number>-<slug>` for
-  a fix, branched off `main`.
+  a fix, `refactor/issue-<number>-<slug>` for a refactoring and `docs/issue-<number>-<slug>` for
+  the documentation, branched off `main`.
 * **Small commits.** One commit per step, each of them compiling. The message starts with a
   keyword (`feat:`, `fix:`, `test:`, `docs:`, `refactor:`) and describes the change in one line.
 * **Push when the branch is done**, not after every commit. The pull request closes the issue
