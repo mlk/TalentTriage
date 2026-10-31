@@ -284,9 +284,11 @@ export OLLAMA_API_KEY="…"
 ```
 
 The web search exists only in the cloud of Ollama, it always goes to `https://ollama.com` — the
-`--endpoint` of the command is the endpoint of the models. Without the key the command cannot
-look at the web, it uses the default pays of the region instead and says so in the log. The
-command prints what it suggests and it does not overwrite an existing file without `--force`:
+`--endpoint` of the command is the endpoint of the models. The answer of the cloud is JSON but it
+is served with the content type `text/html`, so the body is read as JSON whatever the content type
+of the answer says. Without the key the command cannot look at the web, it uses the default pays of
+the region instead and says so in the log. The command prints what it suggests and it does not
+overwrite an existing file without `--force`:
 
 ```
 The requirements of the job seeker:
