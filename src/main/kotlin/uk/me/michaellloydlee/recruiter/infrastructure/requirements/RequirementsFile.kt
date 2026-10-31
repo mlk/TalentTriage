@@ -2,14 +2,16 @@ package uk.me.michaellloydlee.recruiter.infrastructure.requirements
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import uk.me.michaellloydlee.recruiter.domain.requirements.JobRequirements
 import uk.me.michaellloydlee.recruiter.domain.requirements.PayRequirement
+import java.io.IOException
 import java.nio.file.Files
 import java.nio.file.Path
 
 /**
- * Reads the requirements of the job seeker from a local JSON file.
+ * Reads and writes the requirements of the job seeker in a local JSON file.
  *
  * The file holds personal data, it is git-ignored like the credentials and the
  * token.
@@ -42,6 +44,39 @@ object RequirementsFile {
             profile = file.profile,
             shareMinimumPay = file.shareMinimumPay,
         )
+    }
+
+    /**
+     * Writes the requirements to the file.
+     *
+     * The file is written with the same format the loader reads, so the file
+     * of the command can be used by the pipeline without a change.
+     *
+     * @param path location of the file.
+     * @param requirements the requirements of the job seeker.
+     * @param json encoder used to write the file.
+     * @throws IllegalArgumentException when the file cannot be written.
+     */
+    fun save(
+        path: Path,
+        requirements: JobRequirements,
+        json: Json = Json { prettyPrint = true },
+    ) {
+        val file =
+            RequirementsFile(
+                minimumPay =
+                    requirements.minimumPay?.let {
+                        PayFile(it.amount, it.currency, it.period)
+                    },
+                maximumOfficeDays = requirements.maximumOfficeDays,
+                profile = requirements.profile,
+                shareMinimumPay = requirements.shareMinimumPay,
+            )
+        try {
+            Files.writeString(path, json.encodeToString(file))
+        } catch (error: IOException) {
+            throw IllegalArgumentException("Requirements file $path could not be written: ${error.message}", error)
+        }
     }
 
     @Serializable
