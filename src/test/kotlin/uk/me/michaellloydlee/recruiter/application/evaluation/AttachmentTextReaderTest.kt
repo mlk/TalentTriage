@@ -86,6 +86,26 @@ class AttachmentTextReaderTest {
         }
 
     @Test
+    fun readsTheTextOfTheOtherAttachmentsWhenOneCannotBeRead() =
+        runTest {
+            val sink = StringBuilder()
+            val engine = engine("not a document".toByteArray())
+
+            val text =
+                reader(engine, sink).textOf(
+                    message(
+                        attachment("cv.pdf", PDF_MIME_TYPE),
+                        attachment("cv.docx", WORD_MIME_TYPE),
+                    ),
+                )
+
+            assertTrue(text.contains("Hello recruiter"))
+            val record = record(sink)
+            assertEquals(AttachmentTextReader.EVENT_ATTACHMENT_FAILED, record.event)
+            assertEquals("cv.pdf", record.attributes["file"])
+        }
+
+    @Test
     fun joinsTheTextOfTheAttachments() =
         runTest {
             val engine = engine(TestDocuments.pdfWith(listOf("Hello recruiter")))

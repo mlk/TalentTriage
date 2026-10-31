@@ -316,7 +316,7 @@ object per line — to standard output:
 
 ```json
 {"timestamp":"2026-10-24T07:57:23.916683Z","level":"INFO","event":"process-inbox.started","message":"Inbox triage run started","attributes":{"trigger":"cli"}}
-{"timestamp":"2026-10-24T07:57:23.926923Z","level":"INFO","event":"process-inbox.completed","message":"Inbox triage run completed","attributes":{"screened":"3","recruiters":"1","filtered_out":"1","job_listings":"1","worth_follow_up":"0","needs_more_information":"1","trashed":"0","window":"PT1H","since":"2026-10-24T06:57:23.916683Z","unknown":"0"}}
+{"timestamp":"2026-10-24T07:57:23.926923Z","level":"INFO","event":"process-inbox.completed","message":"Inbox triage run completed","attributes":{"screened":"3","recruiters":"1","filtered_out":"1","job_listings":"1","worth_follow_up":"0","needs_more_information":"1","trashed":"0","drafts":"1","window":"PT1H","since":"2026-10-24T06:57:23.916683Z","unknown":"0"}}
 ```
 
 The command exits with status code `0` when the run succeeded and with `1` when it failed:
