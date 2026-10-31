@@ -503,6 +503,22 @@ class ProcessInboxServiceTest {
 
     private fun jsonHeaders() = headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString())
 
+    @Test
+    fun theLogIncludesSubjectWhenDecisionIsUnknown() =
+        runTest {
+            val log = StringBuilder()
+            val gmail = gmailEngine()
+            val model =
+                MockEngine {
+                    respond(content = """{"error":"model not found"}""", status = HttpStatusCode.NotFound)
+                }
+
+            service(gmail, model, log = log).run()
+
+            assertTrue(log.toString().contains("process-inbox.screened"))
+            assertTrue(log.toString().contains("Your CV"), "Log should contain email subject when decision is UNKNOWN")
+        }
+
     companion object {
         private val NOW: Instant = Instant.parse("2026-10-24T08:00:00Z")
 

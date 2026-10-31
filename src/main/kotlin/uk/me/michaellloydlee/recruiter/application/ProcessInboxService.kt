@@ -80,7 +80,13 @@ class ProcessInboxService(
                     "decision" to outcome.decision.name,
                     "stage" to outcome.stage.name,
                     "reason" to outcome.reason,
-                ),
+                ).let { attrs ->
+                    if (outcome.decision == ScreeningDecision.UNKNOWN) {
+                        attrs + ("subject" to message.subject)
+                    } else {
+                        attrs
+                    }
+                },
         )
         when (outcome.decision) {
             ScreeningDecision.RECRUITER -> {
