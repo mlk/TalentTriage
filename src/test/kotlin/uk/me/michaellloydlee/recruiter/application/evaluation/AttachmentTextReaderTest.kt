@@ -19,6 +19,8 @@ import uk.me.michaellloydlee.recruiter.infrastructure.gmail.OAuth2Token
 import uk.me.michaellloydlee.recruiter.infrastructure.gmail.RefreshingAccessTokenProvider
 import uk.me.michaellloydlee.recruiter.infrastructure.gmail.TestOAuth2Client
 import uk.me.michaellloydlee.recruiter.infrastructure.gmail.temporaryTokenStore
+import uk.me.michaellloydlee.recruiter.infrastructure.logging.LogRecord
+import uk.me.michaellloydlee.recruiter.infrastructure.logging.StructuredLogger
 import uk.me.michaellloydlee.recruiter.infrastructure.parser.TestDocuments
 import uk.me.michaellloydlee.recruiter.infrastructure.parser.TestWordDocuments
 import java.time.Instant
@@ -69,6 +71,21 @@ class AttachmentTextReaderTest {
         }
 
     @Test
+    fun reportsAnAttachmentThatCannotBeRead() =
+        runTest {
+            val sink = StringBuilder()
+            val engine = engine("not a document".toByteArray())
+
+            reader(engine, sink).textOf(message(attachment("cv.pdf", PDF_MIME_TYPE)))
+
+            val record = record(sink)
+            assertEquals(AttachmentTextReader.EVENT_ATTACHMENT_FAILED, record.event)
+            assertEquals("message-id", record.attributes["id"])
+            assertEquals("cv.pdf", record.attributes["file"])
+            assertTrue(record.attributes["reason"]!!.isNotBlank())
+        }
+
+    @Test
     fun joinsTheTextOfTheAttachments() =
         runTest {
             val engine = engine(TestDocuments.pdfWith(listOf("Hello recruiter")))
@@ -85,7 +102,10 @@ class AttachmentTextReaderTest {
             assertTrue(text.contains("\n\n"))
         }
 
-    private suspend fun reader(engine: MockEngine): AttachmentTextReader {
+    private suspend fun reader(
+        engine: MockEngine,
+        sink: StringBuilder = StringBuilder(),
+    ): AttachmentTextReader {
         val api =
             GmailApiClient(
                 httpClient = HttpClient(engine) { install(ContentNegotiation) { json(JSON) } },
@@ -96,8 +116,10 @@ class AttachmentTextReaderTest {
                     ),
                 baseUrl = "https://gmail.example/v1",
             )
-        return AttachmentTextReader(GmailMessagesApi(api))
+        return AttachmentTextReader(GmailMessagesApi(api), StructuredLogger(sink))
     }
+
+    private fun record(sink: StringBuilder): LogRecord = Json.decodeFromString(sink.toString().trim())
 
     private fun engine(content: ByteArray = TestDocuments.pdfWith(listOf("Hello recruiter"))): MockEngine =
         MockEngine { request ->
