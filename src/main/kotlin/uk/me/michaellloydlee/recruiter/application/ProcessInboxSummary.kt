@@ -1,10 +1,11 @@
 package uk.me.michaellloydlee.recruiter.application
 
-import java.time.Instant
+import uk.me.michaellloydlee.recruiter.domain.gmail.RunTarget
 
 /**
  * What a run of the pipeline did.
  *
+ * @property target what the run looked at.
  * @property screened how many messages were looked at.
  * @property recruiters how many of them are recruiter mails.
  * @property filteredOut how many of them were not recruiter mails. They are
@@ -20,11 +21,9 @@ import java.time.Instant
  * @property trashed how many of them do not match at all.
  * @property drafts how many drafts that ask the recruiter for the missing
  *   information were written.
- * @property since the moment the run looked back to, the messages that
- *   arrived after it are the ones the run looked at.
  */
 data class ProcessInboxSummary(
-    val since: Instant,
+    val target: RunTarget,
     val screened: Int,
     val recruiters: Int,
     val filteredOut: Int,

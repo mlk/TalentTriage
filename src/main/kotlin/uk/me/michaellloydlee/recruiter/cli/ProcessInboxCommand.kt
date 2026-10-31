@@ -22,6 +22,7 @@ import uk.me.michaellloydlee.recruiter.application.screening.RecruiterVerificati
 import uk.me.michaellloydlee.recruiter.application.screening.RecruiterVerifier
 import uk.me.michaellloydlee.recruiter.application.screening.ScreeningService
 import uk.me.michaellloydlee.recruiter.domain.gmail.MessageWindow
+import uk.me.michaellloydlee.recruiter.domain.gmail.RunTarget
 import uk.me.michaellloydlee.recruiter.domain.gmail.messageWindow
 import uk.me.michaellloydlee.recruiter.domain.gmail.runWindow
 import uk.me.michaellloydlee.recruiter.domain.requirements.JobRequirements
@@ -42,6 +43,7 @@ import uk.me.michaellloydlee.recruiter.infrastructure.requirements.RequirementsF
 import uk.me.michaellloydlee.recruiter.infrastructure.run.FileLastRunStore
 import java.nio.file.Path
 import java.time.Clock
+import java.time.Duration
 import java.time.Instant
 
 /**
@@ -53,6 +55,10 @@ import java.time.Instant
  * looking at them again. The recruiter mails are evaluated against the
  * requirements of the job seeker and end in one of the states of the
  * pipeline.
+ *
+ * The `--id` option looks at one message instead of the inbox: the run
+ * screens that message as if it were pending and it does not move the moment
+ * of the last successful run.
  *
  * @param logger sink for the structured log output of the run.
  * @param httpClientFactory creates the client used to talk to Google and to
@@ -127,7 +133,9 @@ class ProcessInboxCommand(
     private val messageId: String? by
         option(
             "--id",
-            help = "The ID of a specific message to process. If provided, other time-based filters are ignored.",
+            help =
+                "The id of the message to process. The run looks at that message only: the " +
+                    "window of the run is not used and the moment of the run is not remembered",
         )
 
     private val recruiterVerificationEndpoint: String by
@@ -194,8 +202,7 @@ class ProcessInboxCommand(
             attributes = mapOf(TRIGGER_ATTRIBUTE to TRIGGER_CLI),
         )
         val startedAt = clock.instant()
-        val window = window(startedAt)
-        val since = startedAt.minus(window.duration)
+        val target = target(startedAt)
         val credentials = credentials()
         val requirements = requirements()
         httpClientFactory().use { client ->
@@ -209,7 +216,6 @@ class ProcessInboxCommand(
                 try {
                     ProcessInboxService(
                         messages = gmail.messages,
-                        since = since,
                         screening =
                             ScreeningService(
                                 heuristics = RecruiterHeuristics(),
@@ -225,22 +231,56 @@ class ProcessInboxCommand(
                             ),
                         drafts = drafts(client, gmail.drafts),
                         requirements = requirements,
+                        stateManager = gmail.stateManager,
                         logger = logger,
-                    ).run(messageId = messageId)
+                    ).run(target)
                 } catch (error: GmailApiException) {
                     throw CommandFailedException(error.message.orEmpty(), error)
                 } catch (error: OllamaException) {
                     throw CommandFailedException(error.message.orEmpty(), error)
                 }
             // The run succeeded: the next run looks back to this moment, the
-            // mail that was screened out is not looked at again.
-            lastRunStore().save(startedAt)
+            // mail that was screened out is not looked at again. A run of a
+            // single message does not move that moment: it looked at one mail
+            // only, the mail of the window is still waiting.
+            if (target is RunTarget.Window) {
+                lastRunStore().save(startedAt)
+            }
             logger.info(
                 event = "$COMMAND_NAME.completed",
                 message = "Inbox triage run completed",
-                attributes = summary.attributes(window),
+                attributes = summary.attributes(startedAt),
             )
         }
+    }
+
+    /**
+     * What the run looks at: the messages of the inbox that arrived after the
+     * moment the run looks back to, or the message the job seeker asks for.
+     *
+     * @param now the moment of the run.
+     * @return the target of the run.
+     */
+    private suspend fun target(now: Instant): RunTarget {
+        val askedFor = messageId?.let { messageIdOf(it) }
+        if (askedFor != null) {
+            return RunTarget.Message(askedFor)
+        }
+        val window = window(now)
+        return RunTarget.Window(now.minus(window.duration))
+    }
+
+    /**
+     * The id of the message the run looks at.
+     *
+     * @param value the id of the command line.
+     * @return the id of the message.
+     */
+    private fun messageIdOf(value: String): String {
+        if (value.isBlank()) {
+            throw CommandFailedException("The id of a message is not empty")
+        }
+        return value.trim()
     }
 
     /**
@@ -350,22 +390,30 @@ class ProcessInboxCommand(
     /**
      * The counters of the run, they go into the log.
      *
-     * @param window how far back the run looked for messages.
+     * @param now the moment of the run.
      */
-    private fun ProcessInboxSummary.attributes(window: MessageWindow): Map<String, String> =
-        mapOf(
-            "screened" to screened.toString(),
-            "recruiters" to recruiters.toString(),
-            "filtered_out" to filteredOut.toString(),
-            "job_listings" to jobListings.toString(),
-            "worth_follow_up" to worthFollowUp.toString(),
-            "needs_more_information" to needsMoreInformation.toString(),
-            "trashed" to trashed.toString(),
-            "drafts" to drafts.toString(),
-            "window" to window.duration.toString(),
-            "since" to since.toString(),
-            "unknown" to unknown.toString(),
-        )
+    private fun ProcessInboxSummary.attributes(now: Instant): Map<String, String> =
+        buildMap {
+            put("screened", screened.toString())
+            put("recruiters", recruiters.toString())
+            put("filtered_out", filteredOut.toString())
+            put("job_listings", jobListings.toString())
+            put("worth_follow_up", worthFollowUp.toString())
+            put("needs_more_information", needsMoreInformation.toString())
+            put("trashed", trashed.toString())
+            put("drafts", drafts.toString())
+            put("unknown", unknown.toString())
+            when (val target = target) {
+                is RunTarget.Window -> {
+                    put("window", Duration.between(target.since, now).toString())
+                    put("since", target.since.toString())
+                }
+
+                is RunTarget.Message -> {
+                    put("id", target.id)
+                }
+            }
+        }
 
     /**
      * The evaluator of the job descriptions, the decision model of Ollama or a
