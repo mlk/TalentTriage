@@ -307,6 +307,14 @@ The command exits with status code `0` when the run succeeded and `1` when the c
 could not be parsed. The pipeline stages behind the run (fetching the mail, screening it,
 extracting the attachments, evaluating them) are delivered by their own stories.
 
+A failure that nobody expected is a record of the log and not a stack trace on standard
+error. The message of the record holds the stack trace, the log of a run stays one JSON
+object per line:
+
+```json
+{"timestamp":"2026-10-24T07:57:23.926923Z","level":"ERROR","event":"recruiter-cli.failed","message":"java.io.IOException: The state file cannot be written\n\tat …"}
+```
+
 > **Note:** on JDK 24 and newer, Clikt's terminal detection prints a `native-access` warning
 > to standard error. Standard output stays clean JSON; add `--enable-native-access=ALL-UNNAMED`
 > to the JVM arguments to silence it.
