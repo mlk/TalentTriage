@@ -524,9 +524,9 @@ class ProcessInboxServiceTest {
         runTest {
             val gmail = gmailEngine()
             val model = modelEngine()
-            
+
             val summary = service(gmail, model).run(messageId = "specific-id")
-            
+
             assertEquals(1, summary.screened)
             assertEquals(1, summary.recruiters)
         }
@@ -546,4 +546,3 @@ class ProcessInboxServiceTest {
         private val JSON: Json = Json { ignoreUnknownKeys = true }
     }
 }
-
