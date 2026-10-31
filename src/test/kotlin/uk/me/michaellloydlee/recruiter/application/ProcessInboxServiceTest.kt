@@ -519,6 +519,18 @@ class ProcessInboxServiceTest {
             assertTrue(log.toString().contains("Your CV"), "Log should contain email subject when decision is UNKNOWN")
         }
 
+    @Test
+    fun processesSingleMessageByIdAndBypassesList() =
+        runTest {
+            val gmail = gmailEngine()
+            val model = modelEngine()
+            
+            val summary = service(gmail, model).run(messageId = "specific-id")
+            
+            assertEquals(1, summary.screened)
+            assertEquals(1, summary.recruiters)
+        }
+
     companion object {
         private val NOW: Instant = Instant.parse("2026-10-24T08:00:00Z")
 
@@ -534,3 +546,4 @@ class ProcessInboxServiceTest {
         private val JSON: Json = Json { ignoreUnknownKeys = true }
     }
 }
+
