@@ -51,7 +51,7 @@ class ProcessInboxService(
      * @return what the run did.
      */
     suspend fun run(target: RunTarget): ProcessInboxSummary {
-        val pending = pendingMessages(target)
+        val pending = messagesForTarget(target)
         val counters = Counters()
         pending.forEach { message ->
             screen(message, counters)
@@ -81,7 +81,7 @@ class ProcessInboxService(
      * @param target what the run looks at.
      * @return the messages of the run.
      */
-    private suspend fun pendingMessages(target: RunTarget): List<EmailMessage> =
+    private suspend fun messagesForTarget(target: RunTarget): List<EmailMessage> =
         when (target) {
             is RunTarget.Window -> {
                 messages.listUnprocessed(target.since).map { messages.getMessage(it.id) }

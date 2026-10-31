@@ -40,6 +40,7 @@ import uk.me.michaellloydlee.recruiter.infrastructure.logging.StructuredLogger
 import java.time.Clock
 import java.time.Instant
 import java.time.ZoneOffset
+import java.util.Base64
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -495,7 +496,7 @@ class ProcessInboxServiceTest {
             """
             {
               "id": "$id",
-              "threadId": "thread-1",
+              "threadId": "thread-$id",
               "labelIds": [${labels.joinToString(",") { label -> "\"$label\"" }}],
               "payload": {
                 "mimeType": "text/plain",
@@ -503,12 +504,19 @@ class ProcessInboxServiceTest {
                   {"name": "From", "value": "$sender"},
                   {"name": "Subject", "value": "Your CV"}
                 ],
-                "body": {"data": "WWUgbG9va2luZyBmb3IgYSBkZXZlbG9wZXI="}
+                "body": {"data": "${bodyOf(id)}"}
               }
             }
             """.trimIndent()
         return text
     }
+
+    /**
+     * The body of a message, it names the message it belongs to, so a test
+     * that fetches two messages can tell them apart.
+     */
+    private fun bodyOf(id: String): String =
+        Base64.getUrlEncoder().encodeToString("Looking for a developer $id".toByteArray())
 
     private fun token(): OAuth2Token =
         OAuth2Token(
