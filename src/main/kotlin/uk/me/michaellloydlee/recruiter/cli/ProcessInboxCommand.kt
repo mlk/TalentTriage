@@ -124,6 +124,12 @@ class ProcessInboxCommand(
                     "The default is the gap since the last successful run",
         )
 
+    private val messageId: String? by
+        option(
+            "--id",
+            help = "The ID of a specific message to process. If provided, other time-based filters are ignored.",
+        )
+
     private val recruiterVerificationEndpoint: String by
         option(
             "--recruiter-verification-endpoint",
@@ -220,7 +226,7 @@ class ProcessInboxCommand(
                         drafts = drafts(client, gmail.drafts),
                         requirements = requirements,
                         logger = logger,
-                    ).run()
+                    ).run(messageId = messageId)
                 } catch (error: GmailApiException) {
                     throw CommandFailedException(error.message.orEmpty(), error)
                 } catch (error: OllamaException) {

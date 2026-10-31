@@ -44,10 +44,19 @@ class ProcessInboxService(
     /**
      * Runs one pass of the pipeline.
      *
+     * @param messageId the ID of the message to process. If provided, only this message is processed.
      * @return what the run did.
      */
-    suspend fun run(): ProcessInboxSummary {
-        val pending = messages.listUnprocessed(since)
+    suspend fun run(messageId: String? = null): ProcessInboxSummary {
+        val pending =
+            if (messageId != null) {
+                listOf(
+                    uk.me.michaellloydlee.recruiter.domain.gmail
+                        .EmailSummary(messageId, ""),
+                )
+            } else {
+                messages.listUnprocessed(since)
+            }
         val counters = Counters()
         pending.forEach { summary ->
             screen(messages.getMessage(summary.id), counters)
