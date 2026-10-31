@@ -140,6 +140,9 @@ The requirements of the job seeker are written from the CV of the job seeker, wi
 * The **decision model** names the minimum pay out of the pays of the market. The pays of the
   market come from the web, the command looks for the pay of the role in the region of the job
   seeker with the web search of Ollama.
+* The answer of the web search of Ollama is JSON, but the cloud of Ollama serves it with the
+  content type `text/html`. The client of the search reads the body as JSON itself, the content
+  type of the answer does not decide whether the pages of the search are read.
 * The bands of the scale carry the level of the role they are the pay of. The model knows the
   level of the job seeker and not the pays of the market, the level is what makes its answer a
   sharp one.

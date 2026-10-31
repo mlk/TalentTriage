@@ -52,6 +52,37 @@ class OllamaWebSearchClientTest {
         }
 
     @Test
+    fun readsThePagesWhenTheAnswerIsServedAsHtml() =
+        runTest {
+            val engine = engine(contentType = "text/html; charset=utf-8")
+
+            val outcome = client(engine).search("average salary kotlin engineer london")
+
+            val pages = assertIs<WebSearchOutcome.Found>(outcome).results
+            assertEquals(1, pages.size)
+            assertEquals("Kotlin engineer salary", pages.first().title)
+            assertEquals("https://salary.example/kotlin", pages.first().url)
+        }
+
+    @Test
+    fun failsWhenTheAnswerIsNotJson() =
+        runTest {
+            val engine =
+                MockEngine {
+                    respond(
+                        content = "<!DOCTYPE html><html><body>Sign in</body></html>",
+                        status = HttpStatusCode.OK,
+                        headers = headersOf(HttpHeaders.ContentType, "text/html; charset=utf-8"),
+                    )
+                }
+
+            val outcome = client(engine).search("average salary")
+
+            val failure = assertIs<WebSearchOutcome.Failed>(outcome)
+            assertTrue(failure.reason.contains("not JSON"))
+        }
+
+    @Test
     fun failsWithoutAnApiKey() =
         runTest {
             val engine = engine()
@@ -88,7 +119,7 @@ class OllamaWebSearchClientTest {
             assertTrue(failure.reason.contains("could not be reached"))
         }
 
-    private fun engine(): MockEngine =
+    private fun engine(contentType: String = ContentType.Application.Json.toString()): MockEngine =
         MockEngine {
             respond(
                 content =
@@ -100,7 +131,7 @@ class OllamaWebSearchClientTest {
                     ]}
                     """.trimIndent(),
                 status = HttpStatusCode.OK,
-                headers = headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString()),
+                headers = headersOf(HttpHeaders.ContentType, contentType),
             )
         }
 

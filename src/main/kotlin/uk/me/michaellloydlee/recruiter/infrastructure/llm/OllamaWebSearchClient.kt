@@ -1,8 +1,6 @@
 package uk.me.michaellloydlee.recruiter.infrastructure.llm
 
 import io.ktor.client.HttpClient
-import io.ktor.client.call.NoTransformationFoundException
-import io.ktor.client.call.body
 import io.ktor.client.plugins.HttpTimeout
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.client.plugins.expectSuccess
@@ -15,6 +13,9 @@ import io.ktor.client.statement.bodyAsText
 import io.ktor.http.ContentType
 import io.ktor.http.contentType
 import io.ktor.http.isSuccess
+import kotlinx.serialization.SerializationException
+import kotlinx.serialization.decodeFromString
+import kotlinx.serialization.json.Json
 import java.io.IOException
 
 /**
@@ -26,24 +27,26 @@ import java.io.IOException
  * does without the pages.
  *
  * @param httpClient the client the requests are sent with, it needs the
- *   `HttpTimeout` and the `ContentNegotiation` plugin.
+ *   `HttpTimeout` and the `ContentNegotiation` plugin, the plugin writes the
+ *   request.
  * @param apiKey the API key of Ollama, `null` when the search is not possible.
  * @param baseUrl the base URL of the API.
  * @param timeoutMillis how long a call may take, in milliseconds.
+ * @param json parser used to read the answer of the API.
  */
 class OllamaWebSearchClient(
     private val httpClient: HttpClient,
     private val apiKey: String? = null,
     private val baseUrl: String = DEFAULT_BASE_URL,
     private val timeoutMillis: Long = DEFAULT_TIMEOUT_MILLIS,
+    private val json: Json = Json { ignoreUnknownKeys = true },
 ) {
     init {
         require(httpClient.pluginOrNull(HttpTimeout) != null) {
             "The HttpTimeout plugin has to be installed on the client, otherwise the timeout is ignored"
         }
         require(httpClient.pluginOrNull(ContentNegotiation) != null) {
-            "The ContentNegotiation plugin has to be installed on the client, " +
-                "it writes the request and reads the answer"
+            "The ContentNegotiation plugin has to be installed on the client, it writes the request"
         }
     }
 
@@ -77,16 +80,30 @@ class OllamaWebSearchClient(
                     "The web search of Ollama answered with ${response.status.value}: ${response.bodyAsText()}",
                 )
             } else {
-                WebSearchOutcome.Found(response.body<OllamaWebSearchResponse>().results)
+                pages(response.bodyAsText())
             }
-        } catch (error: NoTransformationFoundException) {
-            WebSearchOutcome.Failed(
-                "The web search of Ollama answered with ${error.message}, it reads a single JSON object",
-            )
         } catch (error: IOException) {
             WebSearchOutcome.Failed("The web search of Ollama could not be reached: ${error.message}")
         }
     }
+
+    /**
+     * The pages of the answer of the API.
+     *
+     * The answer of the cloud of Ollama is JSON but it is served with the
+     * content type `text/html`: the body is read as text and parsed here, the
+     * content type of the answer does not decide whether the pages are read.
+     *
+     * @param body the body of the answer.
+     * @return the pages of the search, the failure when the answer is not
+     *   JSON.
+     */
+    private fun pages(body: String): WebSearchOutcome =
+        try {
+            WebSearchOutcome.Found(json.decodeFromString<OllamaWebSearchResponse>(body).results)
+        } catch (error: SerializationException) {
+            WebSearchOutcome.Failed("The web search of Ollama answered with a body that is not JSON: ${error.message}")
+        }
 
     private val searchUrl: String
         get() = "${baseUrl.trimEnd('/')}$SEARCH_PATH"
