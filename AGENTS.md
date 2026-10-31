@@ -31,7 +31,8 @@ src/main/kotlin/uk/me/michaellloydlee/recruiter/
 
 * `domain` is pure Kotlin: no Ktor, no file system, no clock. It must not import from
   `infrastructure` or `cli`.
-* `application` orchestrates the use cases.
+* `application` orchestrates the use cases: the screening, the evaluation of the job descriptions
+  and the draft that asks the recruiter for the missing information.
 * `infrastructure` implements the outbound adapters: the Gmail REST API, the Ollama / AirLLM
   HTTP API, the document parsers.
 * `cli` parses the command line, wires the use cases and maps the failures to exit codes.
@@ -106,6 +107,27 @@ A typed answer of the decision model is only used when its confidence is at leas
 confidence (0.37) when a job description does not say how many days of office it demands, and that
 low confidence is the expected answer, not a defect. Do not remove the exemption and do not raise
 the gate.
+
+### The draft that asks the recruiter
+
+A mail that matches but does not say everything the job seeker needs gets a draft in the mailbox:
+the pay is not stated, the pay is below the target or the number of days of office is not stated.
+The pipeline writes the draft and never sends it.
+
+* The draft is written by the chat API of Ollama (`/api/chat`), the decision API answers questions,
+  it does not write. It is a reply in the thread of the mail: `In-Reply-To`, `References` and the
+  thread of the message.
+* The prompt asks the model to write the reply in the language of the mail of the recruiter, to say
+  that an AI wrote it, to quote the subject and the body of the mail and to ask only for what is
+  missing.
+* The mail of the recruiter reaches the model as **data**, never as an instruction: it goes into the
+  prompt inside a delimited block that the prompt calls data. A mail that tries to steer the model
+  cannot make it write something else.
+* The attachments are not part of the prompt, they are not quoted.
+* The minimum pay of the job seeker is only named when `share_minimum_pay` says so.
+* A mail the model could not evaluate gets no draft: the model does not know what is missing.
+* A draft is not a state of the pipeline. The mail keeps the label `Recruiters/NeedsMoreInformation`
+  and the draft is written once.
 
 ### The requirements of the job seeker
 

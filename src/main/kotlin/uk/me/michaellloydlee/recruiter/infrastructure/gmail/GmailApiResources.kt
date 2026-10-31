@@ -111,3 +111,25 @@ internal data class GmailModifyLabelsResource(
     @SerialName("removeLabelIds")
     val removeLabelIds: List<String> = emptyList(),
 )
+
+/**
+ * A draft of the Gmail REST API, the body of the endpoint that creates one and
+ * the answer of the same endpoint.
+ */
+@Serializable
+internal data class GmailDraftResource(
+    val id: String = "",
+    val message: GmailDraftMessageResource = GmailDraftMessageResource(),
+)
+
+/**
+ * The message of a draft of the Gmail REST API.
+ *
+ * @property raw the mail of the draft, encoded with base64url.
+ * @property threadId the thread the draft belongs to.
+ */
+@Serializable
+internal data class GmailDraftMessageResource(
+    val raw: String = "",
+    val threadId: String = "",
+)

@@ -9,6 +9,7 @@ import com.github.ajalt.clikt.parameters.types.long
 import io.ktor.client.HttpClient
 import uk.me.michaellloydlee.recruiter.application.ProcessInboxService
 import uk.me.michaellloydlee.recruiter.application.ProcessInboxSummary
+import uk.me.michaellloydlee.recruiter.application.draft.DraftWriter
 import uk.me.michaellloydlee.recruiter.application.evaluation.AttachmentTextReader
 import uk.me.michaellloydlee.recruiter.application.evaluation.ChatModelEvaluator
 import uk.me.michaellloydlee.recruiter.application.evaluation.DecisionModelEvaluator
@@ -29,6 +30,7 @@ import uk.me.michaellloydlee.recruiter.domain.screening.RecruiterHeuristics
 import uk.me.michaellloydlee.recruiter.infrastructure.gmail.FileOAuth2TokenStore
 import uk.me.michaellloydlee.recruiter.infrastructure.gmail.GmailApiException
 import uk.me.michaellloydlee.recruiter.infrastructure.gmail.GmailAuthenticationException
+import uk.me.michaellloydlee.recruiter.infrastructure.gmail.GmailDraftsApi
 import uk.me.michaellloydlee.recruiter.infrastructure.gmail.GmailHttpClientFactory
 import uk.me.michaellloydlee.recruiter.infrastructure.gmail.GmailServices
 import uk.me.michaellloydlee.recruiter.infrastructure.gmail.GoogleClientCredentials
@@ -156,6 +158,28 @@ class ProcessInboxCommand(
                     "or usage credits",
         ).default(DecisionModelVerifier.DEFAULT_MODEL)
 
+    private val draftModel: String by
+        option(
+            "--draft-model",
+            "-d",
+            help =
+                "The chat model that writes the draft that asks the recruiter for the missing " +
+                    "information. The models with the suffix :cloud run in the cloud of Ollama and " +
+                    "need a paid plan or usage credits",
+        ).default(DraftWriter.DEFAULT_MODEL)
+
+    private val draftEndpoint: String by
+        option(
+            "--draft-endpoint",
+            help = "The endpoint of the model that writes the drafts",
+        ).default(OllamaChatClient.DEFAULT_BASE_URL)
+
+    private val draftTimeout: Long by
+        option(
+            "--draft-timeout",
+            help = "How long the writing of a draft may take, in milliseconds",
+        ).long().default(OllamaChatClient.DEFAULT_TIMEOUT_MILLIS)
+
     override suspend fun run() {
         logger.info(
             event = "$COMMAND_NAME.started",
@@ -189,9 +213,10 @@ class ProcessInboxCommand(
                         evaluation =
                             EvaluationService(
                                 evaluator = evaluator(client),
+                                attachments = AttachmentTextReader(gmail.messages),
                                 stateManager = gmail.stateManager,
                             ),
-                        attachments = AttachmentTextReader(gmail.messages),
+                        drafts = drafts(client, gmail.drafts),
                         requirements = requirements,
                         logger = logger,
                     ).run()
@@ -329,6 +354,7 @@ class ProcessInboxCommand(
             "worth_follow_up" to worthFollowUp.toString(),
             "needs_more_information" to needsMoreInformation.toString(),
             "trashed" to trashed.toString(),
+            "drafts" to drafts.toString(),
             "window" to window.duration.toString(),
             "since" to since.toString(),
             "unknown" to unknown.toString(),
@@ -367,6 +393,28 @@ class ProcessInboxCommand(
             }
         }
     }
+
+    /**
+     * The writer of the draft that asks the recruiter for the missing
+     * information.
+     *
+     * @param client the client the models of the pipeline are reached with.
+     * @param drafts the draft endpoints of the Gmail API.
+     */
+    private fun drafts(
+        client: HttpClient,
+        drafts: GmailDraftsApi,
+    ): DraftWriter =
+        DraftWriter(
+            client =
+                OllamaChatClient(
+                    httpClient = client,
+                    baseUrl = endpoint(draftEndpoint),
+                    timeoutMillis = draftTimeout,
+                ),
+            drafts = drafts,
+            model = draftModel,
+        )
 
     override fun help(context: Context): String = "Fetch, triage and label the unprocessed messages of the inbox."
 

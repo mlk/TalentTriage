@@ -80,6 +80,7 @@ flowchart TD
 * **Dual-Tier LLM Architecture:** Uses a fast, small model via Ollama for initial screening and routes qualified emails to an AirLLM Python wrapper (or large quantized Ollama model) for deep evaluation.
 * **Stateless Gmail Tracking:** Uses nested Gmail labels (`Recruiters/JobListing`, `Recruiters/WorthFollowUp`, `Recruiters/NeedsMoreInformation`, `Recruiters/Trash`) as state flags.
 * **Document Parsing Engine:** Automatically extracts plain text/Markdown from attached `.pdf` and `.docx` job descriptions using Apache PDFBox and Apache POI. A broken attachment is reported, it never stops the run.
+* **Drafts For The Recruiter:** A mail that matches but does not say everything the job seeker needs gets a draft that asks the recruiter for it — the pay, the days of office, or both. The pipeline writes the draft and never sends it.
 * **OpenAI/Ollama Compatibility:** Leverages native Ollama REST API JSON formats across all endpoints.
 * **Dual-Tier LLM Architecture:** The same typed client talks to the local Ollama instance (short
   timeout) and to the AirLLM wrapper (long timeout) — only the base URL and the timeout differ.
@@ -168,12 +169,17 @@ working directory (`--requirements` changes the file):
 {
   "minimum_pay": { "amount": 120000, "currency": "EUR", "period": "year" },
   "maximum_office_days": 2,
-  "profile": "Senior Kotlin engineer, distributed systems, 8+ years, fintech"
+  "profile": "Senior Kotlin engineer, distributed systems, 8+ years, fintech",
+  "share_minimum_pay": false
 }
 ```
 
 The `requirements` command writes that file from the CV of the job seeker, see
 [the requirements of the job seeker](#-the-requirements-of-the-job-seeker).
+
+`share_minimum_pay` decides whether the draft that asks the recruiter for the
+missing information may name the minimum pay of the job seeker. The default is
+`false`: the draft asks what the pay of the job is and nothing else.
 
 The screening asks a model of the local Ollama instance. By default it is a
 **decision model** (`clef:cloud`), which answers a typed question on the
@@ -192,10 +198,12 @@ recruiter-cli process-inbox --job-description-evaluation=decision   # the decisi
 recruiter-cli process-inbox --job-description-evaluation=chat      # a chat model
 recruiter-cli process-inbox --job-description-evaluation-model=clef:cloud
 ```
-
 Every step of the pipeline gets its own model, so the model of the recruiter
-verification is chosen with `--recruiter-verification-model` and the model of
-the job description evaluation with `--job-description-evaluation-model`.
+verification is chosen with `--recruiter-verification-model` and the model of the
+job description evaluation with `--job-description-evaluation-model`. The draft
+that asks the recruiter for the missing information is written by a chat model
+of its own (`--draft-model`).
+
 
 A job listing - an alert of a job board, it offers many jobs at once and it is
 not one job - is told apart before the model is asked: the rules of the sender
@@ -234,6 +242,9 @@ decision models, they need Ollama v0.35.0 or later.
 | `process-inbox` | `--job-description-evaluation-model`, `-j` | The model that evaluates the job descriptions | `clef:cloud` |
 | `process-inbox` | `--job-description-evaluation-endpoint` | The endpoint of the model that evaluates the job descriptions | `http://localhost:11434` |
 | `process-inbox` | `--job-description-evaluation-timeout` | How long the evaluation of a job description may take, in milliseconds | `600000` |
+| `process-inbox` | `--draft-model`, `-d` | The chat model that writes the draft that asks the recruiter for the missing information | `minimax-m3.1-flash:cloud` |
+| `process-inbox` | `--draft-endpoint` | The endpoint of the model that writes the drafts | `http://localhost:11434` |
+| `process-inbox` | `--draft-timeout` | How long the writing of a draft may take, in milliseconds | `120000` |
 | `requirements` | `CV` | The CV of the job seeker, a PDF or a Word document | — |
 | `requirements` | `--requirements`, `-q` | The file the requirements of the job seeker are written to | `requirements.json` |
 | `requirements` | `--force`, `-f` | Overwrite the file of the requirements when it exists | off |
@@ -451,6 +462,33 @@ that carries one, so a message that was evaluated is never looked at again. A
 message that was only screened out keeps no label: it is reported by the run
 and the window of the run is what stops the next run from looking at it again.
 
+### The draft that asks the recruiter
+
+A message that matches but does not say everything the job seeker needs to know
+- it states no pay, its pay is below the target or the job description does not
+say how many days of office it demands - gets a **draft** in the mailbox. The
+draft is a reply in the thread of the message, the pipeline writes it and never
+sends it: the job seeker reads it and decides.
+
+The draft is written by the chat API of Ollama (`/api/chat`), a model of its own
+(`--draft-model`). It says that it was written by an AI on behalf of the job
+seeker, it quotes the subject and the body of the original message and it asks
+for what is missing - the pay, the days of office, or both. The draft is written
+in the language of the original message: the prompt asks the model for it.
+
+The original message reaches the model as **data**, never as an instruction: it
+goes into the prompt inside a delimited block that the prompt calls data, so a
+message that tries to steer the model cannot make it write something else.
+
+The message keeps the label `Recruiters/NeedsMoreInformation`: the search of the
+pending messages skips it and the draft is written once. A message the model
+could not evaluate gets no draft - the model does not know what is missing. The
+run reports the drafts it wrote in the log:
+
+```json
+{"timestamp":"…","level":"INFO","event":"process-inbox.draft_written","message":"A draft that asks the recruiter for the missing information was written","attributes":{"id":"…","draft":"…","reason":"the message states no pay"}}
+```
+
 The pipeline is a scheduled job, so it only processes the mail that arrived
 since the last run: the search is `is:inbox` with every state label excluded
 and `after:<time>` added. The time is the moment of the last successful run,
@@ -552,17 +590,19 @@ error handling, the testing conventions) are documented in
 ```
 src/main/kotlin/uk/me/michaellloydlee/recruiter/
 ├── application/       # Use cases / orchestration
+│   ├── draft/         # The draft that asks the recruiter for the missing information
 │   ├── evaluation/    # The evaluation of the job descriptions
 │   ├── requirements/  # The requirements of the job seeker, written from the CV
 │   └── screening/     # The heuristic pre-filter and the local classifier
 │                      # (the pipeline of the process-inbox command)
 ├── cli/               # Command line entry point (Clikt commands)
 ├── domain/            # Pure domain model, no infrastructure dependencies
-│   ├── gmail/         # The state labels of the pipeline
+│   ├── evaluation/    # The state of an evaluation and what it misses
+│   ├── gmail/         # The state labels of the pipeline and the drafts
 │   ├── requirements/  # The requirements of the job seeker and the pays of the market
 │   └── screening/     # The rules of the screening
 └── infrastructure/    # Gmail, Ollama, PDF/Word adapters, logging
-    ├── gmail/         # OAuth2 credentials, token store, Gmail REST client, label state
+    ├── gmail/         # OAuth2 credentials, token store, Gmail REST client, label state, drafts
     ├── llm/           # Ollama chat client, decision client and web search
     ├── logging/       # Structured (JSON lines) logger
     ├── parser/        # Text extraction of the attached documents (PDFBox)

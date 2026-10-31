@@ -15,6 +15,7 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import uk.me.michaellloydlee.recruiter.application.draft.DraftWriter
 import uk.me.michaellloydlee.recruiter.application.evaluation.AttachmentTextReader
 import uk.me.michaellloydlee.recruiter.application.evaluation.DecisionModelEvaluator
 import uk.me.michaellloydlee.recruiter.application.evaluation.EvaluationService
@@ -23,6 +24,7 @@ import uk.me.michaellloydlee.recruiter.application.screening.ScreeningService
 import uk.me.michaellloydlee.recruiter.domain.gmail.EmailMessage
 import uk.me.michaellloydlee.recruiter.domain.requirements.JobRequirements
 import uk.me.michaellloydlee.recruiter.infrastructure.gmail.GmailApiClient
+import uk.me.michaellloydlee.recruiter.infrastructure.gmail.GmailDraftsApi
 import uk.me.michaellloydlee.recruiter.infrastructure.gmail.GmailLabelStateManager
 import uk.me.michaellloydlee.recruiter.infrastructure.gmail.GmailLabelsApi
 import uk.me.michaellloydlee.recruiter.infrastructure.gmail.GmailMessagesApi
@@ -30,6 +32,7 @@ import uk.me.michaellloydlee.recruiter.infrastructure.gmail.OAuth2Token
 import uk.me.michaellloydlee.recruiter.infrastructure.gmail.RefreshingAccessTokenProvider
 import uk.me.michaellloydlee.recruiter.infrastructure.gmail.TestOAuth2Client
 import uk.me.michaellloydlee.recruiter.infrastructure.gmail.temporaryTokenStore
+import uk.me.michaellloydlee.recruiter.infrastructure.llm.OllamaChatClient
 import uk.me.michaellloydlee.recruiter.infrastructure.llm.OllamaDecisionClient
 import uk.me.michaellloydlee.recruiter.infrastructure.logging.StructuredLogger
 import java.time.Clock
@@ -226,6 +229,86 @@ class ProcessInboxServiceTest {
             assertTrue(labels.isEmpty())
         }
 
+    @Test
+    fun countsAMailThatDoesNotMatchAsTrashed() =
+        runTest {
+            val gmail = gmailEngine()
+            val model = modelEngine(jdMatches = "does not match")
+
+            val summary = service(gmail, model).run()
+
+            assertEquals(2, summary.trashed)
+            assertEquals(0, summary.drafts)
+        }
+
+    @Test
+    fun writesADraftForAMailThatNeedsMoreInformation() =
+        runTest {
+            val gmail = gmailEngine()
+            val model = modelEngine(officeDays = "unclear")
+
+            val summary = service(gmail, model).run()
+
+            assertEquals(2, summary.needsMoreInformation)
+            assertEquals(2, summary.drafts)
+            val drafts = gmail.requestHistory.filter { it.url.encodedPath.endsWith("/users/me/drafts") }
+            assertEquals(2, drafts.size)
+        }
+
+    @Test
+    fun writesNoDraftForAMailTheModelCouldNotEvaluate() =
+        runTest {
+            val gmail = gmailEngine()
+            val model = modelEngine(answered = false)
+
+            val summary = service(gmail, model).run()
+
+            assertEquals(2, summary.needsMoreInformation)
+            assertEquals(0, summary.drafts)
+            val drafts = gmail.requestHistory.filter { it.url.encodedPath.endsWith("/users/me/drafts") }
+            assertTrue(drafts.isEmpty())
+        }
+
+    @Test
+    fun writesNoDraftForAMailThatIsWorthAFollowUp() =
+        runTest {
+            val gmail = gmailEngine()
+            val model = modelEngine()
+
+            val summary = service(gmail, model).run()
+
+            assertEquals(2, summary.worthFollowUp)
+            assertEquals(0, summary.drafts)
+            val drafts = gmail.requestHistory.filter { it.url.encodedPath.endsWith("/users/me/drafts") }
+            assertTrue(drafts.isEmpty())
+        }
+
+    @Test
+    fun theLogSaysThatADraftWasWritten() =
+        runTest {
+            val gmail = gmailEngine()
+            val model = modelEngine(officeDays = "unclear")
+            val log = StringBuilder()
+
+            service(gmail, model, log).run()
+
+            assertTrue(log.toString().contains("process-inbox.draft_written"))
+        }
+
+    @Test
+    fun reportsADraftThatCouldNotBeWritten() =
+        runTest {
+            val gmail = gmailEngine()
+            val model = modelEngine(officeDays = "unclear", chatAnswers = false)
+            val log = StringBuilder()
+
+            val summary = service(gmail, model, log).run()
+
+            assertEquals(2, summary.needsMoreInformation)
+            assertEquals(0, summary.drafts)
+            assertTrue(log.toString().contains("process-inbox.draft_failed"))
+        }
+
     private suspend fun service(
         gmail: MockEngine,
         model: MockEngine,
@@ -252,6 +335,14 @@ class ProcessInboxServiceTest {
                         install(ContentNegotiation) { json(JSON) }
                     },
             )
+        val chatClient =
+            OllamaChatClient(
+                httpClient =
+                    HttpClient(model) {
+                        install(HttpTimeout)
+                        install(ContentNegotiation) { json(JSON) }
+                    },
+            )
         return ProcessInboxService(
             messages = messages,
             since = since,
@@ -266,9 +357,10 @@ class ProcessInboxServiceTest {
             evaluation =
                 EvaluationService(
                     evaluator = DecisionModelEvaluator(modelClient),
+                    attachments = AttachmentTextReader(messages),
                     stateManager = stateManager,
                 ),
-            attachments = AttachmentTextReader(messages),
+            drafts = DraftWriter(client = chatClient, drafts = GmailDraftsApi(api)),
             requirements =
                 JobRequirements(
                     minimumPay = null,
@@ -286,31 +378,41 @@ class ProcessInboxServiceTest {
     private fun modelEngine(
         officeDays: String = "matches",
         answered: Boolean = true,
+        chatAnswers: Boolean = true,
+        jdMatches: String = "matches",
     ): MockEngine =
         MockEngine { request ->
-            val body = (request.body as TextContent).text
-            val questions = Json.parseToJsonElement(body).jsonObject["questions"]!!.jsonObject
-            val answer =
-                if (questions.containsKey("recruiter")) {
-                    """"recruiter":{"type":"choice","choice":"from a recruiter","confidence":0.9}"""
-                } else if (answered) {
-                    questions.keys.joinToString(",") { name ->
-                        val choice =
-                            when (name) {
-                                "jd_matches" -> "matches"
-                                "office_days" -> officeDays
-                                else -> "does not match"
-                            }
-                        """"$name":{"type":"choice","choice":"$choice","confidence":0.9}"""
+            if (request.url.encodedPath.endsWith("/api/chat")) {
+                respond(
+                    content = CHAT_ANSWER,
+                    status = if (chatAnswers) HttpStatusCode.OK else HttpStatusCode.NotFound,
+                    headers = headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString()),
+                )
+            } else {
+                val body = (request.body as TextContent).text
+                val questions = Json.parseToJsonElement(body).jsonObject["questions"]!!.jsonObject
+                val answer =
+                    if (questions.containsKey("recruiter")) {
+                        """"recruiter":{"type":"choice","choice":"from a recruiter","confidence":0.9}"""
+                    } else if (answered) {
+                        questions.keys.joinToString(",") { name ->
+                            val choice =
+                                when (name) {
+                                    "jd_matches" -> jdMatches
+                                    "office_days" -> officeDays
+                                    else -> "does not match"
+                                }
+                            """"$name":{"type":"choice","choice":"$choice","confidence":0.9}"""
+                        }
+                    } else {
+                        ""
                     }
-                } else {
-                    ""
-                }
-            respond(
-                content = DECISION_ANSWER.replace("{}", "{$answer}"),
-                status = HttpStatusCode.OK,
-                headers = headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString()),
-            )
+                respond(
+                    content = DECISION_ANSWER.replace("{}", "{$answer}"),
+                    status = HttpStatusCode.OK,
+                    headers = headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString()),
+                )
+            }
         }
 
     private fun idOf(label: String): String = "Label_${label.substringAfterLast('/').lowercase()}"
@@ -343,6 +445,14 @@ class ProcessInboxServiceTest {
                             .content
                     respond(
                         content = """{"id":"${idOf(name)}","name":"$name"}""",
+                        status = HttpStatusCode.OK,
+                        headers = jsonHeaders(),
+                    )
+                }
+
+                request.url.encodedPath.endsWith("/users/me/drafts") -> {
+                    respond(
+                        content = """{"id":"draft-id"}""",
                         status = HttpStatusCode.OK,
                         headers = jsonHeaders(),
                     )
@@ -398,6 +508,9 @@ class ProcessInboxServiceTest {
 
         private const val DECISION_ANSWER =
             """{"model":"clef:cloud","answers":{},"usage":{"input_tokens":10,"output_tokens":1}}"""
+
+        private const val CHAT_ANSWER =
+            """{"message":{"role":"assistant","content":"the reply of the model"},"done":true}"""
 
         private const val MESSAGE_LIST =
             """{"messages":[{"id":"first","threadId":"thread-1"},{"id":"second","threadId":"thread-2"}]}"""
