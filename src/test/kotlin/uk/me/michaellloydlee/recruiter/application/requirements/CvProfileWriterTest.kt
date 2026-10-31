@@ -50,6 +50,19 @@ class CvProfileWriterTest {
         }
 
     @Test
+    fun aLongCvIsTruncated() =
+        runTest {
+            val engine = engine(ANSWER)
+            val cv = "a".repeat(20_000)
+
+            writer(engine).write(cv)
+
+            val body = (engine.requestHistory.single().body as TextContent).text
+            assertTrue(body.contains("a".repeat(16_000)))
+            assertTrue(!body.contains("a".repeat(16_001)))
+        }
+
+    @Test
     fun failsWhenTheModelDoesNotAnswerWithAJsonObject() =
         runTest {
             val engine = engine("I am a senior Kotlin engineer.")

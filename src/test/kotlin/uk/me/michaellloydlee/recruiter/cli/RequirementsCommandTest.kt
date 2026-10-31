@@ -19,6 +19,7 @@ import uk.me.michaellloydlee.recruiter.infrastructure.logging.StructuredLogger
 import uk.me.michaellloydlee.recruiter.infrastructure.parser.TestDocuments
 import uk.me.michaellloydlee.recruiter.infrastructure.requirements.RequirementsFile
 import java.nio.file.Path
+import java.time.Clock
 import kotlin.io.path.createTempDirectory
 import kotlin.io.path.writeBytes
 import kotlin.io.path.writeText
@@ -109,6 +110,34 @@ class RequirementsCommandTest {
         }
 
     @Test
+    fun looksForThePaysOfTheMarketOnTheWeb() =
+        runTest {
+            val sink = StringBuilder()
+            val engine = engine()
+
+            val result = cli(sink, engine).test("requirements ${cvFile()} --requirements ${targetFile()}")
+
+            assertEquals(0, result.statusCode)
+            assertTrue(engine.requestHistory.any { it.url.encodedPath.endsWith("/api/web_search") })
+            val notes = records(sink).last().attributes["notes"].orEmpty()
+            assertTrue(notes.contains("75000.0 GBP"))
+        }
+
+    @Test
+    fun usesTheDefaultPaysWithoutTheApiKeyOfTheWebSearch() =
+        runTest {
+            val sink = StringBuilder()
+            val engine = engine()
+
+            val result = cli(sink, engine, emptyMap()).test("requirements ${cvFile()} --requirements ${targetFile()}")
+
+            assertEquals(0, result.statusCode)
+            assertTrue(engine.requestHistory.none { it.url.encodedPath.endsWith("/api/web_search") })
+            val notes = records(sink).last().attributes["notes"].orEmpty()
+            assertTrue(notes.contains("OLLAMA_API_KEY"))
+        }
+
+    @Test
     fun failsWhenTheCvIsMissing() =
         runTest {
             val sink = StringBuilder()
@@ -164,6 +193,7 @@ class RequirementsCommandTest {
     private fun cli(
         sink: StringBuilder,
         engine: MockEngine = engine(),
+        environment: Map<String, String> = mapOf(RequirementsCommand.API_KEY_VARIABLE to "the-key"),
     ): TriageCli =
         TriageCli(
             StructuredLogger(sink),
@@ -173,6 +203,8 @@ class RequirementsCommandTest {
                     install(ContentNegotiation) { json(JSON) }
                 }
             },
+            Clock.systemUTC(),
+            environment,
         )
 
     private fun engine(): MockEngine =
@@ -184,6 +216,10 @@ class RequirementsCommandTest {
         when {
             request.url.encodedPath.endsWith("/api/chat") -> {
                 """{"message":{"role":"assistant","content":"$PROFILE_ANSWER"},"done":true}"""
+            }
+
+            request.url.encodedPath.endsWith("/api/web_search") -> {
+                PAGES
             }
 
             else -> {
@@ -213,6 +249,13 @@ class RequirementsCommandTest {
     private fun jsonHeaders() = headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString())
 
     companion object {
+        private const val PAGES =
+            """{"results":[
+              {"title":"Kotlin engineer salary in London",
+               "url":"https://salary.example/kotlin",
+               "content":"The median salary is £75,000 a year"}
+            ]}"""
+
         private const val PROFILE_ANSWER =
             """{\"profile\":\"Senior Kotlin engineer of the payment team\",""" +
                 """\"role\":\"Senior Kotlin engineer\",\"region\":\"London, United Kingdom\"}"""

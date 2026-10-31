@@ -37,6 +37,9 @@ class RequirementsGenerator(
                 is CvProfileOutcome.Written -> outcome.profile
             }
         val notes = mutableListOf<String>()
+        if (profile.region.isBlank()) {
+            notes.add("The region of the job seeker is not known, the pays of the market are looked for without it")
+        }
         val scale = salaryLookup.scale(profile)
         when (scale) {
             is SalaryScaleOutcome.Default -> {

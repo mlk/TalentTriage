@@ -34,6 +34,13 @@ class SalaryAmountsTest {
     }
 
     @Test
+    fun findsThePayThatIsWrittenWithTheEuropeanSeparator() {
+        val pays = SalaryAmounts.of("The base salary of the role is 72.500 a year.", "EUR")
+
+        assertEquals(listOf(SalaryAmount(72_500.0, "EUR")), pays)
+    }
+
+    @Test
     fun ignoresTheAmountsThatAreNoPays() {
         val pays = SalaryAmounts.of("10 years of experience, 2026, 42 applications.", "EUR")
 

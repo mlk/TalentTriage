@@ -144,6 +144,11 @@ class SalaryScaleLookup(
     /**
      * The currency of a region.
      *
+     * The pages of the web name the currency of their pays, the currency of
+     * the region is the fallback for the pays that are written without one.
+     * The names of the places are matched as they are written, a place that
+     * is not known has the currency of the default.
+     *
      * @param region the place the job seeker works in.
      * @return the currency of the region.
      */

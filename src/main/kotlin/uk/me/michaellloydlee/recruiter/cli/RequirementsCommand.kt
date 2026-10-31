@@ -73,7 +73,7 @@ class RequirementsCommand(
     private val maxOfficeDays: Int by
         option(
             "--max-office-days",
-            help = "The number of days of office a job may demand",
+            help = "The number of days of office a job may demand, 0 demands a job without any office",
         ).int().default(DEFAULT_MAX_OFFICE_DAYS)
 
     private val model: String by
