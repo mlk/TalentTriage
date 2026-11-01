@@ -4,6 +4,7 @@ import com.github.ajalt.clikt.command.SuspendingCliktCommand
 import com.github.ajalt.clikt.core.Context
 import com.github.ajalt.clikt.core.subcommands
 import io.ktor.client.HttpClient
+import uk.me.michaellloydlee.recruiter.infrastructure.browser.openInBrowser
 import uk.me.michaellloydlee.recruiter.infrastructure.gmail.GmailHttpClientFactory
 import uk.me.michaellloydlee.recruiter.infrastructure.logging.StructuredLogger
 import java.time.Clock
@@ -20,16 +21,19 @@ import java.time.Clock
  *   far back they look for messages.
  * @param environment the environment of the commands, it holds the API key of
  *   the web search of Ollama.
+ * @param openBrowser opens the authorisation page of Google in the browser of
+ *   the machine.
  */
 class TriageCli(
     logger: StructuredLogger,
     httpClientFactory: () -> HttpClient = { GmailHttpClientFactory.create() },
     clock: Clock = Clock.systemUTC(),
     environment: Map<String, String> = System.getenv(),
+    openBrowser: suspend (String) -> Unit = { url -> openInBrowser(url) },
 ) : SuspendingCliktCommand(name = COMMAND_NAME) {
     init {
         subcommands(
-            AuthenticateCommand(logger, httpClientFactory),
+            AuthenticateCommand(logger, httpClientFactory, openBrowser),
             PendingCommand(logger, httpClientFactory, clock),
             ProcessInboxCommand(logger, httpClientFactory, clock),
             RequirementsCommand(logger, httpClientFactory, environment),

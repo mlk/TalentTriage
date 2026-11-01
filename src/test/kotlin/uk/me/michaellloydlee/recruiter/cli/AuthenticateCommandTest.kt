@@ -2,35 +2,47 @@ package uk.me.michaellloydlee.recruiter.cli
 
 import com.github.ajalt.clikt.command.test
 import io.ktor.client.HttpClient
+import io.ktor.client.engine.cio.CIO
 import io.ktor.client.engine.mock.MockEngine
 import io.ktor.client.engine.mock.respond
+import io.ktor.client.request.get
 import io.ktor.http.HttpStatusCode
+import io.ktor.http.Url
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
 import uk.me.michaellloydlee.recruiter.infrastructure.logging.LogRecord
 import uk.me.michaellloydlee.recruiter.infrastructure.logging.StructuredLogger
 import java.nio.file.Path
 import kotlin.io.path.createTempDirectory
+import kotlin.io.path.exists
 import kotlin.io.path.readText
 import kotlin.io.path.writeText
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class AuthenticateCommandTest {
     @Test
-    fun printsTheAuthorizationUrlWhenNoCodeIsGiven() =
+    fun opensTheBrowserAndWaitsForTheCode() =
         runTest {
             val sink = StringBuilder()
             val credentials = credentialsFile()
+            val tokenFile = createTempDirectory("token").resolve("token.json")
+            var opened = ""
 
-            val result = cli(sink).test("authenticate --credentials $credentials")
+            val result =
+                cli(sink, openBrowser = { url ->
+                    opened = url
+                    redirectTo(url)
+                }) { HttpClient(tokenEngine()) }
+                    .test("authenticate --credentials $credentials --token $tokenFile")
 
             assertEquals(0, result.statusCode)
+            assertTrue(opened.contains("accounts.google.com"))
             assertTrue(result.stderr.contains("accounts.google.com"))
-            val record = record(sink)
-            assertEquals("authenticate.authorisation_required", record.event)
-            assertTrue(record.attributes["url"]!!.contains("accounts.google.com"))
+            assertEquals("authenticate.completed", record(sink).event)
+            assertTrue(tokenFile.readText().contains("access-token"))
         }
 
     @Test
@@ -91,10 +103,53 @@ class AuthenticateCommandTest {
             assertEquals(1, result.statusCode)
         }
 
+    @Test
+    fun failsWhenTheRedirectCarriesAnotherState() =
+        runTest {
+            val sink = StringBuilder()
+            val credentials = credentialsFile()
+            val tokenFile = createTempDirectory("token").resolve("token.json")
+
+            val result =
+                cli(sink, openBrowser = { url -> redirectTo(url, state = "another-state") }) {
+                    HttpClient(tokenEngine())
+                }.test("authenticate --credentials $credentials --token $tokenFile")
+
+            assertEquals(1, result.statusCode)
+            assertFalse(tokenFile.exists())
+        }
+
+    private fun tokenEngine(): MockEngine =
+        MockEngine {
+            respond(
+                content = """{"access_token":"access-token","expires_in":3600}""",
+                status = HttpStatusCode.OK,
+            )
+        }
+
+    /**
+     * The redirect of the browser to the local service: the browser of the job
+     * seeker goes to Google and comes back with the code.
+     */
+    private suspend fun redirectTo(
+        authorizationUrl: String,
+        state: String? = null,
+    ) {
+        val parameters = Url(authorizationUrl).parameters
+        val redirectUri = parameters["redirect_uri"]!!
+        val client = HttpClient(CIO)
+        try {
+            client.get("$redirectUri/?code=the-code&state=${state ?: parameters["state"]}")
+        } finally {
+            client.close()
+        }
+    }
+
     private fun cli(
         sink: StringBuilder,
+        openBrowser: suspend (String) -> Unit = {},
         httpClientFactory: () -> HttpClient = { HttpClient(MockEngine { respond("{}", HttpStatusCode.OK) }) },
-    ): TriageCli = TriageCli(StructuredLogger(sink), httpClientFactory)
+    ): TriageCli = TriageCli(StructuredLogger(sink), httpClientFactory, openBrowser = openBrowser)
 
     private fun credentialsFile(): Path {
         val file = createTempDirectory("credentials").resolve("credentials.json")
