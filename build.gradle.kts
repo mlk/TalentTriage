@@ -50,6 +50,8 @@ tasks.shadowJar {
 // does not depend on the working directory of the build.
 sourceSets.named("test") {
     resources.srcDir("config/launchd")
+    resources.srcDir("config/systemd")
+    resources.srcDir("config/task-scheduler")
 }
 
 kotlin {
