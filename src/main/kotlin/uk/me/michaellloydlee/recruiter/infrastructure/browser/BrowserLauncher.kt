@@ -9,6 +9,10 @@ import java.io.IOException
  * on Linux and `rundll32` on Windows. A browser that cannot be opened is not
  * a failure: the URL is printed and the job seeker opens it by hand.
  *
+ * The command is not waited for: the browser opens on its own and its exit
+ * code says nothing about the authorisation. Only the failure of the command
+ * itself - a machine without `xdg-open`, for example - is a failure.
+ *
  * @param url the URL to open.
  * @param command the command that opens the browser, the URL is its last
  *   argument.
