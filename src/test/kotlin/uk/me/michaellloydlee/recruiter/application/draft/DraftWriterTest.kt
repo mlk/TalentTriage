@@ -71,21 +71,11 @@ class DraftWriterTest {
         }
 
     @Test
-    fun asksTheModelAboutThePayBelowTheTarget() =
-        runTest {
-            val model = modelEngine()
-
-            writer(model, gmailEngine()).write(message(), missingBelowTheTarget(), REQUIREMENTS)
-
-            assertTrue(instructionOf(model).contains("the pay of the mail is below the target"))
-        }
-
-    @Test
     fun doesNotNameTheTargetWhenTheRequirementsDoNotShareIt() =
         runTest {
             val model = modelEngine()
 
-            writer(model, gmailEngine()).write(message(), missingBelowTheTarget(), REQUIREMENTS)
+            writer(model, gmailEngine()).write(message(), missingPay(), REQUIREMENTS)
 
             val instruction = instructionOf(model)
             assertTrue(instruction.contains("Do not state the target of the job seeker"))
@@ -98,7 +88,7 @@ class DraftWriterTest {
             val model = modelEngine()
 
             writer(model, gmailEngine())
-                .write(message(), missingBelowTheTarget(), REQUIREMENTS.copy(shareMinimumPay = true))
+                .write(message(), missingPay(), REQUIREMENTS.copy(shareMinimumPay = true))
 
             val instruction = instructionOf(model)
             assertTrue(instruction.contains("120000 EUR"))
@@ -386,9 +376,6 @@ class DraftWriterTest {
 
     private fun missingPayAndOfficeDays(): MissingInformation =
         MissingInformation(pay = PayInformation.MISSING, officeDays = true)
-
-    private fun missingBelowTheTarget(): MissingInformation =
-        MissingInformation(pay = PayInformation.BELOW_THE_TARGET, officeDays = false)
 
     companion object {
         private val REQUIREMENTS =

@@ -599,7 +599,7 @@ label, so every state label is excluded by its own path:
 | `Recruiters/JobListing` | a job listing, an alert of a job board that offers many jobs at once | no, it stays in the inbox |
 | `Recruiters/WorthFollowUp` | worth a follow up | no, it stays in the inbox |
 | `Recruiters/NeedsMoreInformation` | a recruiter mail that matches, but something is missing: the pay is not stated, the job description does not say how many days of office it demands or the model could not evaluate the job description | no, it stays in the inbox |
-| `Recruiters/Trash` | not worth any attention | yes, the message leaves the inbox |
+| `Recruiters/Trash` | not worth any attention: the job description does not match, the job demands more days of office than allowed or the pay is below the target of the job seeker | yes, the message leaves the inbox |
 
 The evaluation of a job description has a state of its own (`EvaluationState`):
 it holds the three states an evaluation can lead to - `WorthFollowUp`,
@@ -621,10 +621,13 @@ run.
 ### The draft that asks the recruiter
 
 A message that matches but does not say everything the job seeker needs to know
-- it states no pay, its pay is below the target or the job description does not
-say how many days of office it demands - gets a **draft** in the mailbox. The
-draft is a reply in the thread of the message, the pipeline writes it and never
-sends it: the job seeker reads it and decides.
+- it states no pay or the job description does not say how many days of office
+it demands - gets a **draft** in the mailbox. The draft is a reply in the
+thread of the message, the pipeline writes it and never sends it: the job
+seeker reads it and decides.
+
+A pay below the target of the job seeker is not one of the gaps: the recruiter
+cannot change it, so the mail is trashed and no draft is written.
 
 The draft is written by the chat API of Ollama (`/api/chat`), a model of its own
 (`--draft-model`). It says that it was written by an AI on behalf of the job

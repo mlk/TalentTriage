@@ -25,6 +25,7 @@ import uk.me.michaellloydlee.recruiter.application.screening.ScreeningService
 import uk.me.michaellloydlee.recruiter.domain.gmail.EmailMessage
 import uk.me.michaellloydlee.recruiter.domain.gmail.RunTarget
 import uk.me.michaellloydlee.recruiter.domain.requirements.JobRequirements
+import uk.me.michaellloydlee.recruiter.domain.requirements.PayRequirement
 import uk.me.michaellloydlee.recruiter.infrastructure.gmail.GmailApiClient
 import uk.me.michaellloydlee.recruiter.infrastructure.gmail.GmailDraftsApi
 import uk.me.michaellloydlee.recruiter.infrastructure.gmail.GmailLabelStateManager
@@ -245,6 +246,27 @@ class ProcessInboxServiceTest {
         }
 
     @Test
+    fun trashesAMailWhosePayIsBelowTheTarget() =
+        runTest {
+            val gmail = gmailEngine()
+            val model = modelEngine()
+
+            val summary = service(gmail, model, requirements = REQUIREMENTS_WITH_A_TARGET).run(WINDOW)
+
+            assertEquals(2, summary.trashed)
+            assertEquals(0, summary.needsMoreInformation)
+            assertEquals(0, summary.drafts)
+            val labels = gmail.requestHistory.filter { it.url.encodedPath.endsWith("/modify") }
+            assertEquals(2, labels.size)
+            labels.forEach { label ->
+                val body = (label.body as TextContent).text
+                assertTrue(body.contains("Label_trash"))
+            }
+            val drafts = gmail.requestHistory.filter { it.url.encodedPath.endsWith("/users/me/drafts") }
+            assertTrue(drafts.isEmpty())
+        }
+
+    @Test
     fun writesADraftForAMailThatNeedsMoreInformation() =
         runTest {
             val gmail = gmailEngine()
@@ -316,6 +338,7 @@ class ProcessInboxServiceTest {
         gmail: MockEngine,
         model: MockEngine,
         log: StringBuilder = StringBuilder(),
+        requirements: JobRequirements = REQUIREMENTS,
     ): ProcessInboxService {
         val api =
             GmailApiClient(
@@ -362,12 +385,7 @@ class ProcessInboxServiceTest {
                     stateManager = stateManager,
                 ),
             drafts = DraftWriter(client = chatClient, drafts = GmailDraftsApi(api)),
-            requirements =
-                JobRequirements(
-                    minimumPay = null,
-                    maximumOfficeDays = 2,
-                    profile = "Senior Kotlin engineer",
-                ),
+            requirements = requirements,
             stateManager = stateManager,
             logger = StructuredLogger(log),
         )
@@ -621,6 +639,20 @@ class ProcessInboxServiceTest {
 
     companion object {
         private val NOW: Instant = Instant.parse("2026-10-24T08:00:00Z")
+
+        private val REQUIREMENTS: JobRequirements =
+            JobRequirements(
+                minimumPay = null,
+                maximumOfficeDays = 2,
+                profile = "Senior Kotlin engineer",
+            )
+
+        private val REQUIREMENTS_WITH_A_TARGET: JobRequirements =
+            JobRequirements(
+                minimumPay = PayRequirement(amount = 120_000.0, currency = "EUR"),
+                maximumOfficeDays = 2,
+                profile = "Senior Kotlin engineer",
+            )
 
         private val WINDOW: RunTarget = RunTarget.Window(NOW.minusSeconds(86400))
 
