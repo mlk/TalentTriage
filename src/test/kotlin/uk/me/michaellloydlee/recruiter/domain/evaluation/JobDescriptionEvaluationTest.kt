@@ -1,6 +1,5 @@
 package uk.me.michaellloydlee.recruiter.domain.evaluation
 
-import uk.me.michaellloydlee.recruiter.domain.gmail.RecruiterLabel
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
@@ -9,14 +8,14 @@ class JobDescriptionEvaluationTest {
     fun aJobThatMatchesIsWorthAFollowUp() {
         val evaluation = evaluation(payMatches = true, jdMatches = true, officeDays = AT_MOST, payMissing = false)
 
-        assertEquals(RecruiterLabel.WORTH_FOLLOW_UP, evaluation.state)
+        assertEquals(EvaluationState.WORTH_FOLLOW_UP, evaluation.state)
     }
 
     @Test
     fun aJobThatDoesNotMatchIsTrashed() {
         val evaluation = evaluation(payMatches = true, jdMatches = false, officeDays = AT_MOST, payMissing = false)
 
-        assertEquals(RecruiterLabel.TRASH, evaluation.state)
+        assertEquals(EvaluationState.TRASH, evaluation.state)
     }
 
     @Test
@@ -29,28 +28,28 @@ class JobDescriptionEvaluationTest {
                 payMissing = false,
             )
 
-        assertEquals(RecruiterLabel.TRASH, evaluation.state)
+        assertEquals(EvaluationState.TRASH, evaluation.state)
     }
 
     @Test
     fun aJobWithoutAPayNeedsMoreInformation() {
         val evaluation = evaluation(payMatches = false, jdMatches = true, officeDays = AT_MOST, payMissing = true)
 
-        assertEquals(RecruiterLabel.NEEDS_MORE_INFORMATION, evaluation.state)
+        assertEquals(EvaluationState.NEEDS_MORE_INFORMATION, evaluation.state)
     }
 
     @Test
     fun aJobWithATooLowPayNeedsMoreInformation() {
         val evaluation = evaluation(payMatches = false, jdMatches = true, officeDays = AT_MOST, payMissing = false)
 
-        assertEquals(RecruiterLabel.NEEDS_MORE_INFORMATION, evaluation.state)
+        assertEquals(EvaluationState.NEEDS_MORE_INFORMATION, evaluation.state)
     }
 
     @Test
     fun aJobThatDoesNotMatchIsTrashedEvenWithoutAPay() {
         val evaluation = evaluation(payMatches = false, jdMatches = false, officeDays = AT_MOST, payMissing = true)
 
-        assertEquals(RecruiterLabel.TRASH, evaluation.state)
+        assertEquals(EvaluationState.TRASH, evaluation.state)
     }
 
     @Test
@@ -63,7 +62,7 @@ class JobDescriptionEvaluationTest {
                 payMissing = false,
             )
 
-        assertEquals(RecruiterLabel.NEEDS_MORE_INFORMATION, evaluation.state)
+        assertEquals(EvaluationState.NEEDS_MORE_INFORMATION, evaluation.state)
     }
 
     @Test
@@ -76,7 +75,7 @@ class JobDescriptionEvaluationTest {
                 payMissing = true,
             )
 
-        assertEquals(RecruiterLabel.NEEDS_MORE_INFORMATION, evaluation.state)
+        assertEquals(EvaluationState.NEEDS_MORE_INFORMATION, evaluation.state)
     }
 
     @Test
@@ -89,7 +88,7 @@ class JobDescriptionEvaluationTest {
                 payMissing = false,
             )
 
-        assertEquals(RecruiterLabel.TRASH, evaluation.state)
+        assertEquals(EvaluationState.TRASH, evaluation.state)
     }
 
     @Test
@@ -133,7 +132,7 @@ class JobDescriptionEvaluationTest {
     fun anEvaluationTheModelCouldNotMakeNeedsMoreInformation() {
         val evaluation = JobDescriptionEvaluation.Unknown("The decision model could not be reached")
 
-        assertEquals(RecruiterLabel.NEEDS_MORE_INFORMATION, evaluation.state)
+        assertEquals(EvaluationState.NEEDS_MORE_INFORMATION, evaluation.state)
     }
 
     @Test

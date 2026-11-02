@@ -1,6 +1,5 @@
 package uk.me.michaellloydlee.recruiter.domain.evaluation
 
-import uk.me.michaellloydlee.recruiter.domain.gmail.RecruiterLabel
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
@@ -29,9 +28,9 @@ class OfficeDaysTest {
 
         assertEquals(
             mapOf(
-                OfficeDays.AT_MOST_THE_ALLOWED_DAYS to RecruiterLabel.WORTH_FOLLOW_UP,
-                OfficeDays.MORE_THAN_THE_ALLOWED_DAYS to RecruiterLabel.TRASH,
-                OfficeDays.UNCLEAR to RecruiterLabel.NEEDS_MORE_INFORMATION,
+                OfficeDays.AT_MOST_THE_ALLOWED_DAYS to EvaluationState.WORTH_FOLLOW_UP,
+                OfficeDays.MORE_THAN_THE_ALLOWED_DAYS to EvaluationState.TRASH,
+                OfficeDays.UNCLEAR to EvaluationState.NEEDS_MORE_INFORMATION,
             ),
             states,
         )
