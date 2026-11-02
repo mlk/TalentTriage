@@ -15,7 +15,7 @@ starts, does its work and exits.
 | Language | Kotlin (JVM 17) |
 | Build | Gradle, Kotlin DSL, the Gradle wrapper |
 | Package namespace | `uk.me.michaellloydlee.recruiter` |
-| HTTP | Ktor client (CIO) with `kotlinx.serialization` |
+| HTTP | Ktor client (CIO) with `kotlinx.serialization`, a local Ktor server (CIO) for the authorisation |
 | Documents | Apache PDFBox (`.pdf`), Apache POI (`.docx`) |
 | Quality | ktlint, detekt, JaCoCo (80% line coverage enforced), GitHub Actions |
 
@@ -306,3 +306,11 @@ A story has to be readable on its own, so a ticket follows a fixed shape:
   `nimble`, `tev1`, `clef` and `clef-flash`; `clef:cloud` runs in the cloud of Ollama (Ollama
   v0.40.5 or later, a paid plan or usage credits).
 * **The test suite must stay offline** — no Gmail, no Ollama, no model downloads.
+* **The authorisation happens in the browser.** The `authenticate` command starts a local service
+  on a free port of the loopback interface, opens the authorisation page of Google and waits for
+  the redirect: the service catches the code, exchanges it for a token and stores it. The port of
+  the redirect URI is the port of the service — Google does not check the port of the loopback
+  redirect of a desktop client, so the redirect URI registered with Google stays `http://localhost`.
+  The service checks the `state` of the redirect: a redirect that does not carry the state of the
+  command is refused. The `CODE` argument stays the way out when the port of the service is not
+  free.

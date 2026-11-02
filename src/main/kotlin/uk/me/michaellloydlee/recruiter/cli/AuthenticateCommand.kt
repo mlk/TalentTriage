@@ -8,31 +8,42 @@ import com.github.ajalt.clikt.parameters.options.default
 import com.github.ajalt.clikt.parameters.options.multiple
 import com.github.ajalt.clikt.parameters.options.option
 import io.ktor.client.HttpClient
+import uk.me.michaellloydlee.recruiter.infrastructure.browser.openInBrowser
+import uk.me.michaellloydlee.recruiter.infrastructure.gmail.AuthorizationOutcome
 import uk.me.michaellloydlee.recruiter.infrastructure.gmail.FileOAuth2TokenStore
 import uk.me.michaellloydlee.recruiter.infrastructure.gmail.GmailAuthenticationException
 import uk.me.michaellloydlee.recruiter.infrastructure.gmail.GmailAuthenticator
 import uk.me.michaellloydlee.recruiter.infrastructure.gmail.GmailHttpClientFactory
 import uk.me.michaellloydlee.recruiter.infrastructure.gmail.GmailOAuth2Client
 import uk.me.michaellloydlee.recruiter.infrastructure.gmail.GoogleClientCredentials
+import uk.me.michaellloydlee.recruiter.infrastructure.gmail.LocalAuthorizationService
 import uk.me.michaellloydlee.recruiter.infrastructure.gmail.OAuth2Exception
+import uk.me.michaellloydlee.recruiter.infrastructure.gmail.OAuth2Token
 import uk.me.michaellloydlee.recruiter.infrastructure.logging.StructuredLogger
+import java.net.URI
+import java.net.URISyntaxException
 import java.nio.file.Path
-import java.util.UUID
 
 /**
  * Authorises the application against the Gmail API.
  *
- * Without an authorisation code the command prints the URL the user has to
- * open, with the code it exchanges the code for a token and stores it.
+ * Without an authorisation code the command starts a local service, opens the
+ * authorisation page of Google in the browser and waits for the redirect: the
+ * service catches the code, exchanges it for a token and stores it. With the
+ * code the command exchanges it for a token and stores it, the code was
+ * copied out of the address bar of the browser.
  *
  * @param logger sink for the structured log output.
  * @param httpClientFactory creates the client used for the token requests. It
- *   is called once per invocation and the client is closed when the command
- *   is done, so the factory must return a fresh client every time.
+ *   is called once per invocation and the client is closed when the command is
+ *   done, so the factory must return a fresh client every time.
+ * @param openBrowser opens the authorisation page of Google in the browser of
+ *   the machine.
  */
 class AuthenticateCommand(
     private val logger: StructuredLogger,
     private val httpClientFactory: () -> HttpClient = { GmailHttpClientFactory.create() },
+    private val openBrowser: suspend (String) -> Unit = { url -> openInBrowser(url) },
 ) : SuspendingCliktCommand(name = COMMAND_NAME) {
     private val code: String? by
         argument(
@@ -57,7 +68,9 @@ class AuthenticateCommand(
     private val redirectUri: String by
         option(
             "--redirect-uri",
-            help = "The redirect URI registered for the Google application",
+            help =
+                "The redirect URI registered for the Google application. The local service " +
+                    "listens on its host, the port of the service is a free one",
         ).default(DEFAULT_REDIRECT_URI)
 
     private val scopes: List<String> by
@@ -78,7 +91,7 @@ class AuthenticateCommand(
                 )
             val authorizationCode = code
             if (authorizationCode == null) {
-                printAuthorizationUrl(authenticator, requestedScopes)
+                authorize(authenticator, requestedScopes)
                 return@use
             }
             val token =
@@ -87,17 +100,93 @@ class AuthenticateCommand(
                 } catch (error: OAuth2Exception) {
                     throw CommandFailedException(error.message.orEmpty(), error)
                 }
+            logAuthorised(token)
+        }
+    }
+
+    /**
+     * The authorisation in the browser: the local service catches the redirect
+     * of Google, the code is exchanged for a token and the token is stored.
+     *
+     * @param authenticator exchanges the authorisation code for a token.
+     * @param requestedScopes the scopes the authorisation asks for.
+     */
+    private suspend fun authorize(
+        authenticator: GmailAuthenticator,
+        requestedScopes: List<String>,
+    ) {
+        val service =
+            LocalAuthorizationService(
+                authenticator = authenticator,
+                logger = logger,
+                host = hostOf(redirectUri),
+            )
+        try {
+            service.start()
+            val url =
+                authenticator.authorizationUrl(
+                    redirectUri = service.redirectUri(),
+                    scopes = requestedScopes,
+                    state = service.state(),
+                )
+            echo(
+                "The browser opens the authorisation page of Google, allow the application and the " +
+                    "command continues:",
+                err = true,
+            )
+            echo(url, err = true)
             logger.info(
-                event = "$COMMAND_NAME.completed",
-                message = "The Gmail API is authorised",
+                event = "$COMMAND_NAME.authorisation_required",
+                message = "The application has to be authorised in a browser first",
                 attributes =
                     mapOf(
-                        "token_file" to tokenFile,
-                        "expires_at" to token.expiresAt.toString(),
-                        "scope" to token.scope.orEmpty(),
+                        "url" to url,
+                        "redirect_uri" to service.redirectUri(),
+                        "scope" to requestedScopes.joinToString(separator = " "),
                     ),
             )
+            openBrowser(url)
+            when (val outcome = service.awaitAuthorization()) {
+                is AuthorizationOutcome.Authorised -> logAuthorised(outcome.token)
+                is AuthorizationOutcome.Failed -> throw CommandFailedException(outcome.reason)
+            }
+        } finally {
+            service.stop()
         }
+    }
+
+    /**
+     * The host of the redirect URI, the local service listens on it.
+     *
+     * @param uri the redirect URI of the command line.
+     * @return the host of the redirect URI.
+     */
+    private fun hostOf(uri: String): String {
+        val host =
+            try {
+                URI(uri).host
+            } catch (error: URISyntaxException) {
+                throw CommandFailedException("'$uri' is not a URI", error)
+            }
+        return host ?: throw CommandFailedException("'$uri' has no host, the local service needs one")
+    }
+
+    /**
+     * The log of an authorisation that worked.
+     *
+     * @param token the token that was stored.
+     */
+    private fun logAuthorised(token: OAuth2Token) {
+        logger.info(
+            event = "$COMMAND_NAME.completed",
+            message = "The Gmail API is authorised",
+            attributes =
+                mapOf(
+                    "token_file" to tokenFile,
+                    "expires_at" to token.expiresAt.toString(),
+                    "scope" to token.scope.orEmpty(),
+                ),
+        )
     }
 
     private fun loadCredentials(): GoogleClientCredentials =
@@ -106,29 +195,6 @@ class AuthenticateCommand(
         } catch (error: GmailAuthenticationException) {
             throw CommandFailedException(error.message.orEmpty(), error)
         }
-
-    private fun printAuthorizationUrl(
-        authenticator: GmailAuthenticator,
-        requestedScopes: List<String>,
-    ) {
-        val url = authenticator.authorizationUrl(redirectUri, requestedScopes, UUID.randomUUID().toString())
-        echo(
-            "Open the following URL in a browser, authorise the application and copy the " +
-                "authorisation code from the address bar of the redirect:",
-            err = true,
-        )
-        echo(url, err = true)
-        logger.info(
-            event = "$COMMAND_NAME.authorisation_required",
-            message = "The application has to be authorised in a browser first",
-            attributes =
-                mapOf(
-                    "url" to url,
-                    "redirect_uri" to redirectUri,
-                    "scope" to requestedScopes.joinToString(separator = " "),
-                ),
-        )
-    }
 
     override fun help(context: Context): String =
         "Authorise the application against the Gmail API and store the token locally."

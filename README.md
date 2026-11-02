@@ -92,6 +92,7 @@ flowchart TD
 * **Build System:** Gradle with **Kotlin DSL (`build.gradle.kts`)** and the Gradle Wrapper
 * **Package Namespace:** `uk.me.michaellloydlee.recruiter`
 * **HTTP Client:** Ktor Client CIO (`kotlinx.serialization`)
+* **Local HTTP Service:** Ktor Server CIO (the authorisation callback of the browser)
 * **Attachment Parsers:** Apache PDFBox & Apache POI
 * **Static Analysis & Linting:** `ktlint`, `detekt`
 * **Code Coverage:** JaCoCo (**80% line coverage limit enforced**)
@@ -230,7 +231,7 @@ need a paid plan or usage credits. A local model works as well: `nimble`, `tev1`
 | `authenticate` | `--token`, `-t` | The file the OAuth2 token is stored in | `token.json` |
 | `authenticate` | `--redirect-uri` | The redirect URI registered for the Google application | `http://localhost` |
 | `authenticate` | `--scope`, `-s` | The OAuth2 scopes to request, repeatable | `https://www.googleapis.com/auth/gmail.modify` |
-| `authenticate` | `CODE` (argument) | The authorisation code Google redirects to, taken from the address bar | — |
+| `authenticate` | `CODE` (argument) | The authorisation code Google redirects to, copied from the address bar by hand | — |
 | `pending` | `--credentials`, `-c` | The file with the OAuth2 client credentials | `credentials.json` |
 | `pending` | `--token`, `-t` | The file the OAuth2 token is stored in | `token.json` |
 | `pending` | `--since` | How far back the messages are looked for, an ISO-8601 duration | the gap since the last successful run |
@@ -349,7 +350,10 @@ message:
 | `process-inbox.completed` | INFO | the run is done, the attributes are the counters of the run, the id of the message instead of the window for a run of one message |
 | `pending.listed` / `pending.message` | INFO | the messages that were not processed yet |
 | `requirements.started` / `requirements.completed` | INFO | the requirements were written from the CV |
-| `authenticate.authorisation_required` / `authenticate.completed` | INFO | the authorisation of the mailbox |
+| `authenticate.authorisation_required` | INFO | the authorisation page of Google is open (`url`, `redirect_uri`, `scope`) |
+| `authenticate.service_started` | INFO | the local service waits for the redirect of Google (`redirect_uri`) |
+| `authenticate.refused` | WARN | the redirect does not carry the state of the service (`state`) |
+| `authenticate.completed` | INFO | the authorisation of the mailbox (`token_file`, `expires_at`, `scope`) |
 | `recruiter-cli.failed` | ERROR | a failure nobody expected, the message holds the stack trace |
 
 > **Note:** on JDK 24 and newer, Clikt's terminal detection prints a `native-access` warning
@@ -596,19 +600,26 @@ automatically afterwards.
    recruiter-cli authenticate
    ```
 
-   The command prints the URL of the Google authorisation page. Open it in a browser, allow
-   the application to access the mailbox and copy the authorisation code from the address bar
-   of the redirect. The redirect itself fails to connect — that is expected, the code in the
-   address bar is what matters.
+   The command starts a local service on a free port of the loopback interface and opens the
+   authorisation page of Google in the browser. Allow the application to access the mailbox and
+   the command continues: the local service catches the redirect of Google, exchanges the code
+   for a token and writes the token to `token.json`. The browser gets a page that says the
+   application is authorised, the command exits.
 
-3. **Exchange the code for a token:**
+   The URL of the authorisation page is printed as well, so the authorisation can be done in
+   another browser or on another machine. The service waits five minutes for the redirect.
+
+3. **Exchange the code by hand (only when the local service cannot help):**
 
    ```bash
    recruiter-cli authenticate <code>
    ```
 
-   The token is written to `token.json` (both files are git-ignored) and the access token is
-   refreshed automatically when it expires.
+   The code of the address bar of the redirect is exchanged for a token the same way. This is the
+   way out when the port of the local service is not free.
+
+The token is written to `token.json` (both files are git-ignored) and the access token is
+refreshed automatically when it expires.
 
 ---
 
@@ -657,7 +668,9 @@ src/main/kotlin/uk/me/michaellloydlee/recruiter/
 │   ├── requirements/  # The requirements of the job seeker and the pays of the market
 │   └── screening/     # The rules of the screening
 └── infrastructure/    # Gmail, Ollama, PDF/Word adapters, logging
-    ├── gmail/         # OAuth2 credentials, token store, Gmail REST client, label state, drafts
+    ├── browser/       # Opens the authorisation page of Google in the browser
+    ├── gmail/         # OAuth2 credentials, token store, Gmail REST client, label state, drafts,
+    │                  # the local service that catches the authorisation
     ├── llm/           # Ollama chat client, decision client and web search
     ├── logging/       # Structured (JSON lines) logger
     ├── parser/        # Text extraction of the attached documents (PDFBox)
