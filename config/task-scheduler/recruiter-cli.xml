@@ -10,6 +10,10 @@
     last successful run, so it looks at every mail exactly once and it never
     misses the mail of an outage.
 
+    The task runs on a laptop on battery: the job of macOS runs as well, a
+    triage pass that is missed because the machine is mobile is a mail that is
+    looked at an hour later.
+
     Install it as a task of the user:
 
         schtasks /Create /TN "RecruiterCli" /XML config\task-scheduler\recruiter-cli.xml /F
@@ -45,8 +49,8 @@
     </Principals>
     <Settings>
         <MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy>
-        <DisallowStartIfOnBatteries>true</DisallowStartIfOnBatteries>
-        <StopIfGoingOnBatteries>true</StopIfGoingOnBatteries>
+        <DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries>
+        <StopIfGoingOnBatteries>false</StopIfGoingOnBatteries>
         <StartWhenAvailable>false</StartWhenAvailable>
         <RunOnlyIfNetworkAvailable>false</RunOnlyIfNetworkAvailable>
         <IdleSettings>

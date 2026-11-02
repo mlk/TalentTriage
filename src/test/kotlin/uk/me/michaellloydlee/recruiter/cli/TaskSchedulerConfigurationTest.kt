@@ -61,6 +61,15 @@ class TaskSchedulerConfigurationTest {
         assertEquals("1", text("DaysInterval"))
     }
 
+    @Test
+    fun runsTheTaskOnALaptopOnBattery() {
+        // The job of macOS runs on a laptop on battery, a triage pass that is
+        // missed because the machine is mobile is a mail that is looked at an
+        // hour later.
+        assertEquals("false", text("DisallowStartIfOnBatteries"))
+        assertEquals("false", text("StopIfGoingOnBatteries"))
+    }
+
     private fun arguments(): List<String> = text("Arguments").split(" ").filter { it.isNotEmpty() }
 
     private fun argumentAfter(
