@@ -97,7 +97,9 @@ of the four state labels below `Recruiters/` — `JobListing`, `WorthFollowUp`,
   label that only says "already looked at" is not a state.
 * `NeedsMoreInformation` is the single state for a mail that matches but is incomplete. Both gaps
   of a job description land there: the pay is not stated and the days of office are not stated
-  (`OfficeDays.UNCLEAR`). It is one state, not two.
+  (`OfficeDays.UNCLEAR`). It is one state, not two. A pay below the target of the job seeker is not
+  a gap — the recruiter cannot change it — it is a bad fit and the mail is `Recruiters/Trash`. A
+  mail that states no pay at all is a gap: the pay is missing before it is too low.
 * A job description the model could not evaluate is `NeedsMoreInformation` as well: the mail waits
   for the job seeker instead of being asked again by every run. The reason of the model goes into
   the log.
@@ -127,8 +129,9 @@ the gate.
 ### The draft that asks the recruiter
 
 A mail that matches but does not say everything the job seeker needs gets a draft in the mailbox:
-the pay is not stated, the pay is below the target or the number of days of office is not stated.
-The pipeline writes the draft and never sends it.
+the pay is not stated or the number of days of office is not stated. The pipeline writes the draft
+and never sends it. A pay below the target of the job seeker is not one of the gaps: the recruiter
+cannot change it, the mail is trashed and no draft is written.
 
 * The draft is written by the chat API of Ollama (`/api/chat`), the decision API answers questions,
   it does not write. It is a reply in the thread of the mail: `In-Reply-To`, `References` and the
