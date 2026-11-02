@@ -510,6 +510,12 @@ label, so every state label is excluded by its own path:
 | `Recruiters/NeedsMoreInformation` | a recruiter mail that matches, but something is missing: the pay is not stated, the job description does not say how many days of office it demands or the model could not evaluate the job description | no, it stays in the inbox |
 | `Recruiters/Trash` | not worth any attention | yes, the message leaves the inbox |
 
+The evaluation of a job description has a state of its own (`EvaluationState`):
+it holds the three states an evaluation can lead to - `WorthFollowUp`,
+`NeedsMoreInformation` and `Trash` - and the label of each of them. A job
+listing is a decision of the screening, a listing is not one job and it is not
+evaluated, so it is not a state of an evaluation.
+
 A message carries exactly one state label - applying a new state removes the
 other ones - and the state labels are created in the mailbox when they do not
 exist yet. The state label is the marker of the pipeline: the search of the

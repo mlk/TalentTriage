@@ -1,5 +1,6 @@
 package uk.me.michaellloydlee.recruiter.infrastructure.gmail
 
+import uk.me.michaellloydlee.recruiter.domain.evaluation.EvaluationState
 import uk.me.michaellloydlee.recruiter.domain.gmail.EmailMessage
 import uk.me.michaellloydlee.recruiter.domain.gmail.RecruiterLabel
 import uk.me.michaellloydlee.recruiter.domain.gmail.transition
@@ -34,6 +35,22 @@ class GmailLabelStateManager(
     ) {
         val transition = label.transition(stateLabelIds(), INBOX_LABEL_ID)
         messages.modifyLabels(messageId, transition.add, transition.remove)
+    }
+
+    /**
+     * Applies the state of an evaluation to a message.
+     *
+     * The state of an evaluation carries the label of the mail: the states of
+     * the mailbox are the states of the pipeline.
+     *
+     * @param messageId the id of the message.
+     * @param state the state the evaluation leads to.
+     */
+    suspend fun apply(
+        messageId: String,
+        state: EvaluationState,
+    ) {
+        apply(messageId, state.label)
     }
 
     /**

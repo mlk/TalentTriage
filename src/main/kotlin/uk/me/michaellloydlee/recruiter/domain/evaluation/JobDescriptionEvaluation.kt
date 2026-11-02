@@ -1,7 +1,5 @@
 package uk.me.michaellloydlee.recruiter.domain.evaluation
 
-import uk.me.michaellloydlee.recruiter.domain.gmail.RecruiterLabel
-
 /**
  * The evaluation of a job description against the requirements of the job
  * seeker.
@@ -10,7 +8,7 @@ sealed interface JobDescriptionEvaluation {
     /**
      * The state of the pipeline the evaluation leads to.
      */
-    val state: RecruiterLabel
+    val state: EvaluationState
 
     /**
      * The four criteria of the evaluation.
@@ -34,14 +32,14 @@ sealed interface JobDescriptionEvaluation {
          * everything the job seeker needs to know - the pay, the days of
          * office - is not thrown away either: it waits for the job seeker.
          */
-        override val state: RecruiterLabel
+        override val state: EvaluationState
             get() =
                 when {
-                    !jdMatches -> RecruiterLabel.TRASH
-                    officeDays == OfficeDays.MORE_THAN_THE_ALLOWED_DAYS -> RecruiterLabel.TRASH
-                    officeDays == OfficeDays.UNCLEAR -> RecruiterLabel.NEEDS_MORE_INFORMATION
-                    payMissing || !payMatches -> RecruiterLabel.NEEDS_MORE_INFORMATION
-                    else -> RecruiterLabel.WORTH_FOLLOW_UP
+                    !jdMatches -> EvaluationState.TRASH
+                    officeDays == OfficeDays.MORE_THAN_THE_ALLOWED_DAYS -> EvaluationState.TRASH
+                    officeDays == OfficeDays.UNCLEAR -> EvaluationState.NEEDS_MORE_INFORMATION
+                    payMissing || !payMatches -> EvaluationState.NEEDS_MORE_INFORMATION
+                    else -> EvaluationState.WORTH_FOLLOW_UP
                 }
 
         /**
@@ -89,7 +87,7 @@ sealed interface JobDescriptionEvaluation {
     data class Unknown(
         val reason: String,
     ) : JobDescriptionEvaluation {
-        override val state: RecruiterLabel = RecruiterLabel.NEEDS_MORE_INFORMATION
+        override val state: EvaluationState = EvaluationState.NEEDS_MORE_INFORMATION
     }
 
     companion object {

@@ -4,9 +4,9 @@ import uk.me.michaellloydlee.recruiter.application.draft.DraftOutcome
 import uk.me.michaellloydlee.recruiter.application.draft.DraftWriter
 import uk.me.michaellloydlee.recruiter.application.evaluation.EvaluationService
 import uk.me.michaellloydlee.recruiter.application.screening.ScreeningService
+import uk.me.michaellloydlee.recruiter.domain.evaluation.EvaluationState
 import uk.me.michaellloydlee.recruiter.domain.evaluation.JobDescriptionEvaluation
 import uk.me.michaellloydlee.recruiter.domain.gmail.EmailMessage
-import uk.me.michaellloydlee.recruiter.domain.gmail.RecruiterLabel
 import uk.me.michaellloydlee.recruiter.domain.gmail.RunTarget
 import uk.me.michaellloydlee.recruiter.domain.requirements.JobRequirements
 import uk.me.michaellloydlee.recruiter.domain.screening.ScreeningDecision
@@ -155,24 +155,20 @@ class ProcessInboxService(
                     "reason" to reasonOf(evaluation),
                 ),
         )
-        // An evaluation leads to one of three states. The screening decides
-        // `JobListing`, the branch below is there for the compiler.
+        // An evaluation leads to one of three states. A job listing is a
+        // decision of the screening, it is not evaluated.
         when (evaluation.state) {
-            RecruiterLabel.WORTH_FOLLOW_UP -> {
+            EvaluationState.WORTH_FOLLOW_UP -> {
                 counters.worthFollowUp++
             }
 
-            RecruiterLabel.NEEDS_MORE_INFORMATION -> {
+            EvaluationState.NEEDS_MORE_INFORMATION -> {
                 counters.needsMoreInformation++
                 askForInformation(message, evaluation, counters)
             }
 
-            RecruiterLabel.TRASH -> {
+            EvaluationState.TRASH -> {
                 counters.trashed++
-            }
-
-            RecruiterLabel.JOB_LISTING -> {
-                counters.jobListings++
             }
         }
     }

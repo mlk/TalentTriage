@@ -103,6 +103,10 @@ of the four state labels below `Recruiters/` — `JobListing`, `WorthFollowUp`,
   of the subject decide it without a model, the model is the fallback for the mails the rules do
   not catch. A listing is not evaluated — it is not one job.
 * The state is derived from the evaluation, never from the exception of the model.
+* The state of an evaluation is a type of its own (`domain/evaluation/EvaluationState.kt`): it holds
+  the three states an evaluation can lead to and the label of each of them. A job listing is a
+  decision of the screening — a listing is not one job and it is not evaluated — so it is not a
+  state of an evaluation and the code does not carry a branch for it.
 * The label carries the state, the log carries the reason. A detail that is not a state — why the
   evaluation is incomplete, for instance — belongs in the log.
 * A message the job seeker asks for by its id (`process-inbox --id`) is looked at as if it were
