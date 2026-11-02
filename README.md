@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/mlk/TalentTriage/actions/workflows/ci.yml/badge.svg)](https://github.com/mlk/TalentTriage/actions/workflows/ci.yml)
 
-> **A resource-efficient, local-first recruiter email triage engine built in Kotlin for macOS.**
+> **A resource-efficient, local-first recruiter email triage engine built in Kotlin for macOS, Linux and Windows.**
 
 **TalentTriage** automatically checks your Gmail inbox, filters out recruiter noise using local heuristic rules and lightweight LLM classification, extracts attached Job Descriptions (PDF/Word), and performs deep criteria analysis (Pay, JD relevance, Days in Office) with the models of Ollama — the local instance, the cloud of Ollama or an AirLLM wrapper.
 
@@ -10,12 +10,12 @@
 
 ## 🏗️ Architecture Overview
 
-The system operates as an ephemeral, scheduled CLI job (`talent-triage process-inbox`) triggered by macOS `launchd`. It communicates with the Gmail REST API to track state using nested Gmail labels (`Recruiters/*`), avoiding background process memory overhead.
+The system operates as an ephemeral, scheduled CLI job (`talent-triage process-inbox`) triggered by the scheduler of the system: `launchd` on macOS, a systemd timer on Linux, a task of the Task Scheduler on Windows. It communicates with the Gmail REST API to track state using nested Gmail labels (`Recruiters/*`), avoiding background process memory overhead.
 
 ```mermaid
 flowchart TD
     subgraph Trigger ["⏰ System Trigger"]
-        launchd["macOS launchd (Hourly)"]
+        scheduler["launchd, systemd timer or\nTask Scheduler (Hourly)"]
     end
 
     subgraph CLI ["⚡ TalentTriage CLI Entry Point"]
@@ -43,7 +43,7 @@ flowchart TD
     end
 
     %% Execution Flow
-    launchd --> Command
+    scheduler --> Command
     Command --> Fetch
     Fetch --> Heuristics
 
@@ -76,7 +76,7 @@ flowchart TD
 
 ## ✨ Key Features
 
-* **Zero-Idle Memory Footprint:** Executes completely as a CLI command and terminates, returning 100% of VRAM/RAM back to macOS.
+* **Zero-Idle Memory Footprint:** Executes completely as a CLI command and terminates, returning 100% of VRAM/RAM back to the system.
 * **Stateless Gmail Tracking:** Uses nested Gmail labels (`Recruiters/JobListing`, `Recruiters/WorthFollowUp`, `Recruiters/NeedsMoreInformation`, `Recruiters/Trash`) as state flags.
 * **Document Parsing Engine:** Automatically extracts plain text/Markdown from attached `.pdf` and `.docx` job descriptions using Apache PDFBox and Apache POI. A broken attachment is reported in the log of the run, it never stops the run.
 * **Drafts For The Recruiter:** A mail that matches but does not say everything the job seeker needs gets a draft that asks the recruiter for it — the pay, the days of office, or both. The pipeline writes the draft and never sends it.
@@ -89,6 +89,7 @@ flowchart TD
 ## 🛠️ Tech Stack & Tooling
 
 * **Language:** Kotlin (JVM 17)
+* **Systems:** macOS, Linux and Windows
 * **Build System:** Gradle with **Kotlin DSL (`build.gradle.kts`)** and the Gradle Wrapper
 * **Package Namespace:** `uk.me.michaellloydlee.recruiter`
 * **HTTP Client:** Ktor Client CIO (`kotlinx.serialization`)
@@ -351,6 +352,8 @@ message:
 | `pending.listed` / `pending.message` | INFO | the messages that were not processed yet |
 | `requirements.started` / `requirements.completed` | INFO | the requirements were written from the CV |
 | `authenticate.authorisation_required` | INFO | the authorisation page of Google is open (`url`, `redirect_uri`, `scope`) |
+| `authenticate.browser_opened` | INFO | the browser of the authorisation page is open (`command`) |
+| `authenticate.browser_failed` | WARN | the browser could not be opened, the URL is printed (`url`, `reason`) |
 | `authenticate.service_started` | INFO | the local service waits for the redirect of Google (`redirect_uri`) |
 | `authenticate.refused` | WARN | the redirect does not carry the state of the service (`state`) |
 | `authenticate.completed` | INFO | the authorisation of the mailbox (`token_file`, `expires_at`, `scope`) |
@@ -384,18 +387,36 @@ Such a run is a run of one mail, not a run of the inbox:
 
 ---
 
-## ⏰ The scheduled run on macOS
+## ⏰ The scheduled run
 
 The application is an ephemeral job: it starts, it triages the inbox and it
-exits. `launchd`, the scheduler of macOS, starts it every hour.
+exits. The scheduler of the system starts it every hour: `launchd` on macOS, a
+systemd timer on Linux, a task of the Task Scheduler on Windows.
 
 ### 1. Install the application
 
+The jar and the files of the run live in one directory, the scheduler of the
+system runs the command in that directory. The path of the directory is the
+one of the samples of the schedulers below:
+
+| System | The directory of the installation |
+| --- | --- |
+| macOS and Linux | `/usr/local/lib/recruiter-cli` |
+| Windows | `C:\recruiter-cli` |
+
 ```bash
+# macOS and Linux
 sudo mkdir -p /usr/local/lib/recruiter-cli/logs
 sudo cp build/libs/recruiter-cli.jar /usr/local/lib/recruiter-cli/
 sudo cp credentials.json requirements.json /usr/local/lib/recruiter-cli/
 sudo chown -R "$USER" /usr/local/lib/recruiter-cli
+```
+
+```powershell
+# Windows
+mkdir C:\recruiter-cli\logs
+copy build\libs\recruiter-cli.jar C:\recruiter-cli\
+copy credentials.json requirements.json C:\recruiter-cli\
 ```
 
 The OAuth2 token is written by the `authenticate` command. It is a step of the
@@ -406,11 +427,19 @@ cd /usr/local/lib/recruiter-cli
 java -jar recruiter-cli.jar authenticate
 ```
 
+```powershell
+# Windows
+cd C:\recruiter-cli
+java -jar recruiter-cli.jar authenticate
+```
+
 The moment of the last successful run is written next to the token
 (`token.json.last-run`), the directory has to be writable by the user that runs
 the job.
 
-### 2. Install the launchd job
+### 2. Install the scheduler
+
+#### macOS: the launchd job
 
 The sample of the job is `config/launchd/com.user.recruiter-checker.plist`. It
 runs `java -jar … process-inbox` at the start of every hour, the structured
@@ -457,6 +486,69 @@ change them:
 <string>nimble</string>
 ```
 
+#### Linux: the systemd timer
+
+The sample of the timer is `config/systemd/recruiter-cli.timer` and the sample
+of the service it starts is `config/systemd/recruiter-cli.service`. The timer
+runs the service at the start of every hour, the structured log of the run goes
+to `logs/recruiter-cli.out.log` and the errors go to
+`logs/recruiter-cli.err.log`.
+
+```bash
+mkdir -p ~/.config/systemd/user
+cp config/systemd/recruiter-cli.service ~/.config/systemd/user/
+cp config/systemd/recruiter-cli.timer ~/.config/systemd/user/
+systemctl --user daemon-reload
+systemctl --user enable --now recruiter-cli.timer
+```
+
+The paths of the jar and of the files in the service are the ones of the
+installation above, change them when the application lives somewhere else. The
+timer runs once an hour:
+
+```bash
+systemctl --user list-timers recruiter-cli.timer
+```
+
+The timer of the session stops when the session of the user ends. A machine
+that runs without a session needs the units in `/etc/systemd/system/` and
+`sudo systemctl enable --now recruiter-cli.timer`.
+
+The service only passes the files of the run to the command, everything else
+takes the default of the command. Add the arguments to the `ExecStart` line of
+the service to change them:
+
+```ini
+ExecStart=/usr/bin/java -jar /usr/local/lib/recruiter-cli/recruiter-cli.jar process-inbox --recruiter-verification-model=nimble
+```
+
+#### Windows: the task of the Task Scheduler
+
+The sample of the task is `config/task-scheduler/recruiter-cli.xml`. The task
+runs `java -jar … process-inbox` every hour, the structured log of the run goes
+to the standard output of the task and the errors go to its standard error.
+
+```powershell
+schtasks /Create /TN "RecruiterCli" /XML config\task-scheduler\recruiter-cli.xml /F
+```
+
+The paths of the jar and of the files in the task are the ones of the
+installation above, change them when the application lives somewhere else. The
+task runs once an hour:
+
+```powershell
+schtasks /Query /TN "RecruiterCli" /V /FO LIST
+```
+
+The task runs as the user that installed it and it needs a session of that
+user. The task only passes the files of the run to the command, everything else
+takes the default of the command. Add the arguments to the `Arguments` element
+of the task to change them:
+
+```xml
+<Arguments>--enable-native-access=ALL-UNNAMED -jar "C:\recruiter-cli\recruiter-cli.jar" process-inbox --recruiter-verification-model=nimble</Arguments>
+```
+
 ### 3. The window of a run
 
 The window (`--since`) says how far back a run looks for mail. It is the only
@@ -474,9 +566,8 @@ That is why the sample does not pass a window:
 
 * every mail is looked at once, the screened out mail is not looked at again
   and again,
-* the mail of an outage is never lost: `launchd` coalesces the runs that were
-  missed into one when the machine wakes up, and that run looks back to the
-  last run before the sleep,
+* the mail of an outage is never lost: the scheduler of the system starts the
+  next run and that run looks back to the last run before the outage,
 * the window does not have to be tuned for the machine it runs on.
 
 When no run succeeded yet - the first run - the window is the last 24 hours
@@ -607,10 +698,12 @@ automatically afterwards.
    ```
 
    The command starts a local service on a free port of the loopback interface and opens the
-   authorisation page of Google in the browser. Allow the application to access the mailbox and
-   the command continues: the local service catches the redirect of Google, exchanges the code
-   for a token and writes the token to `token.json`. The browser gets a page that says the
-   application is authorised, the command exits.
+   authorisation page of Google in the browser — `open` on macOS, `xdg-open` on Linux,
+   `rundll32` on Windows. Allow the application to access the mailbox and the command
+   continues: the local service catches the redirect of Google, exchanges the code for a token
+   and writes the token to `token.json`. The browser gets a page that says the application is
+   authorised, the command exits. A browser that cannot be opened is a warning, the URL of the
+   authorisation page is printed and the authorisation is done by hand.
 
    The URL of the authorisation page is printed as well, so the authorisation can be done in
    another browser or on another machine. The service waits five minutes for the redirect.
@@ -649,6 +742,8 @@ Configuration lives in:
 * `gradle/libs.versions.toml` — version catalog (all dependency/plugin versions)
 * `config/detekt/detekt.yml` — detekt rule configuration
 * `config/launchd/com.user.recruiter-checker.plist` — the sample of the macOS launchd job
+* `config/systemd/recruiter-cli.service` and `config/systemd/recruiter-cli.timer` — the samples of the systemd timer of Linux
+* `config/task-scheduler/recruiter-cli.xml` — the sample of the task of the Task Scheduler of Windows
 * `.editorconfig` — ktlint/IDE formatting rules
 
 The conventions of the repository (architecture, the rules for interfaces and
@@ -685,7 +780,9 @@ src/main/kotlin/uk/me/michaellloydlee/recruiter/
     └── serialization/ # Shared kotlinx.serialization helpers
 config/
 ├── detekt/            # The rules of the static analysis
-└── launchd/           # The sample of the macOS launchd job
+├── launchd/           # The sample of the macOS launchd job
+├── systemd/           # The samples of the systemd timer of Linux
+└── task-scheduler/    # The sample of the task of the Task Scheduler of Windows
 ```
 
 > **Note:** the package namespace drops the hyphens of the `uk.me.michael-lloyd-lee` domain because hyphens are not legal in Kotlin package names.

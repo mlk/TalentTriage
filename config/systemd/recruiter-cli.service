@@ -1,0 +1,29 @@
+# The systemd service of TalentTriage on Linux.
+#
+# It runs one inbox triage pass and exits, the timer starts it every hour.
+# The structured log of the run goes to the standard output of the service, the
+# errors go to the standard error of the service.
+#
+# The service does not pass a window: the run looks back to the moment of the
+# last successful run, so it looks at every mail exactly once and it never
+# misses the mail of an outage.
+#
+# Install it as a service of the user:
+#
+#     mkdir -p ~/.config/systemd/user
+#     cp config/systemd/recruiter-cli.service ~/.config/systemd/user/
+#     systemctl --user daemon-reload
+#
+# The paths of the jar and of the files are the ones of the installation
+# described in the README, change them if the installation lives somewhere
+# else.
+[Unit]
+Description=The inbox triage pass of TalentTriage
+Documentation=https://github.com/mlk/TalentTriage
+
+[Service]
+Type=oneshot
+WorkingDirectory=/usr/local/lib/recruiter-cli
+ExecStart=/usr/bin/java --enable-native-access=ALL-UNNAMED -jar /usr/local/lib/recruiter-cli/recruiter-cli.jar process-inbox --credentials /usr/local/lib/recruiter-cli/credentials.json --token /usr/local/lib/recruiter-cli/token.json --requirements /usr/local/lib/recruiter-cli/requirements.json
+StandardOutput=append:/usr/local/lib/recruiter-cli/logs/recruiter-cli.out.log
+StandardError=append:/usr/local/lib/recruiter-cli/logs/recruiter-cli.err.log

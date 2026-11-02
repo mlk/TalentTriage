@@ -1,0 +1,27 @@
+# The systemd timer of TalentTriage on Linux.
+#
+# It starts the service at the start of every hour, the calendar of systemd
+# knows the shortcut `hourly` for it. The timer does not catch up a missed
+# hour: the window of the run looks back to the moment of the last successful
+# run, so the mail of a missed hour is not lost.
+#
+# Install it as a timer of the user:
+#
+#     cp config/systemd/recruiter-cli.timer ~/.config/systemd/user/
+#     systemctl --user daemon-reload
+#     systemctl --user enable --now recruiter-cli.timer
+#
+# The timer of the session needs the service of the user to run: the timer
+# stops when the session of the user ends. A machine that runs without a
+# session needs the units in /etc/systemd/system/ and `sudo systemctl
+# enable --now recruiter-cli.timer`.
+[Unit]
+Description=The hourly inbox triage pass of TalentTriage
+
+[Timer]
+OnCalendar=hourly
+Unit=recruiter-cli.service
+Persistent=false
+
+[Install]
+WantedBy=timers.target

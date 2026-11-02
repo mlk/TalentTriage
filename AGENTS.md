@@ -4,7 +4,8 @@ Guidance for AI agents (and humans) working in this repository.
 
 ## Project
 
-`TalentTriage` is a local-first recruiter email triage engine written in Kotlin for macOS. It
+`TalentTriage` is a local-first recruiter email triage engine written in Kotlin for macOS, Linux
+and Windows. It
 polls a Gmail inbox, filters recruiter noise with local heuristic rules and a small local LLM
 classifier, extracts the attached Job Descriptions (`.pdf` / `.docx`) and evaluates them against
 the criteria (pay, JD relevance, days in office). The whole thing is an ephemeral CLI job — it
@@ -16,6 +17,7 @@ starts, does its work and exits.
 | Build | Gradle, Kotlin DSL, the Gradle wrapper |
 | Package namespace | `uk.me.michaellloydlee.recruiter` |
 | HTTP | Ktor client (CIO) with `kotlinx.serialization`, a local Ktor server (CIO) for the authorisation |
+| Systems | macOS, Linux and Windows: the browser of the authorisation and the scheduler of the run are of the system |
 | Documents | Apache PDFBox (`.pdf`), Apache POI (`.docx`) |
 | Quality | ktlint, detekt, JaCoCo (80% line coverage enforced), GitHub Actions |
 
@@ -310,6 +312,10 @@ A story has to be readable on its own, so a ticket follows a fixed shape:
   `nimble`, `tev1`, `clef` and `clef-flash`; `clef:cloud` runs in the cloud of Ollama (Ollama
   v0.40.5 or later, a paid plan or usage credits).
 * **The test suite must stay offline** — no Gmail, no Ollama, no model downloads.
+* **The browser is the one of the system.** The authorisation page of Google is opened with `open`
+  on macOS, `xdg-open` on Linux and `rundll32 url.dll,FileProtocolHandler` on Windows; the command
+  is detected from `os.name`. A browser that cannot be opened is a warning, the URL of the
+  authorisation page is printed and the authorisation is done by hand.
 * **The authorisation happens in the browser.** The `authenticate` command starts a local service
   on a free port of the loopback interface, opens the authorisation page of Google and waits for
   the redirect: the service catches the code, exchanges it for a token and stores it. The port of
