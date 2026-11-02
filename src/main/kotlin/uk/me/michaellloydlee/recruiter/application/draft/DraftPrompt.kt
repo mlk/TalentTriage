@@ -90,11 +90,6 @@ object DraftPrompt {
         if (missing.pay == PayInformation.MISSING) {
             questions.add("ask what the pay of the job is")
         }
-        if (missing.pay == PayInformation.BELOW_THE_TARGET) {
-            questions.add(
-                "ask about the pay of the job, the pay of the mail is below the target of the job seeker",
-            )
-        }
         if (missing.asksAboutOfficeDays) {
             questions.add("ask how many days of office per week the job demands")
         }

@@ -39,10 +39,26 @@ class JobDescriptionEvaluationTest {
     }
 
     @Test
-    fun aJobWithATooLowPayNeedsMoreInformation() {
+    fun aJobWithATooLowPayIsTrashed() {
         val evaluation = evaluation(payMatches = false, jdMatches = true, officeDays = AT_MOST, payMissing = false)
 
-        assertEquals(EvaluationState.NEEDS_MORE_INFORMATION, evaluation.state)
+        assertEquals(EvaluationState.TRASH, evaluation.state)
+    }
+
+    @Test
+    fun aJobWithATooLowPayIsTrashedEvenWithUnclearOfficeDays() {
+        // The pay wins over the days of office that are not stated: the job
+        // seeker does not want the job whatever the days of office are, so
+        // the recruiter is not asked about them.
+        val evaluation =
+            evaluation(
+                payMatches = false,
+                jdMatches = true,
+                officeDays = OfficeDays.UNCLEAR,
+                payMissing = false,
+            )
+
+        assertEquals(EvaluationState.TRASH, evaluation.state)
     }
 
     @Test
@@ -122,10 +138,12 @@ class JobDescriptionEvaluationTest {
     }
 
     @Test
-    fun theTooLowPayIsNamed() {
+    fun aJobWithATooLowPayMissesNothing() {
+        // The pay is stated, the job seeker knows what the job pays. The mail
+        // is trashed, the recruiter is not asked anything.
         val evaluation = evaluation(payMatches = false, jdMatches = true, officeDays = AT_MOST, payMissing = false)
 
-        assertEquals("the pay is below the target", evaluation.missing)
+        assertEquals(null, evaluation.missing)
     }
 
     @Test
@@ -155,11 +173,11 @@ class JobDescriptionEvaluationTest {
     }
 
     @Test
-    fun aJobWithATooLowPayMissesThePay() {
+    fun aJobWithATooLowPayIsNotAskedAboutThePay() {
         val evaluation = evaluation(payMatches = false, jdMatches = true, officeDays = AT_MOST, payMissing = false)
 
-        assertEquals(PayInformation.BELOW_THE_TARGET, evaluation.missingInformation.pay)
-        assertEquals(true, evaluation.missingInformation.asksAboutPay)
+        assertEquals(PayInformation.KNOWN, evaluation.missingInformation.pay)
+        assertEquals(false, evaluation.missingInformation.asksAboutPay)
     }
 
     @Test

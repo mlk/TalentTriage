@@ -31,12 +31,13 @@ data class MissingInformation(
  * What a mail says about the pay of a job.
  */
 enum class PayInformation {
-    /** The mail states a pay that meets the target of the job seeker. */
+    /**
+     * The mail states a pay. The pay can be below the target of the job
+     * seeker - the mail is trashed then - but the job seeker knows what the
+     * job pays.
+     */
     KNOWN,
 
     /** The mail states no pay at all. */
     MISSING,
-
-    /** The mail states a pay below the target of the job seeker. */
-    BELOW_THE_TARGET,
 }
