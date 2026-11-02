@@ -25,6 +25,11 @@ enum class OperatingSystem(
         /**
          * The system the application runs on.
          *
+         * A system that is neither macOS nor Windows is a Unix-like system:
+         * `xdg-open` opens the browser of it. The name of an unknown system
+         * is not an error, the run of the application does not depend on the
+         * browser - the URL of the authorisation page is printed as well.
+         *
          * @param name the name of the system, the value of the property
          *   `os.name` of the JVM.
          * @return the system of the name.
