@@ -4,6 +4,7 @@ import com.github.ajalt.clikt.command.SuspendingCliktCommand
 import com.github.ajalt.clikt.core.Context
 import com.github.ajalt.clikt.core.subcommands
 import io.ktor.client.HttpClient
+import uk.me.michaellloydlee.recruiter.infrastructure.browser.BrowserOutcome
 import uk.me.michaellloydlee.recruiter.infrastructure.browser.openInBrowser
 import uk.me.michaellloydlee.recruiter.infrastructure.gmail.GmailHttpClientFactory
 import uk.me.michaellloydlee.recruiter.infrastructure.logging.StructuredLogger
@@ -29,7 +30,7 @@ class TriageCli(
     httpClientFactory: () -> HttpClient = { GmailHttpClientFactory.create() },
     clock: Clock = Clock.systemUTC(),
     environment: Map<String, String> = System.getenv(),
-    openBrowser: suspend (String) -> Unit = { url -> openInBrowser(url) },
+    openBrowser: suspend (String) -> BrowserOutcome = { url -> openInBrowser(url) },
 ) : SuspendingCliktCommand(name = COMMAND_NAME) {
     init {
         subcommands(

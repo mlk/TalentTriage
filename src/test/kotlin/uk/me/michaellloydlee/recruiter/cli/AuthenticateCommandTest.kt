@@ -10,6 +10,7 @@ import io.ktor.http.HttpStatusCode
 import io.ktor.http.Url
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
+import uk.me.michaellloydlee.recruiter.infrastructure.browser.BrowserOutcome
 import uk.me.michaellloydlee.recruiter.infrastructure.logging.LogRecord
 import uk.me.michaellloydlee.recruiter.infrastructure.logging.StructuredLogger
 import java.nio.file.Path
@@ -35,6 +36,7 @@ class AuthenticateCommandTest {
                 cli(sink, openBrowser = { url ->
                     opened = url
                     redirectTo(url)
+                    BrowserOutcome.Opened(listOf("open"))
                 }) { HttpClient(tokenEngine()) }
                     .test("authenticate --credentials $credentials --token $tokenFile")
 
@@ -111,12 +113,33 @@ class AuthenticateCommandTest {
             val tokenFile = createTempDirectory("token").resolve("token.json")
 
             val result =
-                cli(sink, openBrowser = { url -> redirectTo(url, state = "another-state") }) {
-                    HttpClient(tokenEngine())
-                }.test("authenticate --credentials $credentials --token $tokenFile")
+                cli(sink, openBrowser = { url ->
+                    redirectTo(url, state = "another-state")
+                    BrowserOutcome.Opened(listOf("open"))
+                }) { HttpClient(tokenEngine()) }
+                    .test("authenticate --credentials $credentials --token $tokenFile")
 
             assertEquals(1, result.statusCode)
             assertFalse(tokenFile.exists())
+        }
+
+    @Test
+    fun aBrowserThatCannotBeOpenedIsAWarning() =
+        runTest {
+            val sink = StringBuilder()
+            val credentials = credentialsFile()
+            val tokenFile = createTempDirectory("token").resolve("token.json")
+
+            val result =
+                cli(sink, openBrowser = { url ->
+                    redirectTo(url)
+                    BrowserOutcome.Failed("The browser could not be opened: xdg-open is not there")
+                }) { HttpClient(tokenEngine()) }
+                    .test("authenticate --credentials $credentials --token $tokenFile")
+
+            assertEquals(0, result.statusCode)
+            assertTrue(tokenFile.readText().contains("access-token"))
+            assertTrue(records(sink).any { it.event == "authenticate.browser_failed" })
         }
 
     private fun tokenEngine(): MockEngine =
@@ -147,7 +170,7 @@ class AuthenticateCommandTest {
 
     private fun cli(
         sink: StringBuilder,
-        openBrowser: suspend (String) -> Unit = {},
+        openBrowser: suspend (String) -> BrowserOutcome = { BrowserOutcome.Opened(listOf("open")) },
         httpClientFactory: () -> HttpClient = { HttpClient(MockEngine { respond("{}", HttpStatusCode.OK) }) },
     ): TriageCli = TriageCli(StructuredLogger(sink), httpClientFactory, openBrowser = openBrowser)
 
@@ -165,4 +188,11 @@ class AuthenticateCommandTest {
                 .lines()
                 .last(),
         )
+
+    private fun records(sink: StringBuilder): List<LogRecord> =
+        sink
+            .toString()
+            .trim()
+            .lines()
+            .map { Json.decodeFromString<LogRecord>(it) }
 }

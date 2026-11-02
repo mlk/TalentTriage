@@ -8,6 +8,7 @@ import com.github.ajalt.clikt.parameters.options.default
 import com.github.ajalt.clikt.parameters.options.multiple
 import com.github.ajalt.clikt.parameters.options.option
 import io.ktor.client.HttpClient
+import uk.me.michaellloydlee.recruiter.infrastructure.browser.BrowserOutcome
 import uk.me.michaellloydlee.recruiter.infrastructure.browser.openInBrowser
 import uk.me.michaellloydlee.recruiter.infrastructure.gmail.AuthorizationOutcome
 import uk.me.michaellloydlee.recruiter.infrastructure.gmail.FileOAuth2TokenStore
@@ -43,7 +44,7 @@ import java.nio.file.Path
 class AuthenticateCommand(
     private val logger: StructuredLogger,
     private val httpClientFactory: () -> HttpClient = { GmailHttpClientFactory.create() },
-    private val openBrowser: suspend (String) -> Unit = { url -> openInBrowser(url) },
+    private val openBrowser: suspend (String) -> BrowserOutcome = { url -> openInBrowser(url) },
 ) : SuspendingCliktCommand(name = COMMAND_NAME) {
     private val code: String? by
         argument(
@@ -145,13 +146,41 @@ class AuthenticateCommand(
                         "scope" to requestedScopes.joinToString(separator = " "),
                     ),
             )
-            openBrowser(url)
+            openTheBrowser(url)
             when (val outcome = service.awaitAuthorization()) {
                 is AuthorizationOutcome.Authorised -> logAuthorised(outcome.token)
                 is AuthorizationOutcome.Failed -> throw CommandFailedException(outcome.reason)
             }
         } finally {
             service.stop()
+        }
+    }
+
+    /**
+     * Opens the authorisation page of Google in the browser of the machine.
+     *
+     * A browser that cannot be opened is not a failure: the URL of the
+     * authorisation page is printed, the job seeker opens it by hand.
+     *
+     * @param url the URL of the authorisation page.
+     */
+    private suspend fun openTheBrowser(url: String) {
+        when (val outcome = openBrowser(url)) {
+            is BrowserOutcome.Opened -> {
+                logger.info(
+                    event = "$COMMAND_NAME.browser_opened",
+                    message = "The browser of the authorisation page is open",
+                    attributes = mapOf("command" to outcome.command.joinToString(separator = " ")),
+                )
+            }
+
+            is BrowserOutcome.Failed -> {
+                logger.warn(
+                    event = "$COMMAND_NAME.browser_failed",
+                    message = "The browser could not be opened, the URL of the authorisation page is printed",
+                    attributes = mapOf("url" to url, "reason" to outcome.reason),
+                )
+            }
         }
     }
 
