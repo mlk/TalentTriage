@@ -15,4 +15,13 @@ enum class OfficeDays {
 
     /** The job does not say how many days of office it demands. */
     UNCLEAR,
+
+    /**
+     * The model was not sure enough about the days of office.
+     *
+     * The answer of the model is only used when the model is sure enough, an
+     * answer that is not used leaves its criterion unknown. The answer
+     * `unclear` is the exception: it is never a reason to leave a mail alone.
+     */
+    NOT_KNOWN,
 }

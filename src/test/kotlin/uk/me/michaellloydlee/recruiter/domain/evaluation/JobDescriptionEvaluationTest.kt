@@ -6,14 +6,14 @@ import kotlin.test.assertEquals
 class JobDescriptionEvaluationTest {
     @Test
     fun aJobThatMatchesIsWorthAFollowUp() {
-        val evaluation = evaluation(payMatches = true, jdMatches = true, officeDays = AT_MOST, payMissing = false)
+        val evaluation = evaluation(jdMatch = MATCHES, officeDays = AT_MOST, payMatch = MEETS_THE_TARGET)
 
         assertEquals(EvaluationState.WORTH_FOLLOW_UP, evaluation.state)
     }
 
     @Test
     fun aJobThatDoesNotMatchIsTrashed() {
-        val evaluation = evaluation(payMatches = true, jdMatches = false, officeDays = AT_MOST, payMissing = false)
+        val evaluation = evaluation(jdMatch = DOES_NOT_MATCH, officeDays = AT_MOST, payMatch = MEETS_THE_TARGET)
 
         assertEquals(EvaluationState.TRASH, evaluation.state)
     }
@@ -22,10 +22,9 @@ class JobDescriptionEvaluationTest {
     fun aJobThatDemandsTooMuchOfficeIsTrashed() {
         val evaluation =
             evaluation(
-                payMatches = true,
-                jdMatches = true,
+                jdMatch = MATCHES,
                 officeDays = OfficeDays.MORE_THAN_THE_ALLOWED_DAYS,
-                payMissing = false,
+                payMatch = MEETS_THE_TARGET,
             )
 
         assertEquals(EvaluationState.TRASH, evaluation.state)
@@ -33,14 +32,14 @@ class JobDescriptionEvaluationTest {
 
     @Test
     fun aJobWithoutAPayNeedsMoreInformation() {
-        val evaluation = evaluation(payMatches = false, jdMatches = true, officeDays = AT_MOST, payMissing = true)
+        val evaluation = evaluation(jdMatch = MATCHES, officeDays = AT_MOST, payMatch = MISSING)
 
         assertEquals(EvaluationState.NEEDS_MORE_INFORMATION, evaluation.state)
     }
 
     @Test
     fun aJobWithATooLowPayIsTrashed() {
-        val evaluation = evaluation(payMatches = false, jdMatches = true, officeDays = AT_MOST, payMissing = false)
+        val evaluation = evaluation(jdMatch = MATCHES, officeDays = AT_MOST, payMatch = BELOW_THE_TARGET)
 
         assertEquals(EvaluationState.TRASH, evaluation.state)
     }
@@ -52,10 +51,9 @@ class JobDescriptionEvaluationTest {
         // the recruiter is not asked about them.
         val evaluation =
             evaluation(
-                payMatches = false,
-                jdMatches = true,
+                jdMatch = MATCHES,
                 officeDays = OfficeDays.UNCLEAR,
-                payMissing = false,
+                payMatch = BELOW_THE_TARGET,
             )
 
         assertEquals(EvaluationState.TRASH, evaluation.state)
@@ -63,7 +61,7 @@ class JobDescriptionEvaluationTest {
 
     @Test
     fun aJobThatDoesNotMatchIsTrashedEvenWithoutAPay() {
-        val evaluation = evaluation(payMatches = false, jdMatches = false, officeDays = AT_MOST, payMissing = true)
+        val evaluation = evaluation(jdMatch = DOES_NOT_MATCH, officeDays = AT_MOST, payMatch = MISSING)
 
         assertEquals(EvaluationState.TRASH, evaluation.state)
     }
@@ -72,10 +70,9 @@ class JobDescriptionEvaluationTest {
     fun aJobWithUnclearOfficeDaysNeedsMoreInformation() {
         val evaluation =
             evaluation(
-                payMatches = true,
-                jdMatches = true,
+                jdMatch = MATCHES,
                 officeDays = OfficeDays.UNCLEAR,
-                payMissing = false,
+                payMatch = MEETS_THE_TARGET,
             )
 
         assertEquals(EvaluationState.NEEDS_MORE_INFORMATION, evaluation.state)
@@ -85,10 +82,9 @@ class JobDescriptionEvaluationTest {
     fun aJobWithUnclearOfficeDaysNeedsMoreInformationEvenWithoutAPay() {
         val evaluation =
             evaluation(
-                payMatches = false,
-                jdMatches = true,
+                jdMatch = MATCHES,
                 officeDays = OfficeDays.UNCLEAR,
-                payMissing = true,
+                payMatch = MISSING,
             )
 
         assertEquals(EvaluationState.NEEDS_MORE_INFORMATION, evaluation.state)
@@ -98,52 +94,98 @@ class JobDescriptionEvaluationTest {
     fun aJobThatDoesNotMatchIsTrashedEvenWithUnclearOfficeDays() {
         val evaluation =
             evaluation(
-                payMatches = true,
-                jdMatches = false,
+                jdMatch = DOES_NOT_MATCH,
                 officeDays = OfficeDays.UNCLEAR,
-                payMissing = false,
+                payMatch = MEETS_THE_TARGET,
             )
 
         assertEquals(EvaluationState.TRASH, evaluation.state)
     }
 
     @Test
-    fun aJobThatIsWorthAFollowUpIsMissingNothing() {
-        val evaluation = evaluation(payMatches = true, jdMatches = true, officeDays = AT_MOST, payMissing = false)
+    fun aJobTheModelIsNotSureAboutNeedsMoreInformation() {
+        val evaluation = evaluation(jdMatch = NOT_KNOWN, officeDays = AT_MOST, payMatch = MEETS_THE_TARGET)
 
-        assertEquals(null, evaluation.missing)
+        assertEquals(EvaluationState.NEEDS_MORE_INFORMATION, evaluation.state)
     }
 
     @Test
-    fun theMissingOfficeDaysAreNamed() {
+    fun aJobTheModelIsNotSureAboutThePayOfNeedsMoreInformation() {
+        val evaluation = evaluation(jdMatch = MATCHES, officeDays = AT_MOST, payMatch = PayMatch.NOT_KNOWN)
+
+        assertEquals(EvaluationState.NEEDS_MORE_INFORMATION, evaluation.state)
+    }
+
+    @Test
+    fun aJobTheModelIsNotSureAboutTheOfficeDaysOfNeedsMoreInformation() {
         val evaluation =
             evaluation(
-                payMatches = true,
-                jdMatches = true,
-                officeDays = OfficeDays.UNCLEAR,
-                payMissing = false,
+                jdMatch = MATCHES,
+                officeDays = OfficeDays.NOT_KNOWN,
+                payMatch = MEETS_THE_TARGET,
             )
 
-        assertEquals(
-            "the job description does not say how many days of office it demands",
-            evaluation.missing,
-        )
+        assertEquals(EvaluationState.NEEDS_MORE_INFORMATION, evaluation.state)
     }
 
     @Test
-    fun theMissingPayIsNamed() {
-        val evaluation = evaluation(payMatches = false, jdMatches = true, officeDays = AT_MOST, payMissing = true)
+    fun aJobWithATooLowPayIsTrashedEvenWhenTheModelIsNotSureAboutTheProfile() {
+        // The pay decides the mail on its own: the job seeker does not want
+        // the job whatever the job description says, the recruiter cannot
+        // change the pay.
+        val evaluation =
+            evaluation(
+                jdMatch = NOT_KNOWN,
+                officeDays = AT_MOST,
+                payMatch = BELOW_THE_TARGET,
+            )
 
-        assertEquals("the message states no pay", evaluation.missing)
+        assertEquals(EvaluationState.TRASH, evaluation.state)
     }
 
     @Test
-    fun aJobWithATooLowPayMissesNothing() {
-        // The pay is stated, the job seeker knows what the job pays. The mail
-        // is trashed, the recruiter is not asked anything.
-        val evaluation = evaluation(payMatches = false, jdMatches = true, officeDays = AT_MOST, payMissing = false)
+    fun aJobThatDoesNotMatchIsTrashedEvenWhenTheModelIsNotSureAboutThePay() {
+        val evaluation =
+            evaluation(
+                jdMatch = DOES_NOT_MATCH,
+                officeDays = AT_MOST,
+                payMatch = PayMatch.NOT_KNOWN,
+            )
 
-        assertEquals(null, evaluation.missing)
+        assertEquals(EvaluationState.TRASH, evaluation.state)
+    }
+
+    @Test
+    fun aJobThatDemandsTooMuchOfficeIsTrashedEvenWhenTheModelIsNotSureAboutTheProfile() {
+        val evaluation =
+            evaluation(
+                jdMatch = NOT_KNOWN,
+                officeDays = OfficeDays.MORE_THAN_THE_ALLOWED_DAYS,
+                payMatch = MEETS_THE_TARGET,
+            )
+
+        assertEquals(EvaluationState.TRASH, evaluation.state)
+    }
+
+    @Test
+    fun aJobWithoutAPayNeedsMoreInformationEvenWhenTheModelIsNotSureAboutTheProfile() {
+        // The pay is missing before it is too low: the mail waits for the job
+        // seeker, the recruiter is asked about the pay.
+        val evaluation =
+            evaluation(
+                jdMatch = NOT_KNOWN,
+                officeDays = AT_MOST,
+                payMatch = MISSING,
+            )
+
+        assertEquals(EvaluationState.NEEDS_MORE_INFORMATION, evaluation.state)
+    }
+
+    @Test
+    fun aPayThatDoesNotMatterDoesNotStopTheMail() {
+        val evaluation = evaluation(jdMatch = MATCHES, officeDays = AT_MOST, payMatch = PayMatch.DOES_NOT_MATTER)
+
+        assertEquals(EvaluationState.WORTH_FOLLOW_UP, evaluation.state)
     }
 
     @Test
@@ -155,7 +197,7 @@ class JobDescriptionEvaluationTest {
 
     @Test
     fun aJobThatIsWorthAFollowUpMissesNothing() {
-        val evaluation = evaluation(payMatches = true, jdMatches = true, officeDays = AT_MOST, payMissing = false)
+        val evaluation = evaluation(jdMatch = MATCHES, officeDays = AT_MOST, payMatch = MEETS_THE_TARGET)
 
         assertEquals(PayInformation.KNOWN, evaluation.missingInformation.pay)
         assertEquals(false, evaluation.missingInformation.officeDays)
@@ -165,7 +207,7 @@ class JobDescriptionEvaluationTest {
 
     @Test
     fun aJobWithoutAPayMissesThePay() {
-        val evaluation = evaluation(payMatches = false, jdMatches = true, officeDays = AT_MOST, payMissing = true)
+        val evaluation = evaluation(jdMatch = MATCHES, officeDays = AT_MOST, payMatch = MISSING)
 
         assertEquals(PayInformation.MISSING, evaluation.missingInformation.pay)
         assertEquals(true, evaluation.missingInformation.asksAboutPay)
@@ -174,7 +216,7 @@ class JobDescriptionEvaluationTest {
 
     @Test
     fun aJobWithATooLowPayIsNotAskedAboutThePay() {
-        val evaluation = evaluation(payMatches = false, jdMatches = true, officeDays = AT_MOST, payMissing = false)
+        val evaluation = evaluation(jdMatch = MATCHES, officeDays = AT_MOST, payMatch = BELOW_THE_TARGET)
 
         assertEquals(PayInformation.KNOWN, evaluation.missingInformation.pay)
         assertEquals(false, evaluation.missingInformation.asksAboutPay)
@@ -184,10 +226,9 @@ class JobDescriptionEvaluationTest {
     fun aJobWithUnclearOfficeDaysMissesTheOfficeDays() {
         val evaluation =
             evaluation(
-                payMatches = true,
-                jdMatches = true,
+                jdMatch = MATCHES,
                 officeDays = OfficeDays.UNCLEAR,
-                payMissing = false,
+                payMatch = MEETS_THE_TARGET,
             )
 
         assertEquals(PayInformation.KNOWN, evaluation.missingInformation.pay)
@@ -199,10 +240,9 @@ class JobDescriptionEvaluationTest {
     fun aJobThatMissesThePayAndTheOfficeDaysMissesBoth() {
         val evaluation =
             evaluation(
-                payMatches = false,
-                jdMatches = true,
+                jdMatch = MATCHES,
                 officeDays = OfficeDays.UNCLEAR,
-                payMissing = true,
+                payMatch = MISSING,
             )
 
         assertEquals(PayInformation.MISSING, evaluation.missingInformation.pay)
@@ -211,20 +251,84 @@ class JobDescriptionEvaluationTest {
         assertEquals(true, evaluation.missingInformation.asksAboutOfficeDays)
     }
 
+    @Test
+    fun aPayTheModelIsNotSureAboutIsNotAGap() {
+        // The mail may state a pay, the recruiter cannot be asked about what
+        // the model does not know.
+        val evaluation = evaluation(jdMatch = MATCHES, officeDays = AT_MOST, payMatch = PayMatch.NOT_KNOWN)
+
+        assertEquals(PayInformation.KNOWN, evaluation.missingInformation.pay)
+        assertEquals(false, evaluation.missingInformation.asksAboutPay)
+    }
+
+    @Test
+    fun theReasonOfAJobThatIsWorthAFollowUp() {
+        val evaluation = evaluation(jdMatch = MATCHES, officeDays = AT_MOST, payMatch = MEETS_THE_TARGET)
+
+        assertEquals("the job matches the requirements of the job seeker", evaluation.reason)
+    }
+
+    @Test
+    fun theReasonOfAJobWithATooLowPay() {
+        val evaluation = evaluation(jdMatch = MATCHES, officeDays = AT_MOST, payMatch = BELOW_THE_TARGET)
+
+        assertEquals("the pay is below the target of the job seeker", evaluation.reason)
+    }
+
+    @Test
+    fun theReasonOfAJobWithoutAPay() {
+        val evaluation = evaluation(jdMatch = MATCHES, officeDays = AT_MOST, payMatch = MISSING)
+
+        assertEquals("the message states no pay", evaluation.reason)
+    }
+
+    @Test
+    fun theReasonOfAJobWithUnclearOfficeDays() {
+        val evaluation =
+            evaluation(
+                jdMatch = MATCHES,
+                officeDays = OfficeDays.UNCLEAR,
+                payMatch = MEETS_THE_TARGET,
+            )
+
+        assertEquals(
+            "the job description does not say how many days of office it demands",
+            evaluation.reason,
+        )
+    }
+
+    @Test
+    fun theReasonOfAJobTheModelIsNotSureAbout() {
+        val evaluation = evaluation(jdMatch = NOT_KNOWN, officeDays = AT_MOST, payMatch = MEETS_THE_TARGET)
+
+        assertEquals("the model was not sure enough about the job description", evaluation.reason)
+    }
+
+    @Test
+    fun theReasonOfAJobTheModelIsNotSureAboutThePayOf() {
+        val evaluation = evaluation(jdMatch = MATCHES, officeDays = AT_MOST, payMatch = PayMatch.NOT_KNOWN)
+
+        assertEquals("the model was not sure enough about the pay", evaluation.reason)
+    }
+
     private fun evaluation(
-        payMatches: Boolean,
-        jdMatches: Boolean,
+        jdMatch: JobMatch,
         officeDays: OfficeDays,
-        payMissing: Boolean,
+        payMatch: PayMatch,
     ): JobDescriptionEvaluation.Evaluated =
         JobDescriptionEvaluation.Evaluated(
-            payMatches = payMatches,
-            jdMatches = jdMatches,
+            jdMatch = jdMatch,
             officeDays = officeDays,
-            payMissing = payMissing,
+            payMatch = payMatch,
         )
 
     companion object {
         private val AT_MOST: OfficeDays = OfficeDays.AT_MOST_THE_ALLOWED_DAYS
+        private val MATCHES: JobMatch = JobMatch.MATCHES
+        private val DOES_NOT_MATCH: JobMatch = JobMatch.DOES_NOT_MATCH
+        private val NOT_KNOWN: JobMatch = JobMatch.NOT_KNOWN
+        private val MEETS_THE_TARGET: PayMatch = PayMatch.MEETS_THE_TARGET
+        private val BELOW_THE_TARGET: PayMatch = PayMatch.BELOW_THE_TARGET
+        private val MISSING: PayMatch = PayMatch.MISSING
     }
 }

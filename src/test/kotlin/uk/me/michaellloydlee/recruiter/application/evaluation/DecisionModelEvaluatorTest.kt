@@ -15,8 +15,11 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import uk.me.michaellloydlee.recruiter.domain.evaluation.EvaluationState
 import uk.me.michaellloydlee.recruiter.domain.evaluation.JobDescriptionEvaluation
+import uk.me.michaellloydlee.recruiter.domain.evaluation.JobMatch
 import uk.me.michaellloydlee.recruiter.domain.evaluation.OfficeDays
+import uk.me.michaellloydlee.recruiter.domain.evaluation.PayMatch
 import uk.me.michaellloydlee.recruiter.domain.gmail.EmailMessage
 import uk.me.michaellloydlee.recruiter.domain.requirements.JobRequirements
 import uk.me.michaellloydlee.recruiter.domain.requirements.PayRequirement
@@ -84,9 +87,30 @@ class DecisionModelEvaluatorTest {
             val evaluation = evaluator(engine).evaluate(message(), "", REQUIREMENTS)
 
             val evaluated = assertIs<JobDescriptionEvaluation.Evaluated>(evaluation)
-            assertEquals(true, evaluated.jdMatches)
+            assertEquals(JobMatch.MATCHES, evaluated.jdMatch)
             assertEquals(OfficeDays.AT_MOST_THE_ALLOWED_DAYS, evaluated.officeDays)
-            assertEquals(false, evaluated.payMissing)
+            assertEquals(PayMatch.BELOW_THE_TARGET, evaluated.payMatch)
+        }
+
+    @Test
+    fun readsThePayThatMeetsTheTarget() =
+        runTest {
+            val engine =
+                engine(
+                    answers =
+                        mapOf(
+                            "jd_matches" to "matches",
+                            "office_days" to "matches",
+                            "pay_matches" to "matches",
+                            "pay_missing" to "does not match",
+                        ),
+                )
+
+            val evaluation = evaluator(engine).evaluate(message(), "", REQUIREMENTS)
+
+            val evaluated = assertIs<JobDescriptionEvaluation.Evaluated>(evaluation)
+            assertEquals(PayMatch.MEETS_THE_TARGET, evaluated.payMatch)
+            assertEquals(EvaluationState.WORTH_FOLLOW_UP, evaluated.state)
         }
 
     @Test
@@ -193,6 +217,27 @@ class DecisionModelEvaluatorTest {
 
             val unknown = assertIs<JobDescriptionEvaluation.Unknown>(evaluation)
             assertTrue(unknown.reason.contains("not sure enough"))
+        }
+
+    @Test
+    fun aMailThatStatesNoPayIsAGapAndNotABadFit() =
+        runTest {
+            val engine =
+                engine(
+                    answers =
+                        mapOf(
+                            "jd_matches" to "matches",
+                            "office_days" to "matches",
+                            "pay_matches" to "does not match",
+                            "pay_missing" to "matches",
+                        ),
+                )
+
+            val evaluation = evaluator(engine).evaluate(message(), "", REQUIREMENTS)
+
+            val evaluated = assertIs<JobDescriptionEvaluation.Evaluated>(evaluation)
+            assertEquals(PayMatch.MISSING, evaluated.payMatch)
+            assertEquals(EvaluationState.NEEDS_MORE_INFORMATION, evaluated.state)
         }
 
     @Test

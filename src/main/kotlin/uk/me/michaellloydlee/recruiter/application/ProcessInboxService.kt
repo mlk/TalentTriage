@@ -233,22 +233,13 @@ class ProcessInboxService(
     private fun reasonOf(evaluation: JobDescriptionEvaluation): String =
         when (evaluation) {
             is JobDescriptionEvaluation.Evaluated -> {
-                reasonOf(evaluation)
+                evaluation.reason
             }
 
             is JobDescriptionEvaluation.Unknown -> {
                 "The model could not evaluate the job description: ${evaluation.reason}"
             }
         }
-
-    /**
-     * What the model decided, and what is still missing.
-     *
-     * @param evaluation the evaluation of the job description.
-     * @return the reason of the log.
-     */
-    private fun reasonOf(evaluation: JobDescriptionEvaluation.Evaluated): String =
-        evaluation.missing?.let { "The model decided, $it is missing" } ?: "The model decided"
 
     /**
      * The counters of a run.

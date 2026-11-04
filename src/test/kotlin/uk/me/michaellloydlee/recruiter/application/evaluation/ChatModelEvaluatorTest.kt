@@ -14,7 +14,9 @@ import io.ktor.serialization.kotlinx.json.json
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
 import uk.me.michaellloydlee.recruiter.domain.evaluation.JobDescriptionEvaluation
+import uk.me.michaellloydlee.recruiter.domain.evaluation.JobMatch
 import uk.me.michaellloydlee.recruiter.domain.evaluation.OfficeDays
+import uk.me.michaellloydlee.recruiter.domain.evaluation.PayMatch
 import uk.me.michaellloydlee.recruiter.domain.gmail.EmailMessage
 import uk.me.michaellloydlee.recruiter.domain.requirements.JobRequirements
 import uk.me.michaellloydlee.recruiter.domain.requirements.PayRequirement
@@ -35,10 +37,9 @@ class ChatModelEvaluatorTest {
             val evaluation = evaluator(engine).evaluate(message(), "", REQUIREMENTS)
 
             val evaluated = assertIs<JobDescriptionEvaluation.Evaluated>(evaluation)
-            assertEquals(true, evaluated.payMatches)
-            assertEquals(true, evaluated.jdMatches)
+            assertEquals(PayMatch.MEETS_THE_TARGET, evaluated.payMatch)
+            assertEquals(JobMatch.MATCHES, evaluated.jdMatch)
             assertEquals(OfficeDays.AT_MOST_THE_ALLOWED_DAYS, evaluated.officeDays)
-            assertEquals(false, evaluated.payMissing)
         }
 
     @Test
@@ -85,7 +86,7 @@ class ChatModelEvaluatorTest {
             val evaluation = evaluator(engine).evaluate(message(), "", REQUIREMENTS)
 
             val evaluated = assertIs<JobDescriptionEvaluation.Evaluated>(evaluation)
-            assertEquals(true, evaluated.jdMatches)
+            assertEquals(JobMatch.MATCHES, evaluated.jdMatch)
         }
 
     @Test

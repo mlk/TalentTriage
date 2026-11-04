@@ -1,7 +1,9 @@
 package uk.me.michaellloydlee.recruiter.application.evaluation
 
 import uk.me.michaellloydlee.recruiter.domain.evaluation.JobDescriptionEvaluation
+import uk.me.michaellloydlee.recruiter.domain.evaluation.JobMatch
 import uk.me.michaellloydlee.recruiter.domain.evaluation.OfficeDays
+import uk.me.michaellloydlee.recruiter.domain.evaluation.PayMatch
 import uk.me.michaellloydlee.recruiter.domain.gmail.EmailMessage
 import uk.me.michaellloydlee.recruiter.domain.requirements.JobRequirements
 import uk.me.michaellloydlee.recruiter.infrastructure.llm.OllamaDecisionAnswer
@@ -19,13 +21,18 @@ import java.io.IOException
  * office has a third option, `unclear`: a job description rarely states the
  * days of office it wants, and the model has to be able to say so instead of
  * guessing. The model also tells how sure it is, a model that is not sure
- * enough leaves the mail alone.
+ * enough about a criterion does not decide that criterion.
+ *
+ * An answer the model is not sure enough about is not used, the criterion it
+ * answers stays unknown. A criterion that is unknown leaves the mail for the
+ * job seeker, a criterion that is known decides the state of the mail even
+ * when the model was not sure about the rest: a pay that is below the target
+ * is a bad fit whatever the model thinks about the job description.
  *
  * @param client the client of the decision API.
  * @param model the name of the decision model.
- * @param minimumConfidence how sure the model has to be, a model that is less
- *   sure leaves the mail alone. The answer `unclear` is the exception: it
- *   does not decide anything, it asks the job seeker to look at the mail.
+ * @param minimumConfidence how sure the model has to be about a criterion, an
+ *   answer the model is less sure about is not used.
  * @param maxBodyLength how many characters of the text go into the state.
  */
 class DecisionModelEvaluator(
@@ -48,45 +55,42 @@ class DecisionModelEvaluator(
                         questions = questions(requirements),
                     ),
                 )
-            evaluation(response.answers)
+            evaluation(response.answers, requirements.caresAboutPay)
         } catch (error: OllamaException) {
             JobDescriptionEvaluation.Unknown("The decision model answered with an error: ${error.message}")
         } catch (error: IOException) {
             JobDescriptionEvaluation.Unknown("The decision model could not be reached: ${error.message}")
         }
 
-    private fun evaluation(answers: Map<String, OllamaDecisionAnswer>): JobDescriptionEvaluation {
+    private fun evaluation(
+        answers: Map<String, OllamaDecisionAnswer>,
+        caresAboutPay: Boolean,
+    ): JobDescriptionEvaluation {
         val jdAnswer = answers[JD_MATCHES]
         val officeAnswer = answers[OFFICE_DAYS]
         val notSure = notSureAbout(answers)
         if (notSure != null || jdAnswer == null || officeAnswer == null) {
             return JobDescriptionEvaluation.Unknown(notSure ?: MISSING_ANSWER)
         }
-        val officeDays = officeDays(officeAnswer.choice)
+        val officeDays = officeDays(officeAnswer)
         if (officeDays == null) {
             return JobDescriptionEvaluation.Unknown(
                 "The decision model answered with an unknown option: ${officeAnswer.choice}",
             )
         }
-        val payAnswer = answers[PAY_MATCHES]
-        val payMissingAnswer = answers[PAY_MISSING]
         return JobDescriptionEvaluation.Evaluated(
-            payMatches = payAnswer == null || payAnswer.choice == OPTION_MATCHES,
-            jdMatches = jdAnswer.choice == OPTION_MATCHES,
+            jdMatch = jdMatch(jdAnswer),
             officeDays = officeDays,
-            payMissing = payMissingAnswer != null && payMissingAnswer.choice == OPTION_MATCHES,
+            payMatch = payMatch(answers[PAY_MATCHES], answers[PAY_MISSING], caresAboutPay),
         )
     }
 
     /**
      * The question the model is not sure enough about.
      *
-     * The answer `unclear` is never a reason to leave the mail alone: it
-     * says that the job description does not answer the question, and the
-     * state of the mail is the work from home check - the job seeker looks
-     * at it. The model is not sure about it either, it answered the
-     * question of the days of office with a confidence of 0.37 in the
-     * measurement of the story.
+     * The answer `unclear` is never a reason to leave a mail alone: it says
+     * that the job description does not answer the question, and the state of
+     * the mail is the work from home check - the job seeker looks at it.
      *
      * @param answers the answers of the model.
      * @return why the model is not sure enough, `null` when it is sure.
@@ -102,18 +106,53 @@ class DecisionModelEvaluator(
             }
 
     /**
+     * What the model decided about the profile of the job seeker.
+     *
+     * @param answer the answer of the model.
+     * @return the match of the profile.
+     */
+    private fun jdMatch(answer: OllamaDecisionAnswer): JobMatch =
+        if (answer.choice == OPTION_MATCHES) JobMatch.MATCHES else JobMatch.DOES_NOT_MATCH
+
+    /**
      * The days of office the model asks for.
      *
-     * @param choice the answer of the model.
+     * @param answer the answer of the model.
      * @return the days of office, `null` when the model answered with an
      *   option that is not known.
      */
-    private fun officeDays(choice: String?): OfficeDays? =
-        when (choice) {
+    private fun officeDays(answer: OllamaDecisionAnswer): OfficeDays? =
+        when (answer.choice) {
             OPTION_MATCHES -> OfficeDays.AT_MOST_THE_ALLOWED_DAYS
             OPTION_DOES_NOT_MATCH -> OfficeDays.MORE_THAN_THE_ALLOWED_DAYS
             OPTION_UNCLEAR -> OfficeDays.UNCLEAR
             else -> null
+        }
+
+    /**
+     * What the model decided about the pay of the job.
+     *
+     * The pay is asked about only when the requirements of the job seeker name
+     * a target, the pay does not matter without one. A mail that states no pay
+     * at all is a gap: the pay is missing before it is too low. A mail that
+     * states a pay that does not meet the target is a bad fit, but only when
+     * the model is sure that the mail states a pay.
+     *
+     * @param payAnswer the answer of the question of the pay.
+     * @param payMissingAnswer the answer of the question of the missing pay.
+     * @param caresAboutPay whether the requirements name a target.
+     * @return what the model decided about the pay.
+     */
+    private fun payMatch(
+        payAnswer: OllamaDecisionAnswer?,
+        payMissingAnswer: OllamaDecisionAnswer?,
+        caresAboutPay: Boolean,
+    ): PayMatch =
+        when {
+            !caresAboutPay -> PayMatch.DOES_NOT_MATTER
+            payMissingAnswer != null && payMissingAnswer.choice == OPTION_MATCHES -> PayMatch.MISSING
+            payAnswer == null || payAnswer.choice == OPTION_MATCHES -> PayMatch.MEETS_THE_TARGET
+            else -> PayMatch.BELOW_THE_TARGET
         }
 
     private fun questions(requirements: JobRequirements): Map<String, OllamaDecisionQuestion> {
