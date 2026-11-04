@@ -68,51 +68,71 @@ class DecisionModelEvaluator(
     ): JobDescriptionEvaluation {
         val jdAnswer = answers[JD_MATCHES]
         val officeAnswer = answers[OFFICE_DAYS]
-        val notSure = notSureAbout(answers)
-        if (notSure != null || jdAnswer == null || officeAnswer == null) {
-            return JobDescriptionEvaluation.Unknown(notSure ?: MISSING_ANSWER)
+        if (jdAnswer == null || officeAnswer == null) {
+            return JobDescriptionEvaluation.Unknown(MISSING_ANSWER)
         }
+        val jdMatch = jdMatch(jdAnswer)
         val officeDays = officeDays(officeAnswer)
-        if (officeDays == null) {
-            return JobDescriptionEvaluation.Unknown(
-                "The decision model answered with an unknown option: ${officeAnswer.choice}",
-            )
+        return when {
+            jdMatch == null -> {
+                JobDescriptionEvaluation.Unknown(
+                    "The decision model answered with an unknown option: ${jdAnswer.choice}",
+                )
+            }
+
+            officeDays == null -> {
+                JobDescriptionEvaluation.Unknown(
+                    "The decision model answered with an unknown option: ${officeAnswer.choice}",
+                )
+            }
+
+            else -> {
+                JobDescriptionEvaluation.Evaluated(
+                    jdMatch = jdMatch,
+                    officeDays = officeDays,
+                    payMatch = payMatch(answers[PAY_MATCHES], answers[PAY_MISSING], caresAboutPay),
+                )
+            }
         }
-        return JobDescriptionEvaluation.Evaluated(
-            jdMatch = jdMatch(jdAnswer),
-            officeDays = officeDays,
-            payMatch = payMatch(answers[PAY_MATCHES], answers[PAY_MISSING], caresAboutPay),
-        )
     }
 
     /**
-     * The question the model is not sure enough about.
+     * Whether the answer of the model is sure enough to be used.
      *
-     * The answer `unclear` is never a reason to leave a mail alone: it says
-     * that the job description does not answer the question, and the state of
-     * the mail is the work from home check - the job seeker looks at it.
+     * The gate of the confidence is a rule of the project: an answer is only
+     * used when the model is sure enough about it. The answer `unclear` is the
+     * exception: it is never a reason to leave a mail alone.
      *
-     * @param answers the answers of the model.
-     * @return why the model is not sure enough, `null` when it is sure.
+     * @param answer the answer of the model.
+     * @return whether the answer may be used.
      */
-    private fun notSureAbout(answers: Map<String, OllamaDecisionAnswer>): String? =
-        answers.entries
-            .firstOrNull { (_, answer) ->
-                answer.choice != OPTION_UNCLEAR &&
-                    answer.confidence != null &&
-                    answer.confidence < minimumConfidence
-            }?.let { (name, answer) ->
-                "The decision model is not sure enough about $name (confidence ${answer.confidence})"
-            }
+    private fun isSure(answer: OllamaDecisionAnswer): Boolean {
+        if (answer.choice == OPTION_UNCLEAR) {
+            return true
+        }
+        val confidence = answer.confidence ?: return true
+        return confidence >= minimumConfidence
+    }
 
     /**
      * What the model decided about the profile of the job seeker.
      *
      * @param answer the answer of the model.
-     * @return the match of the profile.
+     * @return the match of the profile, `null` when the model answered with
+     *   an option that is not known.
      */
-    private fun jdMatch(answer: OllamaDecisionAnswer): JobMatch =
-        if (answer.choice == OPTION_MATCHES) JobMatch.MATCHES else JobMatch.DOES_NOT_MATCH
+    private fun jdMatch(answer: OllamaDecisionAnswer): JobMatch? {
+        val match =
+            when (answer.choice) {
+                OPTION_MATCHES -> JobMatch.MATCHES
+                OPTION_DOES_NOT_MATCH -> JobMatch.DOES_NOT_MATCH
+                else -> null
+            }
+        if (match == null || isSure(answer)) {
+            return match
+        }
+        return JobMatch.NOT_KNOWN
+    }
 
     /**
      * The days of office the model asks for.
@@ -121,13 +141,19 @@ class DecisionModelEvaluator(
      * @return the days of office, `null` when the model answered with an
      *   option that is not known.
      */
-    private fun officeDays(answer: OllamaDecisionAnswer): OfficeDays? =
-        when (answer.choice) {
-            OPTION_MATCHES -> OfficeDays.AT_MOST_THE_ALLOWED_DAYS
-            OPTION_DOES_NOT_MATCH -> OfficeDays.MORE_THAN_THE_ALLOWED_DAYS
-            OPTION_UNCLEAR -> OfficeDays.UNCLEAR
-            else -> null
+    private fun officeDays(answer: OllamaDecisionAnswer): OfficeDays? {
+        val days =
+            when (answer.choice) {
+                OPTION_MATCHES -> OfficeDays.AT_MOST_THE_ALLOWED_DAYS
+                OPTION_DOES_NOT_MATCH -> OfficeDays.MORE_THAN_THE_ALLOWED_DAYS
+                OPTION_UNCLEAR -> OfficeDays.UNCLEAR
+                else -> null
+            }
+        if (days == null || isSure(answer)) {
+            return days
         }
+        return OfficeDays.NOT_KNOWN
+    }
 
     /**
      * What the model decided about the pay of the job.
@@ -150,10 +176,22 @@ class DecisionModelEvaluator(
     ): PayMatch =
         when {
             !caresAboutPay -> PayMatch.DOES_NOT_MATTER
-            payMissingAnswer != null && payMissingAnswer.choice == OPTION_MATCHES -> PayMatch.MISSING
-            payAnswer == null || payAnswer.choice == OPTION_MATCHES -> PayMatch.MEETS_THE_TARGET
-            else -> PayMatch.BELOW_THE_TARGET
+            statesNoPayAtAll(payMissingAnswer) -> PayMatch.MISSING
+            payAnswer == null || payMissingAnswer == null -> PayMatch.NOT_KNOWN
+            !isSure(payAnswer) -> PayMatch.NOT_KNOWN
+            payAnswer.choice == OPTION_MATCHES -> PayMatch.MEETS_THE_TARGET
+            isSure(payMissingAnswer) -> PayMatch.BELOW_THE_TARGET
+            else -> PayMatch.NOT_KNOWN
         }
+
+    /**
+     * Whether the model is sure that the mail states no pay at all.
+     *
+     * @param answer the answer of the question of the missing pay.
+     * @return whether the mail states no pay.
+     */
+    private fun statesNoPayAtAll(answer: OllamaDecisionAnswer?): Boolean =
+        answer != null && isSure(answer) && answer.choice == OPTION_MATCHES
 
     private fun questions(requirements: JobRequirements): Map<String, OllamaDecisionQuestion> {
         val questions =
@@ -227,7 +265,7 @@ class DecisionModelEvaluator(
         /** The decision model of the evaluation. */
         const val DEFAULT_MODEL: String = "clef:cloud"
 
-        /** How sure the model has to be, a model that is less sure leaves the mail alone. */
+        /** How sure the model has to be, a model that is less sure does not decide the criterion. */
         const val DEFAULT_MINIMUM_CONFIDENCE: Double = 0.5
 
         /** How many characters of the text go into the state by default. */

@@ -215,8 +215,59 @@ class DecisionModelEvaluatorTest {
 
             val evaluation = evaluator(engine).evaluate(message(), "", REQUIREMENTS)
 
-            val unknown = assertIs<JobDescriptionEvaluation.Unknown>(evaluation)
-            assertTrue(unknown.reason.contains("not sure enough"))
+            val evaluated = assertIs<JobDescriptionEvaluation.Evaluated>(evaluation)
+            assertEquals(JobMatch.NOT_KNOWN, evaluated.jdMatch)
+            assertEquals(OfficeDays.NOT_KNOWN, evaluated.officeDays)
+            assertEquals(PayMatch.NOT_KNOWN, evaluated.payMatch)
+            assertEquals(EvaluationState.NEEDS_MORE_INFORMATION, evaluated.state)
+        }
+
+    @Test
+    fun aModelThatIsNotSureAboutTheProfileStillTrashesAMailWhosePayIsBelowTheTarget() =
+        runTest {
+            // The pay decides the mail on its own: the model is sure that the
+            // mail states a pay that is below the target, the job seeker does
+            // not want the job whatever the job description says.
+            val engine =
+                engine(
+                    answers =
+                        mapOf(
+                            "jd_matches" to "does not match",
+                            "office_days" to "unclear",
+                            "pay_matches" to "does not match",
+                            "pay_missing" to "does not match",
+                        ),
+                    confidenceOfTheProfile = 0.0496,
+                )
+
+            val evaluation = evaluator(engine).evaluate(message(), "", REQUIREMENTS)
+
+            val evaluated = assertIs<JobDescriptionEvaluation.Evaluated>(evaluation)
+            assertEquals(JobMatch.NOT_KNOWN, evaluated.jdMatch)
+            assertEquals(PayMatch.BELOW_THE_TARGET, evaluated.payMatch)
+            assertEquals(EvaluationState.TRASH, evaluated.state)
+        }
+
+    @Test
+    fun aModelThatIsNotSureAboutThePayLeavesTheMailAlone() =
+        runTest {
+            val engine =
+                engine(
+                    answers =
+                        mapOf(
+                            "jd_matches" to "matches",
+                            "office_days" to "matches",
+                            "pay_matches" to "does not match",
+                            "pay_missing" to "does not match",
+                        ),
+                    confidenceOfThePay = 0.2,
+                )
+
+            val evaluation = evaluator(engine).evaluate(message(), "", REQUIREMENTS)
+
+            val evaluated = assertIs<JobDescriptionEvaluation.Evaluated>(evaluation)
+            assertEquals(PayMatch.NOT_KNOWN, evaluated.payMatch)
+            assertEquals(EvaluationState.NEEDS_MORE_INFORMATION, evaluated.state)
         }
 
     @Test
@@ -302,12 +353,19 @@ class DecisionModelEvaluatorTest {
                 "pay_missing" to "does not match",
             ),
         confidenceOfTheOfficeDays: Double = confidence,
+        confidenceOfTheProfile: Double = confidence,
+        confidenceOfThePay: Double = confidence,
     ): MockEngine =
         MockEngine {
             val answer =
                 answers.entries.joinToString(",") { (name, choice) ->
                     val answerConfidence =
-                        if (name == "office_days") confidenceOfTheOfficeDays else confidence
+                        when (name) {
+                            "office_days" -> confidenceOfTheOfficeDays
+                            "jd_matches" -> confidenceOfTheProfile
+                            "pay_matches", "pay_missing" -> confidenceOfThePay
+                            else -> confidence
+                        }
                     """"$name":{"type":"choice","choice":"$choice","confidence":$answerConfidence}"""
                 }
             respond(

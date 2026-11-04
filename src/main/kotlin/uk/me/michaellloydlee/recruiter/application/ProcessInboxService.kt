@@ -179,7 +179,9 @@ class ProcessInboxService(
      * The mail keeps the label `Recruiters/NeedsMoreInformation`: the draft
      * waits in the mailbox of the job seeker and the mail is not asked again.
      * A mail the model could not evaluate gets no draft: the model does not
-     * know what is missing.
+     * know what is missing. A mail whose only gap is a criterion the model was
+     * not sure about gets no draft either: the recruiter cannot be asked
+     * about what the model does not know.
      *
      * @param message the mail of the recruiter.
      * @param evaluation the evaluation of the job description.
@@ -195,6 +197,9 @@ class ProcessInboxService(
                 is JobDescriptionEvaluation.Evaluated -> evaluation.missingInformation
                 is JobDescriptionEvaluation.Unknown -> return
             }
+        if (!missing.asksAboutPay && !missing.asksAboutOfficeDays) {
+            return
+        }
         when (val outcome = drafts.write(message, missing, requirements)) {
             is DraftOutcome.Written -> {
                 counters.drafts++
