@@ -100,6 +100,10 @@ of the four state labels below `Recruiters/` — `JobListing`, `WorthFollowUp`,
   (`OfficeDays.UNCLEAR`). It is one state, not two. A pay below the target of the job seeker is not
   a gap — the recruiter cannot change it — it is a bad fit and the mail is `Recruiters/Trash`. A
   mail that states no pay at all is a gap: the pay is missing before it is too low.
+* A criterion the model was not sure enough about is not known (`JobMatch.NOT_KNOWN`,
+  `PayMatch.NOT_KNOWN`, `OfficeDays.NOT_KNOWN`). A mail with a criterion that is not known is
+  `NeedsMoreInformation` as well: the job seeker looks at it, the recruiter is not asked about what
+  the model does not know.
 * A job description the model could not evaluate is `NeedsMoreInformation` as well: the mail waits
   for the job seeker instead of being asked again by every run. The reason of the model goes into
   the log.
@@ -111,8 +115,10 @@ of the four state labels below `Recruiters/` — `JobListing`, `WorthFollowUp`,
   the three states an evaluation can lead to and the label of each of them. A job listing is a
   decision of the screening — a listing is not one job and it is not evaluated — so it is not a
   state of an evaluation and the code does not carry a branch for it.
-* The label carries the state, the log carries the reason. A detail that is not a state — why the
-  evaluation is incomplete, for instance — belongs in the log.
+* The label carries the state, the log carries the reason. The reason is a part of the evaluation
+  (`JobDescriptionEvaluation.Evaluated.reason`): it names the criterion that decided the state, a
+  trashed mail says why it was trashed. A detail that is not a state — why the evaluation is
+  incomplete, for instance — belongs in the log.
 * A message the job seeker asks for by its id (`process-inbox --id`) is looked at as if it were
   pending: the state of an earlier run is removed before it is screened and the run decides the
   state again. Such a run does not move the moment of the last successful run — the mail of the
@@ -125,6 +131,14 @@ A typed answer of the decision model is only used when its confidence is at leas
 confidence (0.37) when a job description does not say how many days of office it demands, and that
 low confidence is the expected answer, not a defect. Do not remove the exemption and do not raise
 the gate.
+
+The gate belongs to the **answer**, not to the whole evaluation: an answer the model is not sure
+enough about is not used and the criterion it answers stays unknown. A criterion that is unknown
+leaves the mail for the job seeker, but it does not stop a criterion that is known from deciding the
+state of the mail: a pay that is below the target is a bad fit whatever the model thinks about the
+job description. A mail that states a pay of 135000 GBP to a job seeker whose target is 160000 GBP
+is trashed even when the model is not sure about the job description (the model answered it with a
+confidence of 0.05).
 
 ### The draft that asks the recruiter
 

@@ -267,6 +267,56 @@ class ProcessInboxServiceTest {
         }
 
     @Test
+    fun trashesAMailWhosePayIsBelowTheTargetEvenWhenTheModelIsNotSureAboutTheProfile() =
+        runTest {
+            // The mail of a recruiter that states a pay of 135000 GBP: the
+            // model is sure that the pay is below the target of the job
+            // seeker and not sure about the job description. The pay decides
+            // the mail on its own.
+            val gmail = gmailEngine()
+            val model = modelEngine(jdMatches = "does not match", confidenceOfTheProfile = 0.0496)
+
+            val summary =
+                service(gmail, model, requirements = REQUIREMENTS_WITH_A_TARGET).run(WINDOW)
+
+            assertEquals(2, summary.trashed)
+            assertEquals(0, summary.needsMoreInformation)
+            assertEquals(0, summary.drafts)
+            val labels = gmail.requestHistory.filter { it.url.encodedPath.endsWith("/modify") }
+            labels.forEach { label ->
+                val body = (label.body as TextContent).text
+                assertTrue(body.contains("Label_trash"))
+            }
+        }
+
+    @Test
+    fun writesNoDraftForAMailTheModelWasNotSureAbout() =
+        runTest {
+            // The model was not sure enough about the job description and the
+            // mail misses nothing else: the recruiter is not asked about what
+            // the model does not know.
+            val gmail = gmailEngine()
+            val model = modelEngine(confidenceOfTheProfile = 0.2)
+
+            val summary = service(gmail, model).run(WINDOW)
+
+            assertEquals(2, summary.needsMoreInformation)
+            assertEquals(0, summary.drafts)
+        }
+
+    @Test
+    fun asksTheRecruiterAboutTheOfficeDaysWhenTheModelIsNotSureAboutTheProfile() =
+        runTest {
+            val gmail = gmailEngine()
+            val model = modelEngine(officeDays = "unclear", confidenceOfTheProfile = 0.2)
+
+            val summary = service(gmail, model).run(WINDOW)
+
+            assertEquals(2, summary.needsMoreInformation)
+            assertEquals(2, summary.drafts)
+        }
+
+    @Test
     fun writesADraftForAMailThatNeedsMoreInformation() =
         runTest {
             val gmail = gmailEngine()
@@ -400,6 +450,7 @@ class ProcessInboxServiceTest {
         answered: Boolean = true,
         chatAnswers: Boolean = true,
         jdMatches: String = "matches",
+        confidenceOfTheProfile: Double = 0.9,
     ): MockEngine =
         MockEngine { request ->
             if (request.url.encodedPath.endsWith("/api/chat")) {
@@ -422,7 +473,8 @@ class ProcessInboxServiceTest {
                                     "office_days" -> officeDays
                                     else -> "does not match"
                                 }
-                            """"$name":{"type":"choice","choice":"$choice","confidence":0.9}"""
+                            val confidence = if (name == "jd_matches") confidenceOfTheProfile else 0.9
+                            """"$name":{"type":"choice","choice":"$choice","confidence":$confidence}"""
                         }
                     } else {
                         ""

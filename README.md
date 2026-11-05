@@ -598,7 +598,7 @@ label, so every state label is excluded by its own path:
 | --- | --- | --- |
 | `Recruiters/JobListing` | a job listing, an alert of a job board that offers many jobs at once | no, it stays in the inbox |
 | `Recruiters/WorthFollowUp` | worth a follow up | no, it stays in the inbox |
-| `Recruiters/NeedsMoreInformation` | a recruiter mail that matches, but something is missing: the pay is not stated, the job description does not say how many days of office it demands or the model could not evaluate the job description | no, it stays in the inbox |
+| `Recruiters/NeedsMoreInformation` | a recruiter mail that matches, but something is missing: the pay is not stated, the job description does not say how many days of office it demands, the model was not sure enough about a criterion or the model could not evaluate the job description | no, it stays in the inbox |
 | `Recruiters/Trash` | not worth any attention: the job description does not match, the job demands more days of office than allowed or the pay is below the target of the job seeker | yes, the message leaves the inbox |
 
 The evaluation of a job description has a state of its own (`EvaluationState`):
@@ -606,6 +606,16 @@ it holds the three states an evaluation can lead to - `WorthFollowUp`,
 `NeedsMoreInformation` and `Trash` - and the label of each of them. A job
 listing is a decision of the screening, a listing is not one job and it is not
 evaluated, so it is not a state of an evaluation.
+
+The evaluation decides three criteria: the job description matches the profile
+of the job seeker, the job demands at most the days of office the job seeker
+allows and the mail states a pay that meets the target. The decision model of
+Ollama tells how sure it is about every answer: an answer the model is not
+sure enough about (a confidence below `0.5`) is not used and the criterion it
+answers stays unknown. A criterion that is unknown leaves the mail for the job
+seeker, but it does not stop a criterion that is known from deciding the state
+of the mail: a mail that states a pay below the target is trashed even when
+the model is not sure about the job description.
 
 A message carries exactly one state label - applying a new state removes the
 other ones - and the state labels are created in the mailbox when they do not

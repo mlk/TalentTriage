@@ -4,7 +4,9 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import uk.me.michaellloydlee.recruiter.domain.evaluation.JobDescriptionEvaluation
+import uk.me.michaellloydlee.recruiter.domain.evaluation.JobMatch
 import uk.me.michaellloydlee.recruiter.domain.evaluation.OfficeDays
+import uk.me.michaellloydlee.recruiter.domain.evaluation.PayMatch
 import uk.me.michaellloydlee.recruiter.domain.gmail.EmailMessage
 import uk.me.michaellloydlee.recruiter.domain.requirements.JobRequirements
 import uk.me.michaellloydlee.recruiter.infrastructure.llm.OllamaChatClient
@@ -55,14 +57,17 @@ class ChatModelEvaluator(
                             ),
                     ),
                 )
-            answer(response.content)
+            answer(response.content, requirements.caresAboutPay)
         } catch (error: OllamaException) {
             JobDescriptionEvaluation.Unknown("The model of the evaluation answered with an error: ${error.message}")
         } catch (error: IOException) {
             JobDescriptionEvaluation.Unknown("The model of the evaluation could not be reached: ${error.message}")
         }
 
-    private fun answer(content: String): JobDescriptionEvaluation {
+    private fun answer(
+        content: String,
+        caresAboutPay: Boolean,
+    ): JobDescriptionEvaluation {
         val start = content.indexOf('{')
         val end = content.lastIndexOf('}')
         if (start < 0 || end <= start) {
@@ -76,10 +81,13 @@ class ChatModelEvaluator(
                     "The model of the evaluation answered with an unreadable JSON object: ${error.message}",
                 )
             }
-        return evaluation(answer)
+        return evaluation(answer, caresAboutPay)
     }
 
-    private fun evaluation(answer: EvaluationAnswer): JobDescriptionEvaluation {
+    private fun evaluation(
+        answer: EvaluationAnswer,
+        caresAboutPay: Boolean,
+    ): JobDescriptionEvaluation {
         val jdMatches = answer.jdMatches
         val officeChoice = answer.officeDays
         if (jdMatches == null || officeChoice == null) {
@@ -91,11 +99,35 @@ class ChatModelEvaluator(
                     "The model of the evaluation answered with an unknown option: $officeChoice",
                 )
         return JobDescriptionEvaluation.Evaluated(
-            payMatches = answer.payMatches ?: true,
-            jdMatches = jdMatches,
+            jdMatch = if (jdMatches) JobMatch.MATCHES else JobMatch.DOES_NOT_MATCH,
             officeDays = officeDays,
-            payMissing = answer.payMissing ?: false,
+            payMatch = payMatch(answer, caresAboutPay),
         )
+    }
+
+    /**
+     * What the model decided about the pay of the job.
+     *
+     * The pay is asked about only when the requirements of the job seeker name
+     * a target, the pay does not matter without one. A mail that states no pay
+     * at all is a gap: the pay is missing before it is too low.
+     *
+     * @param answer the answer of the model.
+     * @param caresAboutPay whether the requirements name a target.
+     * @return what the model decided about the pay.
+     */
+    private fun payMatch(
+        answer: EvaluationAnswer,
+        caresAboutPay: Boolean,
+    ): PayMatch {
+        if (!caresAboutPay) {
+            return PayMatch.DOES_NOT_MATTER
+        }
+        return when {
+            answer.payMissing == true -> PayMatch.MISSING
+            answer.payMatches == false -> PayMatch.BELOW_THE_TARGET
+            else -> PayMatch.MEETS_THE_TARGET
+        }
     }
 
     /**
