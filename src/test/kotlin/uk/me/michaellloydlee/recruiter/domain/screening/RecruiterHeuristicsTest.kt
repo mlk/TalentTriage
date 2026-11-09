@@ -21,6 +21,34 @@ class RecruiterHeuristicsTest {
     }
 
     @Test
+    fun aRecruiterThatIsLookingToHireIsACandidate() {
+        val message =
+            message(
+                subject = "Front End Developer (React) – Boutique London Fund Manager",
+                body =
+                    "I'm working with a growing boutique investment manager that's looking to hire a " +
+                        "Front End Developer to help drive a major platform programme.",
+                sender = "Jacob Bartoli <jacob.bartoli@execcommunities.com>",
+            )
+
+        assertTrue(heuristics.isCandidate(message))
+    }
+
+    @Test
+    fun aRecruiterThatIsRecruitingIsACandidate() {
+        val message = message(subject = "Hello", body = "We are recruiting a senior Kotlin engineer")
+
+        assertTrue(heuristics.isCandidate(message))
+    }
+
+    @Test
+    fun aRecruiterThatIsLookingForSomebodyIsACandidate() {
+        val message = message(subject = "Hello", body = "My client is looking for a lead developer")
+
+        assertTrue(heuristics.isCandidate(message))
+    }
+
+    @Test
     fun theWordsAreMatchedWithoutTheCase() {
         val message = message(subject = "INTERVIEW INVITATION")
 
