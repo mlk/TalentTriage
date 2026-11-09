@@ -17,6 +17,8 @@ import uk.me.michaellloydlee.recruiter.domain.gmail.EmailMessage
  * "hired", "recruit" matches "recruiting" and "recruited". That costs a
  * call to the model for the mails that talk about hiring without being a
  * recruiter mail, and it keeps the mails that use another form of the word.
+ * A stem that is not a part of the word is listed with its form: "hiring"
+ * is not a part of "hire".
  *
  * @param keywords the words a recruiter mail talks about, they are looked for
  *   in the subject and in the body of the message.
@@ -46,8 +48,9 @@ class RecruiterHeuristics(
          * The words a recruiter mail talks about.
          *
          * They are the stems of the words: the words are matched as a part of
-         * a word, so "hire" catches "looking to hire" and "recruit" catches
-         * "we are recruiting".
+         * a word, so "hire" catches "hires" and "hired". A word whose stem
+         * is not a part of the word is listed with its form: "hiring" is not
+         * a part of "hire", "opportunities" is not a part of "opportunity".
          */
         val DEFAULT_KEYWORDS: Set<String> =
             setOf(
@@ -59,16 +62,19 @@ class RecruiterHeuristics(
                 "curriculum vitae",
                 "cv",
                 "hire",
+                "hiring",
                 "interview",
                 "job",
                 "jobs",
                 "offer",
+                "opportunities",
                 "opportunity",
                 "position",
                 "recruit",
                 "referral",
                 "resume",
                 "talent",
+                "vacancies",
                 "vacancy",
                 "looking for",
                 "your experience",
