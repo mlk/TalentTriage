@@ -42,6 +42,33 @@ class RecruiterHeuristicsTest {
     }
 
     @Test
+    fun theKeywordHireCatchesTheWordHiring() {
+        // The words are matched as a part of a word: "hire" is a part of
+        // "hired" and of "hires", but not of "hiring".
+        val message = message(subject = "Hello", body = "We are hiring a senior Kotlin engineer")
+
+        assertTrue(heuristics.isCandidate(message))
+    }
+
+    @Test
+    fun theKeywordRecruitCatchesTheWordRecruitment() {
+        // The words are matched as a part of a word, the keyword is the stem
+        // of the word: "recruit" catches "recruitment".
+        val message = message(subject = "Hello", body = "Recruitment update for the team")
+
+        assertTrue(heuristics.isCandidate(message))
+    }
+
+    @Test
+    fun theKeywordOpportunityCatchesTheWordOpportunities() {
+        // The words are matched as a part of a word: "opportunity" is not a
+        // part of "opportunities".
+        val message = message(subject = "Hello", body = "I have three opportunities for you")
+
+        assertTrue(heuristics.isCandidate(message))
+    }
+
+    @Test
     fun aRecruiterThatIsLookingForSomebodyIsACandidate() {
         val message = message(subject = "Hello", body = "My client is looking for a lead developer")
 
