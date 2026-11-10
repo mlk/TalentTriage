@@ -27,11 +27,14 @@ import io.ktor.http.isSuccess
  *   `HttpTimeout` and the `ContentNegotiation` plugin.
  * @param baseUrl the base URL of the API.
  * @param timeoutMillis how long a call may take, in milliseconds.
+ * @param usage counts what the answers took, the counter is shared by the
+ *   clients of a run.
  */
 class OllamaChatClient(
     private val httpClient: HttpClient,
     private val baseUrl: String = DEFAULT_BASE_URL,
     private val timeoutMillis: Long = DEFAULT_TIMEOUT_MILLIS,
+    private val usage: ModelUsageCounter = ModelUsageCounter(),
 ) {
     init {
         require(httpClient.pluginOrNull(HttpTimeout) != null) {
@@ -67,7 +70,7 @@ class OllamaChatClient(
             throw OllamaException(response.status.value, response.bodyAsText())
         }
         return try {
-            response.body()
+            response.body<OllamaChatResponse>()
         } catch (error: NoTransformationFoundException) {
             // The API streamed the answer although the request asked for the
             // whole one, the client cannot read a stream.
@@ -75,6 +78,16 @@ class OllamaChatClient(
                 response.status.value,
                 "The API answered with ${response.contentType()}, the client reads a single JSON object",
                 error,
+            )
+        }.also { answer ->
+            // The answer knows what it took: the tokens of the prompt and the
+            // tokens of the answer of the model.
+            usage.record(
+                ModelUsage(
+                    calls = 1,
+                    inputTokens = (answer.promptEvalCount ?: 0).toLong(),
+                    outputTokens = (answer.evalCount ?: 0).toLong(),
+                ),
             )
         }
     }

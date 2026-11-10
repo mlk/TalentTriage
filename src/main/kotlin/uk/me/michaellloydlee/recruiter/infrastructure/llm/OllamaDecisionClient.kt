@@ -29,11 +29,14 @@ import io.ktor.http.isSuccess
  *   `HttpTimeout` and the `ContentNegotiation` plugin.
  * @param baseUrl the base URL of the API.
  * @param timeoutMillis how long a call may take, in milliseconds.
+ * @param usage counts what the answers took, the counter is shared by the
+ *   clients of a run.
  */
 class OllamaDecisionClient(
     private val httpClient: HttpClient,
     private val baseUrl: String = OllamaChatClient.DEFAULT_BASE_URL,
     private val timeoutMillis: Long = OllamaChatClient.DEFAULT_TIMEOUT_MILLIS,
+    private val usage: ModelUsageCounter = ModelUsageCounter(),
 ) {
     init {
         require(httpClient.pluginOrNull(HttpTimeout) != null) {
@@ -64,12 +67,22 @@ class OllamaDecisionClient(
             throw OllamaException(response.status.value, response.bodyAsText())
         }
         return try {
-            response.body()
+            response.body<OllamaDecisionResponse>()
         } catch (error: NoTransformationFoundException) {
             throw OllamaException(
                 response.status.value,
                 "The API answered with ${response.contentType()}, the client reads a single JSON object",
                 error,
+            )
+        }.also { answer ->
+            // The answer knows what it took: the tokens of the input and the
+            // tokens the model generated.
+            usage.record(
+                ModelUsage(
+                    calls = 1,
+                    inputTokens = answer.usage.inputTokens,
+                    outputTokens = answer.usage.outputTokens,
+                ),
             )
         }
     }

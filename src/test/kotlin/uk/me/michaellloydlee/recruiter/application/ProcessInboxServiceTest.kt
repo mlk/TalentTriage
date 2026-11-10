@@ -35,6 +35,8 @@ import uk.me.michaellloydlee.recruiter.infrastructure.gmail.OAuth2Token
 import uk.me.michaellloydlee.recruiter.infrastructure.gmail.RefreshingAccessTokenProvider
 import uk.me.michaellloydlee.recruiter.infrastructure.gmail.TestOAuth2Client
 import uk.me.michaellloydlee.recruiter.infrastructure.gmail.temporaryTokenStore
+import uk.me.michaellloydlee.recruiter.infrastructure.llm.ModelUsage
+import uk.me.michaellloydlee.recruiter.infrastructure.llm.ModelUsageCounter
 import uk.me.michaellloydlee.recruiter.infrastructure.llm.OllamaChatClient
 import uk.me.michaellloydlee.recruiter.infrastructure.llm.OllamaDecisionClient
 import uk.me.michaellloydlee.recruiter.infrastructure.logging.StructuredLogger
@@ -47,6 +49,19 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 class ProcessInboxServiceTest {
+    @Test
+    fun saysWhatTheCallsToTheModelsTook() =
+        runTest {
+            val gmail = gmailEngine()
+            val model = modelEngine()
+
+            val summary = service(gmail, model).run(WINDOW)
+
+            // Two messages, a screening and an evaluation for each of them.
+            assertEquals(ModelUsage(calls = 4, inputTokens = 40, outputTokens = 4), summary.models)
+            assertTrue(summary.durationMillis >= 0)
+        }
+
     @Test
     fun screensEveryUnprocessedMessage() =
         runTest {
@@ -402,6 +417,7 @@ class ProcessInboxServiceTest {
             )
         val messages = GmailMessagesApi(api)
         val stateManager = GmailLabelStateManager(messages, GmailLabelsApi(api))
+        val usage = ModelUsageCounter()
         val modelClient =
             OllamaDecisionClient(
                 httpClient =
@@ -409,6 +425,7 @@ class ProcessInboxServiceTest {
                         install(HttpTimeout)
                         install(ContentNegotiation) { json(JSON) }
                     },
+                usage = usage,
             )
         val chatClient =
             OllamaChatClient(
@@ -417,6 +434,7 @@ class ProcessInboxServiceTest {
                         install(HttpTimeout)
                         install(ContentNegotiation) { json(JSON) }
                     },
+                usage = usage,
             )
         return ProcessInboxService(
             messages = messages,
@@ -437,6 +455,7 @@ class ProcessInboxServiceTest {
             drafts = DraftWriter(client = chatClient, drafts = GmailDraftsApi(api)),
             requirements = requirements,
             stateManager = stateManager,
+            usageCounter = usage,
             logger = StructuredLogger(log),
         )
     }

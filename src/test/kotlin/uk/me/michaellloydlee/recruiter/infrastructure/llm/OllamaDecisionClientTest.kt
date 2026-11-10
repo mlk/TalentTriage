@@ -77,6 +77,19 @@ class OllamaDecisionClientTest {
         }
 
     @Test
+    fun countsWhatTheCallsToTheModelTook() =
+        runTest {
+            val engine = engine()
+            val usage = ModelUsageCounter()
+            val decision = client(engine, usage)
+
+            decision.decide(request())
+            decision.decide(request())
+
+            assertEquals(ModelUsage(calls = 2, inputTokens = 348, outputTokens = 2), usage.usage())
+        }
+
+    @Test
     fun failsWhenTheApiAnswersWithAnError() =
         runTest {
             val engine =
@@ -122,7 +135,10 @@ class OllamaDecisionClientTest {
             )
         }
 
-    private fun client(engine: MockEngine): OllamaDecisionClient =
+    private fun client(
+        engine: MockEngine,
+        usage: ModelUsageCounter = ModelUsageCounter(),
+    ): OllamaDecisionClient =
         OllamaDecisionClient(
             httpClient =
                 HttpClient(engine) {
@@ -130,6 +146,7 @@ class OllamaDecisionClientTest {
                     install(ContentNegotiation) { json(JSON) }
                 },
             baseUrl = "http://ollama.example:11434",
+            usage = usage,
         )
 
     private fun request(): OllamaDecisionRequest =
