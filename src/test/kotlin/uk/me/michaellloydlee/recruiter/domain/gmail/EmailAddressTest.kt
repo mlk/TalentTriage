@@ -16,7 +16,7 @@ class EmailAddressTest {
     }
 
     @Test
-    fun theReplyGoesToTheAddressOfTheSenderWhenTheMailHasNoReplyTo() {
+    fun theReplyGoesToTheAddressOfTheSenderWithoutItsName() {
         val address =
             replyAddress(
                 from = "Jane Doe <jane@example.com>",
@@ -27,10 +27,10 @@ class EmailAddressTest {
     }
 
     @Test
-    fun theNameOfTheSenderIsNotPartOfTheAddress() {
+    fun theNameOfTheSenderMayHoldAComma() {
         val address =
             replyAddress(
-                from = "Jane Doe <jane@example.com>",
+                from = "Doe, Jane <jane@example.com>",
                 replyTo = "",
             )
 
