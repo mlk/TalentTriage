@@ -34,6 +34,7 @@ import java.time.Instant
 import java.util.Base64
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
@@ -163,8 +164,8 @@ class DraftWriterTest {
             val mime = mimeOf(request)
             assertTrue(mime.contains("To: recruiter@example.com"))
             assertTrue(mime.contains("Subject: Re: Your CV"))
-            assertTrue(mime.contains("In-Reply-To: <message-id>"))
-            assertTrue(mime.contains("References: <message-id>"))
+            assertTrue(mime.contains("In-Reply-To: <message-id@mail.example.com>"))
+            assertTrue(mime.contains("References: <message-id@mail.example.com>"))
         }
 
     @Test
@@ -233,7 +234,45 @@ class DraftWriterTest {
         }
 
     @Test
-    fun aMailWithoutASenderLeavesTheMailWithoutADraft() =
+    fun theDraftGoesToTheAddressOfTheReplyToHeader() =
+        runTest {
+            val gmail = gmailEngine()
+
+            val outcome =
+                writer(modelEngine(), gmail).write(
+                    message(
+                        sender = "no-reply@linkedin.com",
+                        replyTo = "Jane Doe <jane@example.com>",
+                    ),
+                    missingPay(),
+                    REQUIREMENTS,
+                )
+
+            assertIs<DraftOutcome.Written>(outcome)
+            val mime = mimeOf(gmail.requestHistory.single())
+            assertTrue(mime.contains("To: jane@example.com\r\n"))
+            assertFalse(mime.contains("no-reply@linkedin.com"))
+        }
+
+    @Test
+    fun theDraftGoesToTheAddressOfTheSenderWhenTheMailHasNoReplyTo() =
+        runTest {
+            val gmail = gmailEngine()
+
+            val outcome =
+                writer(modelEngine(), gmail).write(
+                    message(sender = "Jane Doe <jane@example.com>"),
+                    missingPay(),
+                    REQUIREMENTS,
+                )
+
+            assertIs<DraftOutcome.Written>(outcome)
+            val mime = mimeOf(gmail.requestHistory.single())
+            assertTrue(mime.contains("To: jane@example.com\r\n"))
+        }
+
+    @Test
+    fun aMailWithoutAnAddressLeavesTheMailWithoutADraft() =
         runTest {
             val gmail = gmailEngine()
 
@@ -242,7 +281,7 @@ class DraftWriterTest {
                     .write(message(sender = " "), missingPay(), REQUIREMENTS)
 
             val failed = assertIs<DraftOutcome.Failed>(outcome)
-            assertTrue(failed.reason.contains("no sender"))
+            assertTrue(failed.reason.contains("no address"))
             assertTrue(gmail.requestHistory.isEmpty())
         }
 
@@ -359,6 +398,7 @@ class DraftWriterTest {
     private fun message(
         sender: String = "recruiter@example.com",
         body: String = "the body of the mail",
+        replyTo: String = "",
     ): EmailMessage =
         EmailMessage(
             id = "message-id",
@@ -367,6 +407,8 @@ class DraftWriterTest {
             subject = "Your CV",
             body = body,
             labelIds = listOf("INBOX"),
+            messageId = "message-id@mail.example.com",
+            replyTo = replyTo,
         )
 
     private fun missingPay(): MissingInformation = MissingInformation(pay = PayInformation.MISSING, officeDays = false)

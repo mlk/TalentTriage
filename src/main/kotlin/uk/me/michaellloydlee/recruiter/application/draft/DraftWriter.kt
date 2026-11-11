@@ -3,6 +3,7 @@ package uk.me.michaellloydlee.recruiter.application.draft
 import uk.me.michaellloydlee.recruiter.domain.evaluation.MissingInformation
 import uk.me.michaellloydlee.recruiter.domain.gmail.EmailDraft
 import uk.me.michaellloydlee.recruiter.domain.gmail.EmailMessage
+import uk.me.michaellloydlee.recruiter.domain.gmail.replyAddress
 import uk.me.michaellloydlee.recruiter.domain.gmail.replySubject
 import uk.me.michaellloydlee.recruiter.domain.requirements.JobRequirements
 import uk.me.michaellloydlee.recruiter.infrastructure.gmail.GmailApiException
@@ -13,6 +14,8 @@ import uk.me.michaellloydlee.recruiter.infrastructure.llm.OllamaException
 import uk.me.michaellloydlee.recruiter.infrastructure.llm.OllamaMessage
 import uk.me.michaellloydlee.recruiter.infrastructure.llm.OllamaOptions
 import java.io.IOException
+import java.time.Clock
+import java.util.UUID
 
 /**
  * Writes the draft that asks the recruiter for the information the mail does
@@ -27,12 +30,14 @@ import java.io.IOException
  * @param drafts the draft endpoints of the Gmail API.
  * @param model the name of the chat model.
  * @param maxBodyLength how many characters of the mail go into the prompt.
+ * @param clock the clock of the draft, it says when the draft was written.
  */
 class DraftWriter(
     private val client: OllamaChatClient,
     private val drafts: GmailDraftsApi,
     private val model: String = DEFAULT_MODEL,
     private val maxBodyLength: Int = DEFAULT_MAX_BODY_LENGTH,
+    private val clock: Clock = Clock.systemUTC(),
 ) {
     /**
      * Writes the draft for a mail of a recruiter.
@@ -50,8 +55,8 @@ class DraftWriter(
         if (!missing.asksAboutPay && !missing.asksAboutOfficeDays) {
             return DraftOutcome.Failed("The mail ${message.id} misses nothing, there is nothing to ask for")
         }
-        if (message.sender.isBlank()) {
-            return DraftOutcome.Failed("The mail ${message.id} has no sender to reply to")
+        if (replyAddress(message.sender, message.replyTo).isBlank()) {
+            return DraftOutcome.Failed("The mail ${message.id} has no address to reply to")
         }
         val reply = reply(message, missing, requirements)
         return when (reply) {
@@ -115,12 +120,21 @@ class DraftWriter(
         text: String,
     ): EmailDraft =
         EmailDraft(
-            to = message.sender,
+            to = replyAddress(message.sender, message.replyTo),
             subject = replySubject(message.subject),
             body = text,
-            inReplyTo = message.id,
+            inReplyTo = message.messageId,
+            messageId = newMessageId(),
+            date = clock.instant(),
             threadId = message.threadId,
         )
+
+    /**
+     * The message id of the draft, a message id of RFC 5322.
+     *
+     * @return the message id of the draft.
+     */
+    private fun newMessageId(): String = "${UUID.randomUUID()}@$MESSAGE_ID_DOMAIN"
 
     /**
      * The request with the instruction and the mail of the recruiter.
@@ -184,5 +198,12 @@ class DraftWriter(
 
         /** How many characters of the mail go into the prompt by default. */
         const val DEFAULT_MAX_BODY_LENGTH: Int = 8_000
+
+        /**
+         * The domain of the message id of a draft. A message id of RFC 5322
+         * is a name and a domain, the domain of a local application is not
+         * sent to anybody.
+         */
+        const val MESSAGE_ID_DOMAIN: String = "talent-triage.local"
     }
 }
