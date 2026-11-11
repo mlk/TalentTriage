@@ -69,27 +69,28 @@ class OllamaChatClient(
         if (!response.status.isSuccess()) {
             throw OllamaException(response.status.value, response.bodyAsText())
         }
-        return try {
-            response.body<OllamaChatResponse>()
-        } catch (error: NoTransformationFoundException) {
-            // The API streamed the answer although the request asked for the
-            // whole one, the client cannot read a stream.
-            throw OllamaException(
-                response.status.value,
-                "The API answered with ${response.contentType()}, the client reads a single JSON object",
-                error,
-            )
-        }.also { answer ->
-            // The answer knows what it took: the tokens of the prompt and the
-            // tokens of the answer of the model.
-            usage.record(
-                ModelUsage(
-                    calls = 1,
-                    inputTokens = (answer.promptEvalCount ?: 0).toLong(),
-                    outputTokens = (answer.evalCount ?: 0).toLong(),
-                ),
-            )
-        }
+        val answer: OllamaChatResponse =
+            try {
+                response.body()
+            } catch (error: NoTransformationFoundException) {
+                // The API streamed the answer although the request asked for the
+                // whole one, the client cannot read a stream.
+                throw OllamaException(
+                    response.status.value,
+                    "The API answered with ${response.contentType()}, the client reads a single JSON object",
+                    error,
+                )
+            }
+        // The answer knows what it took: the tokens of the prompt and the
+        // tokens of the answer of the model.
+        usage.record(
+            ModelUsage(
+                calls = 1,
+                inputTokens = (answer.promptEvalCount ?: 0).toLong(),
+                outputTokens = (answer.evalCount ?: 0).toLong(),
+            ),
+        )
+        return answer
     }
 
     private val chatUrl: String

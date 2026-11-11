@@ -66,25 +66,26 @@ class OllamaDecisionClient(
         if (!response.status.isSuccess()) {
             throw OllamaException(response.status.value, response.bodyAsText())
         }
-        return try {
-            response.body<OllamaDecisionResponse>()
-        } catch (error: NoTransformationFoundException) {
-            throw OllamaException(
-                response.status.value,
-                "The API answered with ${response.contentType()}, the client reads a single JSON object",
-                error,
-            )
-        }.also { answer ->
-            // The answer knows what it took: the tokens of the input and the
-            // tokens the model generated.
-            usage.record(
-                ModelUsage(
-                    calls = 1,
-                    inputTokens = answer.usage.inputTokens,
-                    outputTokens = answer.usage.outputTokens,
-                ),
-            )
-        }
+        val answer: OllamaDecisionResponse =
+            try {
+                response.body()
+            } catch (error: NoTransformationFoundException) {
+                throw OllamaException(
+                    response.status.value,
+                    "The API answered with ${response.contentType()}, the client reads a single JSON object",
+                    error,
+                )
+            }
+        // The answer knows what it took: the tokens of the input and the
+        // tokens the model generated.
+        usage.record(
+            ModelUsage(
+                calls = 1,
+                inputTokens = answer.usage.inputTokens,
+                outputTokens = answer.usage.outputTokens,
+            ),
+        )
+        return answer
     }
 
     private val decideUrl: String

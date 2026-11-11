@@ -1,5 +1,7 @@
 package uk.me.michaellloydlee.recruiter.infrastructure.llm
 
+import java.util.concurrent.atomic.AtomicReference
+
 /**
  * What the calls to the models took.
  *
@@ -38,11 +40,12 @@ data class ModelUsage(
  * counter is shared by the clients of a run: the command line creates it and
  * gives it to every client of the pipeline.
  *
- * The pipeline asks the models one after the other, the counter needs no
- * lock.
+ * The counter is safe to use from more than one thread: the pipeline asks the
+ * models one after the other today, a run that asks them at the same time
+ * does not lose a call.
  */
 class ModelUsageCounter {
-    private var usage: ModelUsage = ModelUsage.EMPTY
+    private val usage: AtomicReference<ModelUsage> = AtomicReference(ModelUsage.EMPTY)
 
     /**
      * Adds the usage of one answer to the count.
@@ -50,7 +53,7 @@ class ModelUsageCounter {
      * @param usage what the answer took.
      */
     fun record(usage: ModelUsage) {
-        this.usage = this.usage + usage
+        this.usage.updateAndGet { counted -> counted + usage }
     }
 
     /**
@@ -58,5 +61,5 @@ class ModelUsageCounter {
      *
      * @return the usage of the calls that were made.
      */
-    fun usage(): ModelUsage = usage
+    fun usage(): ModelUsage = usage.get()
 }
