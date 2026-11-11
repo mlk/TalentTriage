@@ -113,6 +113,19 @@ class OllamaChatClientTest {
         }
 
     @Test
+    fun countsWhatTheCallsToTheModelTook() =
+        runTest {
+            val engine = engine()
+            val usage = ModelUsageCounter()
+            val chat = client(engine, usage = usage)
+
+            chat.chat(request())
+            chat.chat(request())
+
+            assertEquals(ModelUsage(calls = 2, inputTokens = 14, outputTokens = 84), usage.usage())
+        }
+
+    @Test
     fun usesTheConfiguredBaseUrl() =
         runTest {
             val engine = engine()
@@ -198,6 +211,7 @@ class OllamaChatClientTest {
         engine: MockEngine,
         baseUrl: String = "http://ollama.example:11434",
         timeoutMillis: Long = 30_000,
+        usage: ModelUsageCounter = ModelUsageCounter(),
     ): OllamaChatClient =
         OllamaChatClient(
             httpClient =
@@ -214,6 +228,7 @@ class OllamaChatClientTest {
                 },
             baseUrl = baseUrl,
             timeoutMillis = timeoutMillis,
+            usage = usage,
         )
 
     private fun request(): OllamaChatRequest =

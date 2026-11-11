@@ -322,8 +322,14 @@ object per line — to standard output:
 
 ```json
 {"timestamp":"2026-10-24T07:57:23.916683Z","level":"INFO","event":"process-inbox.started","message":"Inbox triage run started","attributes":{"trigger":"cli"}}
-{"timestamp":"2026-10-24T07:57:23.926923Z","level":"INFO","event":"process-inbox.completed","message":"Inbox triage run completed","attributes":{"screened":"3","recruiters":"1","filtered_out":"1","job_listings":"1","worth_follow_up":"0","needs_more_information":"1","trashed":"0","drafts":"1","window":"PT1H","since":"2026-10-24T06:57:23.916683Z","unknown":"0"}}
+{"timestamp":"2026-10-24T07:57:23.926923Z","level":"INFO","event":"process-inbox.completed","message":"Inbox triage run completed","attributes":{"screened":"3","recruiters":"1","filtered_out":"1","job_listings":"1","worth_follow_up":"0","needs_more_information":"1","trashed":"0","drafts":"1","unknown":"0","model_calls":"3","input_tokens":"8142","output_tokens":"217","duration_ms":"48210","window":"PT1H","since":"2026-10-24T06:57:23.916683Z"}}
 ```
+
+The run says what the calls to the models took: `model_calls` is the number of the
+calls, `input_tokens` and `output_tokens` are the tokens of the answers (the
+tokens of the cloud of Ollama are what it bills) and `duration_ms` is how long
+the run took. The counters are also in the summary of the run
+(`ProcessInboxSummary`).
 
 The command exits with status code `0` when the run succeeded and with `1` when it failed:
 the command line could not be parsed or the run failed. A failure the command knows - a
@@ -348,7 +354,7 @@ message:
 | `process-inbox.draft_written` | INFO | a draft was written (`id`, `draft`, `reason`) |
 | `process-inbox.draft_failed` | WARN | no draft could be written (`id`, `reason`) |
 | `process-inbox.window_fallback` | WARN | the moment of the last run is not in the past (`last_run`) |
-| `process-inbox.completed` | INFO | the run is done, the attributes are the counters of the run, the id of the message instead of the window for a run of one message |
+| `process-inbox.completed` | INFO | the run is done, the attributes are the counters of the run and what the calls to the models took, the id of the message instead of the window for a run of one message |
 | `pending.listed` / `pending.message` | INFO | the messages that were not processed yet |
 | `requirements.started` / `requirements.completed` | INFO | the requirements were written from the CV |
 | `authenticate.authorisation_required` | INFO | the authorisation page of Google is open (`url`, `redirect_uri`, `scope`) |

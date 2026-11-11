@@ -35,6 +35,7 @@ import uk.me.michaellloydlee.recruiter.infrastructure.gmail.GmailDraftsApi
 import uk.me.michaellloydlee.recruiter.infrastructure.gmail.GmailHttpClientFactory
 import uk.me.michaellloydlee.recruiter.infrastructure.gmail.GmailServices
 import uk.me.michaellloydlee.recruiter.infrastructure.gmail.GoogleClientCredentials
+import uk.me.michaellloydlee.recruiter.infrastructure.llm.ModelUsageCounter
 import uk.me.michaellloydlee.recruiter.infrastructure.llm.OllamaChatClient
 import uk.me.michaellloydlee.recruiter.infrastructure.llm.OllamaDecisionClient
 import uk.me.michaellloydlee.recruiter.infrastructure.llm.OllamaException
@@ -214,24 +215,29 @@ class ProcessInboxCommand(
                 )
             val summary =
                 try {
+                    // One counter for the models of the run: the run says what
+                    // the calls to the models took.
+                    val usage = ModelUsageCounter()
                     ProcessInboxService(
                         messages = gmail.messages,
                         screening =
                             ScreeningService(
                                 heuristics = RecruiterHeuristics(),
                                 jobListings = JobListingHeuristics(),
-                                verifier = verifier(client),
+                                verifier = verifier(client, usage),
                                 stateManager = gmail.stateManager,
                             ),
                         evaluation =
                             EvaluationService(
-                                evaluator = evaluator(client),
+                                evaluator = evaluator(client, usage),
                                 attachments = AttachmentTextReader(gmail.messages, logger),
                                 stateManager = gmail.stateManager,
                             ),
-                        drafts = drafts(client, gmail.drafts),
+                        drafts = drafts(client, gmail.drafts, usage),
                         requirements = requirements,
                         stateManager = gmail.stateManager,
+                        usageCounter = usage,
+                        clock = clock,
                         logger = logger,
                     ).run(target)
                 } catch (error: GmailApiException) {
@@ -287,7 +293,10 @@ class ProcessInboxCommand(
      * The verifier of the recruiter verification, the decision model of Ollama
      * or a chat model.
      */
-    private fun verifier(client: HttpClient): RecruiterVerifier {
+    private fun verifier(
+        client: HttpClient,
+        usage: ModelUsageCounter,
+    ): RecruiterVerifier {
         val endpoint = endpoint(recruiterVerificationEndpoint)
         val timeout = recruiterVerificationTimeout
         return when (recruiterVerification) {
@@ -298,6 +307,7 @@ class ProcessInboxCommand(
                             httpClient = client,
                             baseUrl = endpoint,
                             timeoutMillis = timeout,
+                            usage = usage,
                         ),
                     model = recruiterVerificationModel,
                 )
@@ -310,6 +320,7 @@ class ProcessInboxCommand(
                             httpClient = client,
                             baseUrl = endpoint,
                             timeoutMillis = timeout,
+                            usage = usage,
                         ),
                     model = recruiterVerificationModel,
                 )
@@ -403,6 +414,10 @@ class ProcessInboxCommand(
             put("trashed", trashed.toString())
             put("drafts", drafts.toString())
             put("unknown", unknown.toString())
+            put("model_calls", models.calls.toString())
+            put("input_tokens", models.inputTokens.toString())
+            put("output_tokens", models.outputTokens.toString())
+            put("duration_ms", durationMillis.toString())
             when (val target = target) {
                 is RunTarget.Window -> {
                     put("window", Duration.between(target.since, now).toString())
@@ -419,7 +434,10 @@ class ProcessInboxCommand(
      * The evaluator of the job descriptions, the decision model of Ollama or a
      * chat model.
      */
-    private fun evaluator(client: HttpClient): JobDescriptionEvaluator {
+    private fun evaluator(
+        client: HttpClient,
+        usage: ModelUsageCounter,
+    ): JobDescriptionEvaluator {
         val endpoint = endpoint(jobDescriptionEvaluationEndpoint)
         val timeout = jobDescriptionEvaluationTimeout
         return when (jobDescriptionEvaluation) {
@@ -430,6 +448,7 @@ class ProcessInboxCommand(
                             httpClient = client,
                             baseUrl = endpoint,
                             timeoutMillis = timeout,
+                            usage = usage,
                         ),
                     model = jobDescriptionEvaluationModel,
                 )
@@ -442,6 +461,7 @@ class ProcessInboxCommand(
                             httpClient = client,
                             baseUrl = endpoint,
                             timeoutMillis = timeout,
+                            usage = usage,
                         ),
                     model = jobDescriptionEvaluationModel,
                 )
@@ -459,6 +479,7 @@ class ProcessInboxCommand(
     private fun drafts(
         client: HttpClient,
         drafts: GmailDraftsApi,
+        usage: ModelUsageCounter,
     ): DraftWriter =
         DraftWriter(
             client =
@@ -466,6 +487,7 @@ class ProcessInboxCommand(
                     httpClient = client,
                     baseUrl = endpoint(draftEndpoint),
                     timeoutMillis = draftTimeout,
+                    usage = usage,
                 ),
             drafts = drafts,
             model = draftModel,

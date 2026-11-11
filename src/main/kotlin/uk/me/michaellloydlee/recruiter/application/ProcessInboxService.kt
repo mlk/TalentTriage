@@ -12,7 +12,10 @@ import uk.me.michaellloydlee.recruiter.domain.requirements.JobRequirements
 import uk.me.michaellloydlee.recruiter.domain.screening.ScreeningDecision
 import uk.me.michaellloydlee.recruiter.infrastructure.gmail.GmailLabelStateManager
 import uk.me.michaellloydlee.recruiter.infrastructure.gmail.GmailMessagesApi
+import uk.me.michaellloydlee.recruiter.infrastructure.llm.ModelUsageCounter
 import uk.me.michaellloydlee.recruiter.infrastructure.logging.StructuredLogger
+import java.time.Clock
+import java.time.Duration
 
 /**
  * Runs one pass of the pipeline over the messages of the inbox.
@@ -33,6 +36,8 @@ import uk.me.michaellloydlee.recruiter.infrastructure.logging.StructuredLogger
  *   information.
  * @param requirements the requirements of the job seeker.
  * @param stateManager keeps the state of the messages.
+ * @param usageCounter counts what the calls to the models took.
+ * @param clock the clock of the run, it says how long the run took.
  * @param logger sink for the log of the run.
  */
 class ProcessInboxService(
@@ -42,6 +47,8 @@ class ProcessInboxService(
     private val drafts: DraftWriter,
     private val requirements: JobRequirements,
     private val stateManager: GmailLabelStateManager,
+    private val usageCounter: ModelUsageCounter = ModelUsageCounter(),
+    private val clock: Clock = Clock.systemUTC(),
     private val logger: StructuredLogger,
 ) {
     /**
@@ -51,6 +58,7 @@ class ProcessInboxService(
      * @return what the run did.
      */
     suspend fun run(target: RunTarget): ProcessInboxSummary {
+        val startedAt = clock.instant()
         val pending = messagesForTarget(target)
         val counters = Counters()
         pending.forEach { message ->
@@ -67,6 +75,8 @@ class ProcessInboxService(
             needsMoreInformation = counters.needsMoreInformation,
             trashed = counters.trashed,
             drafts = counters.drafts,
+            models = usageCounter.usage(),
+            durationMillis = Duration.between(startedAt, clock.instant()).toMillis(),
         )
     }
 
