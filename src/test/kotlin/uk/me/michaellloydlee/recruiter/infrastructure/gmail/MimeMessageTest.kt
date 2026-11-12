@@ -1,6 +1,7 @@
 package uk.me.michaellloydlee.recruiter.infrastructure.gmail
 
 import uk.me.michaellloydlee.recruiter.domain.gmail.EmailDraft
+import java.time.Instant
 import java.util.Base64
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -17,6 +18,24 @@ class MimeMessageTest {
         assertTrue(mime.contains("In-Reply-To: <message-id>\r\n"))
         assertTrue(mime.contains("References: <message-id>\r\n"))
         assertTrue(mime.contains("Content-Type: text/plain; charset=\"UTF-8\"\r\n"))
+    }
+
+    @Test
+    fun writesTheDateTheMessageIdAndTheVersionOfMime() {
+        val mime = MimeMessage.build(draft())
+
+        assertTrue(mime.contains("Date: Sat, 24 Oct 2026 08:00:00 GMT\r\n"))
+        assertTrue(mime.contains("Message-ID: <draft-id@talent-triage.local>\r\n"))
+        assertTrue(mime.contains("MIME-Version: 1.0\r\n"))
+    }
+
+    @Test
+    fun writesNoInReplyToWhenTheMailHasNoMessageId() {
+        val mime = MimeMessage.build(draft(inReplyTo = ""))
+
+        assertFalse(mime.contains("In-Reply-To"))
+        assertFalse(mime.contains("References"))
+        assertTrue(mime.contains("Message-ID: <draft-id@talent-triage.local>\r\n"))
     }
 
     @Test
@@ -43,8 +62,11 @@ class MimeMessageTest {
         assertEquals(
             "To: recruiter@example.com\r\n" +
                 "Subject: Re: Your CV\r\n" +
+                "Date: Sat, 24 Oct 2026 08:00:00 GMT\r\n" +
+                "Message-ID: <draft-id@talent-triage.local>\r\n" +
                 "In-Reply-To: <message-id>\r\n" +
                 "References: <message-id>\r\n" +
+                "MIME-Version: 1.0\r\n" +
                 "Content-Type: text/plain; charset=\"UTF-8\"\r\n" +
                 "\r\n" +
                 "the reply of the model",
@@ -52,12 +74,17 @@ class MimeMessageTest {
         )
     }
 
-    private fun draft(subject: String = "Re: Your CV"): EmailDraft =
+    private fun draft(
+        subject: String = "Re: Your CV",
+        inReplyTo: String = "message-id",
+    ): EmailDraft =
         EmailDraft(
             to = "recruiter@example.com",
             subject = subject,
             body = "the reply of the model",
-            inReplyTo = "message-id",
+            inReplyTo = inReplyTo,
+            messageId = "draft-id@talent-triage.local",
+            date = Instant.parse("2026-10-24T08:00:00Z"),
             threadId = "thread-id",
         )
 }

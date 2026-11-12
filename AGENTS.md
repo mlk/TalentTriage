@@ -149,7 +149,13 @@ cannot change it, the mail is trashed and no draft is written.
 
 * The draft is written by the chat API of Ollama (`/api/chat`), the decision API answers questions,
   it does not write. It is a reply in the thread of the mail: `In-Reply-To`, `References` and the
-  thread of the message.
+  thread of the message. The `In-Reply-To` and the `References` carry the `Message-ID` of the mail,
+  a message id of RFC 5322, and not the id of the message in Gmail.
+* The draft goes to the address the mail asks the answer at: the address of the `Reply-To` header
+  when the mail has one, the address of the `From` header otherwise. The name of the sender is not
+  part of the address. A platform that writes from an address nobody reads names the address of the
+  recruiter in its `Reply-To` header.
+* The draft is a mail: it has a `Date`, a `Message-ID` of its own and a `MIME-Version`.
 * The prompt asks the model to write the reply in the language of the mail of the recruiter, to say
   that an AI wrote it, to quote the subject and the body of the mail and to ask only for what is
   missing.

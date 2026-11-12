@@ -51,8 +51,11 @@ class GmailDraftsApiTest {
             assertEquals(
                 "To: recruiter@example.com\r\n" +
                     "Subject: Re: Your CV\r\n" +
+                    "Date: Sat, 24 Oct 2026 08:00:00 GMT\r\n" +
+                    "Message-ID: <draft-id@talent-triage.local>\r\n" +
                     "In-Reply-To: <message-id>\r\n" +
                     "References: <message-id>\r\n" +
+                    "MIME-Version: 1.0\r\n" +
                     "Content-Type: text/plain; charset=\"UTF-8\"\r\n" +
                     "\r\n" +
                     "the reply of the model",
@@ -103,6 +106,8 @@ class GmailDraftsApiTest {
             subject = "Re: Your CV",
             body = "the reply of the model",
             inReplyTo = "message-id",
+            messageId = "draft-id@talent-triage.local",
+            date = NOW,
             threadId = "thread-id",
         )
 
