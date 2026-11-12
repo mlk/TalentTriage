@@ -231,7 +231,6 @@ class ProcessInboxCommand(
                             EvaluationService(
                                 evaluator = evaluator(client, usage),
                                 attachments = AttachmentTextReader(gmail.messages, logger),
-                                stateManager = gmail.stateManager,
                             ),
                         drafts = drafts(client, gmail.drafts, usage),
                         requirements = requirements,

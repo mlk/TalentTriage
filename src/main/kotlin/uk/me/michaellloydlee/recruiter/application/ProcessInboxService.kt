@@ -26,6 +26,9 @@ import java.time.Duration
  * say everything the job seeker needs to know gets a draft that asks the
  * recruiter about it.
  *
+ * The run applies the state of the mail: the label of the state is what
+ * keeps the next run from looking at the mail again.
+ *
  * The run looks at what its target says: the messages of the inbox that
  * arrived after a moment, or one message the job seeker asks for by its id.
  *
@@ -170,15 +173,18 @@ class ProcessInboxService(
         when (evaluation.state) {
             EvaluationState.WORTH_FOLLOW_UP -> {
                 counters.worthFollowUp++
+                stateManager.apply(message.id, evaluation.state)
             }
 
             EvaluationState.NEEDS_MORE_INFORMATION -> {
                 counters.needsMoreInformation++
+                stateManager.apply(message.id, evaluation.state)
                 askForInformation(message, evaluation, counters)
             }
 
             EvaluationState.TRASH -> {
                 counters.trashed++
+                stateManager.apply(message.id, evaluation.state)
             }
         }
     }
