@@ -1,0 +1,27 @@
+name: Ollama Review
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: ollama-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  review:
+    if: >-
+      github.event.pull_request.draft == false &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: mlk/ollama-review-action@c91bafdc4d041811b078750ad3bd4ffc753efbd8 # v1
+        with:
+          model: glm-5.3
+        env:
+          OLLAMA_API_KEY: ${{ secrets.OLLAMA_API_KEY }}
