@@ -304,6 +304,35 @@ class ProcessInboxCommandTest {
         }
 
     @Test
+    fun doesNotRememberTheMomentOfARunThatBroke() =
+        runTest {
+            // The answer of the API cannot be read: the run breaks, the moment
+            // of the last successful run is not written and the window stays
+            // open.
+            val sink = StringBuilder()
+            val engine = engine(brokenAnswer = true)
+            val token = tokenFile()
+
+            val code =
+                runCli(
+                    arrayOf(
+                        "process-inbox",
+                        "--credentials",
+                        credentialsFile().toString(),
+                        "--token",
+                        token.toString(),
+                        "--requirements",
+                        requirementsFile().toString(),
+                    ),
+                    StructuredLogger(sink),
+                    cli(sink, Clock.fixed(NOW, ZoneOffset.UTC)) { mockClient(engine) },
+                )
+
+            assertEquals(1, code)
+            assertNull(FileLastRunStore.nextTo(token).load())
+        }
+
+    @Test
     fun warnsWhenTheMomentOfTheLastRunIsInTheFuture() =
         runTest {
             val sink = StringBuilder()
@@ -465,16 +494,29 @@ class ProcessInboxCommandTest {
     private fun engine(
         officeDays: String = "matches",
         chatAnswers: Boolean = true,
+        brokenAnswer: Boolean = false,
     ): MockEngine =
         MockEngine { request ->
-            if (request.url.encodedPath.endsWith("/api/chat") && !chatAnswers) {
-                respond(content = "boom", status = HttpStatusCode.InternalServerError)
-            } else {
-                respond(
-                    content = contentFor(request, officeDays),
-                    status = HttpStatusCode.OK,
-                    headers = jsonHeaders(),
-                )
+            when {
+                request.url.encodedPath.endsWith("/api/chat") && !chatAnswers -> {
+                    respond(content = "boom", status = HttpStatusCode.InternalServerError)
+                }
+
+                request.url.encodedPath.endsWith("/modify") && brokenAnswer -> {
+                    respond(
+                        content = """{"error":"the answer cannot be read"}""",
+                        status = HttpStatusCode.OK,
+                        headers = jsonHeaders(),
+                    )
+                }
+
+                else -> {
+                    respond(
+                        content = contentFor(request, officeDays),
+                        status = HttpStatusCode.OK,
+                        headers = jsonHeaders(),
+                    )
+                }
             }
         }
 

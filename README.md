@@ -686,9 +686,11 @@ want.
 The pipeline is a scheduled job, so it only processes the mail that arrived
 since the last run: the search is `is:inbox` with every state label excluded
 and `after:<time>` added. The time is the moment of the last successful run,
-so the run looks at every mail exactly once. `--since` says how far back the
-run looks instead: `PT24H` or `P1D` are the same, `P7D` looks a week back.
-The window of the run is in the log of the run.
+so the run looks at every mail of the window exactly once: a mail that reached
+a state is skipped by its label, a mail that was filtered out keeps no label
+and is not looked at again because the window moves. `--since` says how far
+back the run looks instead: `PT24H` or `P1D` are the same, `P7D` looks a week
+back. The window of the run is in the log of the run.
 
 A run that left a mail pending does not move that moment: the mail that waits
 for its draft keeps no label and the next run has to look at it again. The run

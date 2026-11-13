@@ -400,11 +400,13 @@ class ProcessInboxServiceTest {
             service(gmail, model).run(WINDOW)
 
             val requests = gmail.requestHistory
-            val draft = requests.indexOfFirst { it.url.encodedPath.endsWith("/users/me/drafts") }
-            val label = requests.indexOfFirst { it.url.encodedPath.endsWith("/modify") }
-            assertTrue(draft >= 0, "The draft was written")
-            assertTrue(label >= 0, "The state label was applied")
-            assertTrue(draft < label, "The draft is written before the state label is applied")
+            val drafts = requests.indices.filter { requests[it].url.encodedPath.endsWith("/users/me/drafts") }
+            val labels = requests.indices.filter { requests[it].url.encodedPath.endsWith("/modify") }
+            assertEquals(2, drafts.size)
+            assertEquals(2, labels.size)
+            drafts.zip(labels).forEach { (draft, label) ->
+                assertTrue(draft < label, "The draft of the mail is written before its label")
+            }
         }
 
     @Test
@@ -441,6 +443,23 @@ class ProcessInboxServiceTest {
             service(gmail, model, log).run(WINDOW)
 
             assertTrue(log.toString().contains("process-inbox.label_failed"))
+        }
+
+    @Test
+    fun countsAMailWhoseDraftWasWrittenAndWhoseLabelFailedAsFailed() =
+        runTest {
+            // The draft is written, the label cannot be applied: the mail keeps
+            // its draft and no label, the next run writes a second draft.
+            val gmail = gmailEngine(modifyFails = true)
+            val model = modelEngine(officeDays = "unclear")
+
+            val summary = service(gmail, model).run(WINDOW)
+
+            assertEquals(2, summary.drafts)
+            assertEquals(2, summary.failed)
+            assertEquals(0, summary.needsMoreInformation)
+            val labels = gmail.requestHistory.filter { it.url.encodedPath.endsWith("/modify") }
+            assertEquals(2, labels.size)
         }
 
     @Test
