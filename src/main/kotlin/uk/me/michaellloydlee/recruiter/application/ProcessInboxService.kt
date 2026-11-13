@@ -209,9 +209,9 @@ class ProcessInboxService(
             stateManager.apply(message.id, state)
             counters.count(state)
         } catch (error: GmailApiException) {
-            labelFailed(message, counters, reasonOf(error))
+            labelFailed(message, state, counters, reasonOf(error))
         } catch (error: IOException) {
-            labelFailed(message, counters, reasonOf(error))
+            labelFailed(message, state, counters, reasonOf(error))
         }
     }
 
@@ -219,11 +219,13 @@ class ProcessInboxService(
      * Counts a mail whose state label could not be applied.
      *
      * @param message the mail of the recruiter.
+     * @param state the state the mail was to change to.
      * @param counters the counters of the run.
      * @param reason what went wrong, it goes into the log.
      */
     private fun labelFailed(
         message: EmailMessage,
+        state: EvaluationState,
         counters: Counters,
         reason: String,
     ) {
@@ -234,6 +236,7 @@ class ProcessInboxService(
             attributes =
                 mapOf(
                     "id" to message.id,
+                    "state" to state.name,
                     "reason" to reason,
                 ),
         )

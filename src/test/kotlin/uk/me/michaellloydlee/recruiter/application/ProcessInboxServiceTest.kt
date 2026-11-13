@@ -400,12 +400,24 @@ class ProcessInboxServiceTest {
             service(gmail, model).run(WINDOW)
 
             val requests = gmail.requestHistory
-            val drafts = requests.indices.filter { requests[it].url.encodedPath.endsWith("/users/me/drafts") }
-            val labels = requests.indices.filter { requests[it].url.encodedPath.endsWith("/modify") }
-            assertEquals(2, drafts.size)
-            assertEquals(2, labels.size)
-            drafts.zip(labels).forEach { (draft, label) ->
-                assertTrue(draft < label, "The draft of the mail is written before its label")
+            val drafts = mutableMapOf<String, Int>()
+            val labels = mutableMapOf<String, Int>()
+            requests.forEachIndexed { index, request ->
+                val path = request.url.encodedPath
+                if (path.endsWith("/users/me/drafts")) {
+                    drafts[mailOfTheDraft(request)] = index
+                }
+                if (path.endsWith("/modify")) {
+                    labels[path.substringAfterLast("/users/me/messages/").substringBefore("/")] = index
+                }
+            }
+            assertEquals(setOf("first", "second"), drafts.keys)
+            assertEquals(setOf("first", "second"), labels.keys)
+            drafts.forEach { (mail, draft) ->
+                assertTrue(
+                    draft < labels.getValue(mail),
+                    "The draft of the mail $mail is written before its label",
+                )
             }
         }
 

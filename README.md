@@ -678,10 +678,10 @@ the log:
 ```
 
 A label that cannot be applied after the draft was written is the other way
-round: the message keeps its draft and no label, so the next run writes a second
-draft for it. The run counts the message as `failed` and goes on with the other
-mails, the job seeker finds both drafts in the mailbox and sends the one they
-want.
+round: the message keeps its draft and no label, so the next run writes another
+draft for it — one more draft on every run while the label keeps failing. The
+run counts the message as `failed` and goes on with the other mails, the job
+seeker finds the drafts in the mailbox and sends the one they want.
 
 The pipeline is a scheduled job, so it only processes the mail that arrived
 since the last run: the search is `is:inbox` with every state label excluded

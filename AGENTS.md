@@ -178,7 +178,8 @@ cannot change it, the mail is trashed and no draft is written.
   the mail keeps no label, the run counts it as `failed` and the next run looks at it again. The
   guarantee does not depend on the error ending the run — it is the counter that holds the window
   open. A label that cannot be applied after the draft was written is the other way round: the mail
-  keeps its draft and no label, so the next run writes a second draft for it.
+  keeps its draft and no label, so the next run writes another draft for it — one more draft on
+  every run while the label keeps failing.
 
 ### The requirements of the job seeker
 

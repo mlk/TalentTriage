@@ -254,6 +254,23 @@ fun idOf(request: HttpRequestData): String =
         .substringBefore("/")
 
 /**
+ * The id of the mail a draft replies to.
+ *
+ * The draft belongs to the thread of the mail it answers, and the thread of a
+ * message of the tests is named after the message.
+ *
+ * @param request the request that writes the draft.
+ * @return the id of the mail the draft replies to.
+ */
+fun mailOfTheDraft(request: HttpRequestData): String {
+    val body = (request.body as TextContent).text
+    val message =
+        Json.parseToJsonElement(body).jsonObject["message"]!!.jsonObject
+    val thread = message["threadId"]!!.jsonPrimitive.content
+    return thread.removePrefix(THREAD_PREFIX)
+}
+
+/**
  * A message of the mailbox.
  *
  * @param id the id of the message.
@@ -276,7 +293,7 @@ fun message(
         """
         {
           "id": "$id",
-          "threadId": "thread-$id",
+          "threadId": "${THREAD_PREFIX}$id",
           "labelIds": [${labels.joinToString(",") { label -> "\"$label\"" }}],
           "payload": {
             "mimeType": "text/plain",
@@ -355,3 +372,6 @@ internal const val MESSAGE_LIST =
 
 /** The parser of the answers of the API. */
 internal val JSON: Json = Json { ignoreUnknownKeys = true }
+
+/** The prefix of the thread of a message of the tests. */
+internal const val THREAD_PREFIX: String = "thread-"
