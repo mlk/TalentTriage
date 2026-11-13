@@ -78,6 +78,21 @@ class GmailDraftsApiTest {
             assertEquals("thread-id", message["threadId"]!!.jsonPrimitive.content)
         }
 
+    @Test
+    fun removesTheDraftFromTheMailbox() =
+        runTest {
+            val engine =
+                MockEngine {
+                    respond(content = "{}", status = HttpStatusCode.OK)
+                }
+
+            api(engine).deleteDraft("draft-id")
+
+            val request = engine.requestHistory.single()
+            assertEquals("DELETE", request.method.value)
+            assertEquals("/v1/users/me/drafts/draft-id", request.url.encodedPath)
+        }
+
     private suspend fun api(engine: MockEngine): GmailDraftsApi {
         val client =
             GmailApiClient(

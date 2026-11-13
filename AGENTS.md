@@ -174,12 +174,16 @@ cannot change it, the mail is trashed and no draft is written.
   mail keeps the label `Recruiters/NeedsMoreInformation` and the draft is written once. A draft that
   could not be written is a failure of the mail: the mail keeps no label and the next run looks at it
   again.
-* A label that cannot be applied is a failure of the mail, like a draft that could not be written:
-  the mail keeps no label, the run counts it as `failed` and the next run looks at it again. The
-  guarantee does not depend on the error ending the run — it is the counter that holds the window
-  open. A label that cannot be applied after the draft was written is the other way round: the mail
-  keeps its draft and no label, so the next run writes another draft for it — one more draft on
-  every run while the label keeps failing.
+* A state label that cannot be applied is a failure of the mail, like a draft that could not be
+  written: the mail keeps no label, the run counts it as `failed` and the next run looks at it again.
+  The guarantee does not depend on the error ending the run — it is the counter that holds the window
+  open.
+* A state label that cannot be applied after the draft was written leaves the mail without a label:
+  the draft the pipeline wrote is removed again, so the next run writes it again and the job seeker
+  does not find two drafts for the same mail.
+* The label of a job listing is applied by the screening, not by the run: a listing whose label cannot
+  be applied breaks the run. The window stays open either way — the moment of the last successful run
+  is not written.
 
 ### The requirements of the job seeker
 

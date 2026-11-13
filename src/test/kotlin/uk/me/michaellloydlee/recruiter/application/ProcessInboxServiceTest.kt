@@ -473,8 +473,9 @@ class ProcessInboxServiceTest {
     @Test
     fun countsAMailWhoseDraftWasWrittenAndWhoseLabelFailedAsFailed() =
         runTest {
-            // The draft is written, the label cannot be applied: the mail keeps
-            // its draft and no label, the next run writes a second draft.
+            // The draft is written, the label cannot be applied: the draft is
+            // removed again, the mail keeps no label and the next run writes
+            // the draft again.
             val gmail = gmailEngine(modifyFails = true)
             val model = modelEngine(officeDays = "unclear")
 
@@ -485,6 +486,20 @@ class ProcessInboxServiceTest {
             assertEquals(0, summary.needsMoreInformation)
             val labels = gmail.requestHistory.filter { it.url.encodedPath.endsWith("/modify") }
             assertEquals(2, labels.size)
+            val deletions = gmail.requestHistory.filter { it.method.value == "DELETE" }
+            assertEquals(2, deletions.size)
+        }
+
+    @Test
+    fun keepsTheDraftWhenTheLabelWasApplied() =
+        runTest {
+            val gmail = gmailEngine()
+            val model = modelEngine(officeDays = "unclear")
+
+            service(gmail, model).run(WINDOW)
+
+            val deletions = gmail.requestHistory.filter { it.method.value == "DELETE" }
+            assertTrue(deletions.isEmpty())
         }
 
     @Test

@@ -1,5 +1,6 @@
 package uk.me.michaellloydlee.recruiter.application.draft
 
+import kotlinx.serialization.SerializationException
 import uk.me.michaellloydlee.recruiter.application.reasonOf
 import uk.me.michaellloydlee.recruiter.domain.evaluation.MissingInformation
 import uk.me.michaellloydlee.recruiter.domain.gmail.EmailDraft
@@ -112,6 +113,8 @@ class DraftWriter(
             notWritten(message, error)
         } catch (error: IOException) {
             notWritten(message, error)
+        } catch (error: SerializationException) {
+            notWritten(message, error)
         }
 
     /**
@@ -126,6 +129,29 @@ class DraftWriter(
         error: Exception,
     ): DraftOutcome =
         DraftOutcome.Failed("The draft of the mail ${message.id} could not be written: ${reasonOf(error)}")
+
+    /**
+     * Removes a draft from the mailbox.
+     *
+     * The draft of a mail whose state label could not be applied is removed:
+     * the mail keeps no label, so the next run writes the draft again and the
+     * job seeker does not find two drafts for the same mail.
+     *
+     * @param draftId the id of the draft.
+     * @return the reason the draft could not be removed, null when it was
+     *   removed.
+     */
+    suspend fun delete(draftId: String): String? =
+        try {
+            drafts.deleteDraft(draftId)
+            null
+        } catch (error: GmailApiException) {
+            reasonOf(error)
+        } catch (error: IOException) {
+            reasonOf(error)
+        } catch (error: SerializationException) {
+            reasonOf(error)
+        }
 
     /**
      * The draft of a mail, a reply in the thread of the mail.

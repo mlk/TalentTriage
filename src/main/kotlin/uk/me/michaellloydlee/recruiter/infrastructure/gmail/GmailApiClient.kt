@@ -16,6 +16,7 @@ import io.ktor.http.contentType
 import io.ktor.http.isSuccess
 import kotlinx.serialization.DeserializationStrategy
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
 
 /**
  * The client of the Gmail REST API.
@@ -68,6 +69,18 @@ class GmailApiClient(
             contentType(ContentType.Application.Json)
             setBody(body)
         }
+
+    /**
+     * Sends a `DELETE` request.
+     *
+     * @param path path of the resource, relative to the base URL.
+     */
+    suspend fun delete(path: String) {
+        execute(JsonObject.serializer()) {
+            method = HttpMethod.Delete
+            url(resolve(path))
+        }
+    }
 
     private suspend fun <T> execute(
         deserializer: DeserializationStrategy<T>,

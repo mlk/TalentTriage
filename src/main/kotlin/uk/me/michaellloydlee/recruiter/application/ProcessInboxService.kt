@@ -200,22 +200,31 @@ class ProcessInboxService(
      * @param message the mail of the recruiter.
      * @param state the state the mail changes to.
      * @param counters the counters of the run.
+     * @return whether the label was applied.
      */
     private suspend fun applyState(
         message: EmailMessage,
         state: EvaluationState,
         counters: Counters,
-    ) {
-        try {
-            stateManager.apply(message.id, state)
-            counters.count(state)
-        } catch (error: GmailApiException) {
-            labelFailed(message, state, counters, reasonOf(error))
-        } catch (error: IOException) {
-            labelFailed(message, state, counters, reasonOf(error))
-        } catch (error: SerializationException) {
-            labelFailed(message, state, counters, reasonOf(error))
+    ): Boolean {
+        // The reason of the failure, null when the label was applied.
+        val failure =
+            try {
+                stateManager.apply(message.id, state)
+                counters.count(state)
+                null
+            } catch (error: GmailApiException) {
+                reasonOf(error)
+            } catch (error: IOException) {
+                reasonOf(error)
+            } catch (error: SerializationException) {
+                reasonOf(error)
+            }
+        if (failure != null) {
+            labelFailed(message, state, counters, failure)
+            return false
         }
+        return true
     }
 
     /**
@@ -296,10 +305,12 @@ class ProcessInboxService(
                             "reason" to reasonOf(evaluation),
                         ),
                 )
-                // A label that cannot be applied leaves the mail with its draft
-                // and without a label: the next run writes a second draft for
-                // the same mail.
-                applyState(message, evaluation.state, counters)
+                if (!applyState(message, evaluation.state, counters)) {
+                    // The label could not be applied: the draft the pipeline
+                    // wrote is removed, the next run writes it again and the
+                    // job seeker does not find two drafts for the same mail.
+                    removeDraft(message, outcome.draftId)
+                }
             }
 
             is DraftOutcome.Failed -> {
@@ -316,6 +327,44 @@ class ProcessInboxService(
                         ),
                 )
             }
+        }
+    }
+
+    /**
+     * Removes the draft the pipeline wrote for a mail.
+     *
+     * The mail keeps no label, so the next run writes the draft again. The
+     * draft that stays behind would be a second draft for the same mail.
+     *
+     * @param message the mail of the recruiter.
+     * @param draftId the id of the draft.
+     */
+    private suspend fun removeDraft(
+        message: EmailMessage,
+        draftId: String,
+    ) {
+        val failure = drafts.delete(draftId)
+        if (failure == null) {
+            logger.info(
+                event = EVENT_DRAFT_ROLLED_BACK,
+                message = "The draft of the mail was removed: the next run writes it again",
+                attributes =
+                    mapOf(
+                        "id" to message.id,
+                        "draft" to draftId,
+                    ),
+            )
+        } else {
+            logger.warn(
+                event = EVENT_DRAFT_ROLLBACK_FAILED,
+                message = "The draft of the mail could not be removed",
+                attributes =
+                    mapOf(
+                        "id" to message.id,
+                        "draft" to draftId,
+                        "reason" to failure,
+                    ),
+            )
         }
     }
 
@@ -379,5 +428,11 @@ class ProcessInboxService(
 
         /** The event of the log of a state label that could not be applied. */
         const val EVENT_LABEL_FAILED: String = "process-inbox.label_failed"
+
+        /** The event of the log of a draft that was removed again. */
+        const val EVENT_DRAFT_ROLLED_BACK: String = "process-inbox.draft_rolled_back"
+
+        /** The event of the log of a draft that could not be removed. */
+        const val EVENT_DRAFT_ROLLBACK_FAILED: String = "process-inbox.draft_rollback_failed"
     }
 }

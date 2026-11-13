@@ -354,6 +354,8 @@ message:
 | `process-inbox.draft_written` | INFO | a draft was written (`id`, `draft`, `reason`) |
 | `process-inbox.draft_failed` | WARN | no draft could be written, the mail keeps no label (`id`, `reason`) |
 | `process-inbox.label_failed` | WARN | the state label could not be applied, the mail keeps no label (`id`, `state`, `reason`) |
+| `process-inbox.draft_rolled_back` | INFO | the draft of a mail whose label failed was removed again (`id`, `draft`) |
+| `process-inbox.draft_rollback_failed` | WARN | the draft of a mail whose label failed could not be removed (`id`, `draft`, `reason`) |
 | `process-inbox.window_fallback` | WARN | the moment of the last run is not in the past (`last_run`) |
 | `process-inbox.window_kept` | WARN | the moment of the last successful run is not moved, a mail of the run stays pending (`failed`) |
 | `process-inbox.completed` | INFO | the run is done, the attributes are the counters of the run and what the calls to the models took, the id of the message instead of the window for a run of one message |
@@ -678,10 +680,14 @@ the log:
 ```
 
 A label that cannot be applied after the draft was written is the other way
-round: the message keeps its draft and no label, so the next run writes another
-draft for it — one more draft on every run while the label keeps failing. The
-run counts the message as `failed` and goes on with the other mails, the job
-seeker finds the drafts in the mailbox and sends the one they want.
+round: the message keeps no label, so the next run looks at it again. The draft
+the pipeline wrote is removed again, so the job seeker does not find two drafts
+for the same mail — the run counts the message as `failed` and goes on with the
+other mails.
+
+The label of a job listing is applied by the screening, not by the run: a
+listing whose label cannot be applied breaks the run. The window stays open
+either way, the moment of the last successful run is not written.
 
 The pipeline is a scheduled job, so it only processes the mail that arrived
 since the last run: the search is `is:inbox` with every state label excluded
