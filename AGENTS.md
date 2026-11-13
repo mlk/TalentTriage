@@ -175,8 +175,12 @@ cannot change it, the mail is trashed and no draft is written.
   could not be written is a failure of the mail: the mail keeps no label and the next run looks at it
   again.
 * A label that cannot be applied after the draft was written is the other way round: the mail keeps
-  its draft and no label, so the next run writes a second draft for it. The error of the API ends the
-  run.
+  its draft and no label, so the next run writes a second draft for it. The run counts the mail as
+  `failed` and goes on with the other mails.
+* A label that cannot be applied is a failure of the mail, like a draft that could not be written:
+  the mail keeps no label, the run counts it as `failed` and the next run looks at it again. The
+  guarantee does not depend on the error ending the run — it is the counter that holds the window
+  open.
 
 ### The requirements of the job seeker
 

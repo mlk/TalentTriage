@@ -10,10 +10,12 @@ import uk.me.michaellloydlee.recruiter.domain.gmail.EmailMessage
 import uk.me.michaellloydlee.recruiter.domain.gmail.RunTarget
 import uk.me.michaellloydlee.recruiter.domain.requirements.JobRequirements
 import uk.me.michaellloydlee.recruiter.domain.screening.ScreeningDecision
+import uk.me.michaellloydlee.recruiter.infrastructure.gmail.GmailApiException
 import uk.me.michaellloydlee.recruiter.infrastructure.gmail.GmailLabelStateManager
 import uk.me.michaellloydlee.recruiter.infrastructure.gmail.GmailMessagesApi
 import uk.me.michaellloydlee.recruiter.infrastructure.llm.ModelUsageCounter
 import uk.me.michaellloydlee.recruiter.infrastructure.logging.StructuredLogger
+import java.io.IOException
 import java.time.Clock
 import java.time.Duration
 
@@ -174,8 +176,7 @@ class ProcessInboxService(
         // decision of the screening, it is not evaluated.
         when (evaluation.state) {
             EvaluationState.WORTH_FOLLOW_UP -> {
-                counters.worthFollowUp++
-                stateManager.apply(message.id, evaluation.state)
+                applyState(message, evaluation.state, counters)
             }
 
             EvaluationState.NEEDS_MORE_INFORMATION -> {
@@ -183,10 +184,59 @@ class ProcessInboxService(
             }
 
             EvaluationState.TRASH -> {
-                counters.trashed++
-                stateManager.apply(message.id, evaluation.state)
+                applyState(message, evaluation.state, counters)
             }
         }
+    }
+
+    /**
+     * Applies the state label of a mail and counts it.
+     *
+     * A label that cannot be applied is a failure of the mail: the mail keeps
+     * no label, the run counts it as failed and the next run looks at it
+     * again. The run goes on with the other mails.
+     *
+     * @param message the mail of the recruiter.
+     * @param state the state the mail changes to.
+     * @param counters the counters of the run.
+     */
+    private suspend fun applyState(
+        message: EmailMessage,
+        state: EvaluationState,
+        counters: Counters,
+    ) {
+        try {
+            stateManager.apply(message.id, state)
+            counters.count(state)
+        } catch (error: GmailApiException) {
+            labelFailed(message, counters, error.message.orEmpty())
+        } catch (error: IOException) {
+            labelFailed(message, counters, error.message.orEmpty())
+        }
+    }
+
+    /**
+     * Counts a mail whose state label could not be applied.
+     *
+     * @param message the mail of the recruiter.
+     * @param counters the counters of the run.
+     * @param reason what went wrong, it goes into the log.
+     */
+    private fun labelFailed(
+        message: EmailMessage,
+        counters: Counters,
+        reason: String,
+    ) {
+        counters.failed++
+        logger.warn(
+            event = EVENT_LABEL_FAILED,
+            message = "The state label of the mail could not be applied",
+            attributes =
+                mapOf(
+                    "id" to message.id,
+                    "reason" to reason,
+                ),
+        )
     }
 
     /**
@@ -224,14 +274,12 @@ class ProcessInboxService(
         if (missing == null || (!missing.asksAboutPay && !missing.asksAboutOfficeDays)) {
             // The recruiter is not asked about anything: the mail waits for
             // the job seeker.
-            counters.needsMoreInformation++
-            stateManager.apply(message.id, evaluation.state)
+            applyState(message, evaluation.state, counters)
             return
         }
         when (val outcome = drafts.write(message, missing, requirements)) {
             is DraftOutcome.Written -> {
                 counters.drafts++
-                counters.needsMoreInformation++
                 logger.info(
                     event = EVENT_DRAFT_WRITTEN,
                     message = "A draft that asks the recruiter for the missing information was written",
@@ -245,7 +293,7 @@ class ProcessInboxService(
                 // A label that cannot be applied leaves the mail with its draft
                 // and without a label: the next run writes a second draft for
                 // the same mail.
-                stateManager.apply(message.id, evaluation.state)
+                applyState(message, evaluation.state, counters)
             }
 
             is DraftOutcome.Failed -> {
@@ -295,6 +343,19 @@ class ProcessInboxService(
         var trashed: Int = 0
         var drafts: Int = 0
         var failed: Int = 0
+
+        /**
+         * Counts a mail that carries the label of its state.
+         *
+         * @param state the state the mail reached.
+         */
+        fun count(state: EvaluationState) {
+            when (state) {
+                EvaluationState.WORTH_FOLLOW_UP -> worthFollowUp++
+                EvaluationState.NEEDS_MORE_INFORMATION -> needsMoreInformation++
+                EvaluationState.TRASH -> trashed++
+            }
+        }
     }
 
     companion object {
@@ -309,5 +370,8 @@ class ProcessInboxService(
 
         /** The event of the log of a draft that could not be written. */
         const val EVENT_DRAFT_FAILED: String = "process-inbox.draft_failed"
+
+        /** The event of the log of a state label that could not be applied. */
+        const val EVENT_LABEL_FAILED: String = "process-inbox.label_failed"
     }
 }

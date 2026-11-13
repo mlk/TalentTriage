@@ -23,8 +23,8 @@ import uk.me.michaellloydlee.recruiter.infrastructure.llm.ModelUsage
  * @property drafts how many drafts that ask the recruiter for the missing
  *   information were written.
  * @property failed how many of them the run could not finish: the draft that
- *   asks the recruiter could not be written, so the mail keeps no label and
- *   the next run looks at it again.
+ *   asks the recruiter could not be written or the state label could not be
+ *   applied, so the mail keeps no label and the next run looks at it again.
  * @property models what the calls to the models took, the tokens are what
  *   the cloud of Ollama bills.
  * @property durationMillis how long the run took, in milliseconds.

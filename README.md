@@ -353,6 +353,7 @@ message:
 | `process-inbox.attachment_failed` | INFO | an attachment could not be read (`id`, `file`, `reason`) |
 | `process-inbox.draft_written` | INFO | a draft was written (`id`, `draft`, `reason`) |
 | `process-inbox.draft_failed` | WARN | no draft could be written, the mail keeps no label (`id`, `reason`) |
+| `process-inbox.label_failed` | WARN | the state label could not be applied, the mail keeps no label (`id`, `reason`) |
 | `process-inbox.window_fallback` | WARN | the moment of the last run is not in the past (`last_run`) |
 | `process-inbox.window_kept` | WARN | the moment of the last successful run is not moved, a mail waits for its draft (`failed`) |
 | `process-inbox.completed` | INFO | the run is done, the attributes are the counters of the run and what the calls to the models took, the id of the message instead of the window for a run of one message |
@@ -678,8 +679,9 @@ the log:
 
 A label that cannot be applied after the draft was written is the other way
 round: the message keeps its draft and no label, so the next run writes a second
-draft for it. The error of the API ends the run, the job seeker finds both drafts
-in the mailbox and sends the one they want.
+draft for it. The run counts the message as `failed` and goes on with the other
+mails, the job seeker finds both drafts in the mailbox and sends the one they
+want.
 
 The pipeline is a scheduled job, so it only processes the mail that arrived
 since the last run: the search is `is:inbox` with every state label excluded
