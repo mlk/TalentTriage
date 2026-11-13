@@ -698,10 +698,13 @@ says so in the log, the window stays open until a run has no failed mail. A run
 that keeps failing holds the window open the way a run that crashes holds it:
 the mail is looked at again until it is in a state, and the mail that was
 filtered out is screened again with it. The window closes when the failure is
-gone or when the job seeker removes the mail from the inbox.
+gone or when the job seeker removes the mail from the inbox. A window on the
+command line wins over the moment: `--since PT24H` looks at the last day of mail
+whatever the moment says, so a mail that is older than the window is not looked
+at again.
 
 ```json
-{"timestamp":"…","level":"WARN","event":"process-inbox.window_kept","message":"The moment of the last successful run is not moved: the next run looks at the same window again","attributes":{"failed":"1"}}
+{"timestamp":"…","level":"WARN","event":"process-inbox.window_kept","message":"The moment of the last successful run is not moved: a mail of the run stays pending","attributes":{"failed":"1"}}
 ```
 
 `recruiter-cli pending` lists the messages that were not processed yet, it is

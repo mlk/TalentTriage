@@ -422,6 +422,19 @@ class ProcessInboxServiceTest {
         }
 
     @Test
+    fun countsAMailWhoseDraftCouldNotBeWrittenByTheMailboxAsFailed() =
+        runTest {
+            val gmail = gmailEngine(draftFails = true)
+            val model = modelEngine(officeDays = "unclear")
+
+            val summary = service(gmail, model).run(WINDOW)
+
+            assertEquals(2, summary.failed)
+            assertEquals(0, summary.drafts)
+            assertEquals(0, summary.needsMoreInformation)
+        }
+
+    @Test
     fun countsAMailWhoseLabelCouldNotBeAppliedAsFailed() =
         runTest {
             val gmail = gmailEngine(modifyFails = true)

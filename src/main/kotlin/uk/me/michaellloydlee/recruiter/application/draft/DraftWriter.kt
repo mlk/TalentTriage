@@ -94,6 +94,9 @@ class DraftWriter(
     /**
      * Writes the draft into the mailbox.
      *
+     * A network failure leaves the mail without a draft as well: the mail is
+     * looked at again by the next run.
+     *
      * @param message the mail of the recruiter.
      * @param text the reply of the model.
      * @return what happened to the draft.
@@ -105,8 +108,22 @@ class DraftWriter(
         try {
             DraftOutcome.Written(drafts.createDraft(draft(message, text)))
         } catch (error: GmailApiException) {
-            DraftOutcome.Failed("The draft of the mail ${message.id} could not be written: ${error.message}")
+            notWritten(message, error)
+        } catch (error: IOException) {
+            notWritten(message, error)
         }
+
+    /**
+     * The draft could not be written into the mailbox.
+     *
+     * @param message the mail of the recruiter.
+     * @param error what went wrong.
+     * @return the outcome of the draft.
+     */
+    private fun notWritten(
+        message: EmailMessage,
+        error: Exception,
+    ): DraftOutcome = DraftOutcome.Failed("The draft of the mail ${message.id} could not be written: ${error.message}")
 
     /**
      * The draft of a mail, a reply in the thread of the mail.

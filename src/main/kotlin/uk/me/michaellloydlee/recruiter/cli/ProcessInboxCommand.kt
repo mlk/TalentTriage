@@ -279,7 +279,7 @@ class ProcessInboxCommand(
                 event = "$COMMAND_NAME.window_kept",
                 message =
                     "The moment of the last successful run is not moved: " +
-                        "the next run looks at the same window again",
+                        "a mail of the run stays pending",
                 attributes = mapOf("failed" to summary.failed.toString()),
             )
             return

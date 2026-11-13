@@ -175,6 +175,7 @@ fun gmailEngine(
     listing: Boolean = false,
     labels: List<String> = listOf("INBOX"),
     modifyFails: Boolean = false,
+    draftFails: Boolean = false,
 ): MockEngine =
     MockEngine { request ->
         when {
@@ -204,6 +205,14 @@ fun gmailEngine(
                 respond(
                     content = """{"id":"${idOf(name)}","name":"$name"}""",
                     status = HttpStatusCode.OK,
+                    headers = jsonHeaders(),
+                )
+            }
+
+            request.url.encodedPath.endsWith("/users/me/drafts") && draftFails -> {
+                respond(
+                    content = """{"error":"the draft cannot be written"}""",
+                    status = HttpStatusCode.InternalServerError,
                     headers = jsonHeaders(),
                 )
             }

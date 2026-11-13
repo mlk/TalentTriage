@@ -222,6 +222,17 @@ class DraftWriterTest {
         }
 
     @Test
+    fun aNetworkFailureOfTheMailboxLeavesTheMailWithoutADraft() =
+        runTest {
+            val gmail = MockEngine { throw IOException("the network is down") }
+
+            val outcome = writer(modelEngine(), gmail).write(message(), missingPay(), REQUIREMENTS)
+
+            val failed = assertIs<DraftOutcome.Failed>(outcome)
+            assertTrue(failed.reason.contains("could not be written"))
+        }
+
+    @Test
     fun anEmptyAnswerOfTheModelLeavesTheMailWithoutADraft() =
         runTest {
             val gmail = gmailEngine()
