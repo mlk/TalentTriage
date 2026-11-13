@@ -304,6 +304,30 @@ class ProcessInboxCommandTest {
         }
 
     @Test
+    fun doesNotRememberTheMomentOfARunWhoseLabelCouldNotBeApplied() =
+        runTest {
+            // The label cannot be applied: the mail keeps no label, so the
+            // moment of the run is not moved and the next run looks at it
+            // again.
+            val sink = StringBuilder()
+            val engine = engine(modifyFails = true)
+            val token = tokenFile()
+
+            val result =
+                cli(sink, Clock.fixed(NOW, ZoneOffset.UTC)) { mockClient(engine) }
+                    .test(
+                        "process-inbox --credentials ${credentialsFile()} " +
+                            "--token $token --requirements ${requirementsFile()}",
+                    )
+
+            assertEquals(0, result.statusCode)
+            assertNull(FileLastRunStore.nextTo(token).load())
+            val completed = records(sink).last()
+            assertEquals("process-inbox.completed", completed.event)
+            assertEquals("1", completed.attributes["failed"])
+        }
+
+    @Test
     fun doesNotRememberTheMomentOfARunThatBroke() =
         runTest {
             // The answer of the API cannot be read: the run breaks, the moment
@@ -495,6 +519,7 @@ class ProcessInboxCommandTest {
         officeDays: String = "matches",
         chatAnswers: Boolean = true,
         brokenAnswer: Boolean = false,
+        modifyFails: Boolean = false,
     ): MockEngine =
         MockEngine { request ->
             when {
@@ -506,6 +531,14 @@ class ProcessInboxCommandTest {
                     respond(
                         content = """{"error":"the answer cannot be read"}""",
                         status = HttpStatusCode.OK,
+                        headers = jsonHeaders(),
+                    )
+                }
+
+                request.url.encodedPath.endsWith("/modify") && modifyFails -> {
+                    respond(
+                        content = """{"error":"the labels cannot be changed"}""",
+                        status = HttpStatusCode.InternalServerError,
                         headers = jsonHeaders(),
                     )
                 }

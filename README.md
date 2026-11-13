@@ -353,7 +353,7 @@ message:
 | `process-inbox.attachment_failed` | INFO | an attachment could not be read (`id`, `file`, `reason`) |
 | `process-inbox.draft_written` | INFO | a draft was written (`id`, `draft`, `reason`) |
 | `process-inbox.draft_failed` | WARN | no draft could be written, the mail keeps no label (`id`, `reason`) |
-| `process-inbox.label_failed` | WARN | the state label could not be applied, the mail keeps no label (`id`, `reason`) |
+| `process-inbox.label_failed` | WARN | the state label could not be applied, the mail keeps no label (`id`, `state`, `reason`) |
 | `process-inbox.window_fallback` | WARN | the moment of the last run is not in the past (`last_run`) |
 | `process-inbox.window_kept` | WARN | the moment of the last successful run is not moved, a mail of the run stays pending (`failed`) |
 | `process-inbox.completed` | INFO | the run is done, the attributes are the counters of the run and what the calls to the models took, the id of the message instead of the window for a run of one message |
