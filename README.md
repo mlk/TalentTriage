@@ -655,6 +655,14 @@ The original message reaches the model as **data**, never as an instruction: it
 goes into the prompt inside a delimited block that the prompt calls data, so a
 message that tries to steer the model cannot make it write something else.
 
+The draft goes to the address the message asks the answer at: the address of
+the `Reply-To` header when the message has one, the address of the `From` header
+otherwise. The name of the sender is not part of the address - a platform that
+writes from an address nobody reads names the address of the recruiter in its
+`Reply-To` header. The draft is a mail: it has a `Date`, a `Message-ID` of its
+own and a `MIME-Version`, and it replies to the `Message-ID` of the original
+message.
+
 The message keeps the label `Recruiters/NeedsMoreInformation`: the search of the
 pending messages skips it and the draft is written once. A message the model
 could not evaluate gets no draft - the model does not know what is missing. The

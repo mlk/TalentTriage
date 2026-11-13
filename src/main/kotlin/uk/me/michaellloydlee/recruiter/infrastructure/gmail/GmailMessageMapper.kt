@@ -18,6 +18,8 @@ internal object GmailMessageMapper {
             id = message.id,
             threadId = message.threadId,
             sender = header(message, "From"),
+            replyTo = header(message, "Reply-To"),
+            messageId = messageId(message),
             subject = header(message, "Subject"),
             body = body(message),
             labelIds = message.labelIds,
@@ -64,6 +66,19 @@ internal object GmailMessageMapper {
             ?.firstOrNull { it.name.equals(name, ignoreCase = true) }
             ?.value
             .orEmpty()
+
+    /**
+     * The message id of the message, without the brackets of the header.
+     *
+     * The value of the `Message-ID` header is a message id of RFC 5322
+     * between brackets: `<18f2c1a4b3d5e6f7@mail.example.com>`. The domain
+     * holds the id itself, the brackets are the format of the header.
+     *
+     * @param message the message of the API.
+     * @return the message id of the message, empty when the message has none.
+     */
+    private fun messageId(message: GmailMessageResource): String =
+        header(message, "Message-ID").removeSurrounding("<", ">").trim()
 
     private fun body(message: GmailMessageResource): String {
         val payload = message.payload ?: return message.snippet

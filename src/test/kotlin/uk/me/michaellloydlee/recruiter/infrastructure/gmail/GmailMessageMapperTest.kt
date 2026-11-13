@@ -36,6 +36,36 @@ class GmailMessageMapperTest {
     }
 
     @Test
+    fun readsTheReplyToAndTheMessageIdOfTheMail() {
+        val message =
+            GmailMessageMapper.toDomain(
+                GmailMessageResource(
+                    id = "message-id",
+                    threadId = "thread-id",
+                    labelIds = listOf("INBOX"),
+                    payload =
+                        GmailPayloadResource(
+                            mimeType = "text/plain",
+                            headers =
+                                listOf(
+                                    GmailHeaderResource(name = "From", value = "no-reply@linkedin.com"),
+                                    GmailHeaderResource(name = "Reply-To", value = "Jane <jane@example.com>"),
+                                    GmailHeaderResource(
+                                        name = "Message-ID",
+                                        value = "<18f2c1a4b3d5e6f7@mail.example.com>",
+                                    ),
+                                ),
+                            body = GmailBodyResource(data = "SGVsbG8gcmVjcnVpdGVyIQ=="),
+                        ),
+                ),
+            )
+
+        assertEquals("no-reply@linkedin.com", message.sender)
+        assertEquals("Jane <jane@example.com>", message.replyTo)
+        assertEquals("18f2c1a4b3d5e6f7@mail.example.com", message.messageId)
+    }
+
+    @Test
     fun readsTheAttachmentsOfTheNestedParts() {
         val message =
             GmailMessageMapper.toDomain(

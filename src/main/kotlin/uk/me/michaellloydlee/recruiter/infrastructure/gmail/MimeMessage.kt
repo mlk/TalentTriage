@@ -1,6 +1,9 @@
 package uk.me.michaellloydlee.recruiter.infrastructure.gmail
 
 import uk.me.michaellloydlee.recruiter.domain.gmail.EmailDraft
+import java.time.Instant
+import java.time.ZoneOffset
+import java.time.format.DateTimeFormatter
 import java.util.Base64
 
 /**
@@ -33,12 +36,34 @@ internal object MimeMessage {
         buildString {
             append(header("To", draft.to))
             append(header("Subject", draft.subject))
-            append(header("In-Reply-To", "<${draft.inReplyTo}>"))
-            append(header("References", "<${draft.inReplyTo}>"))
+            append(header("Date", date(draft.date)))
+            append(header("Message-ID", messageId(draft.messageId)))
+            if (draft.inReplyTo.isNotBlank()) {
+                append(header("In-Reply-To", messageId(draft.inReplyTo)))
+                append(header("References", messageId(draft.inReplyTo)))
+            }
+            append(header("MIME-Version", MIME_VERSION))
             append(header("Content-Type", "text/plain; charset=\"UTF-8\""))
             append(LINE_BREAK)
             append(draft.body)
         }
+
+    /**
+     * The moment of the mail, in the format of RFC 2822.
+     *
+     * @param moment the moment of the mail.
+     * @return the moment as the header of a mail writes it.
+     */
+    private fun date(moment: Instant): String =
+        DateTimeFormatter.RFC_1123_DATE_TIME.format(moment.atZone(ZoneOffset.UTC))
+
+    /**
+     * A message id of RFC 5322, the value between the brackets.
+     *
+     * @param id the message id.
+     * @return the message id as the header of a mail writes it.
+     */
+    private fun messageId(id: String): String = "<$id>"
 
     /**
      * A header of the mail.
@@ -57,4 +82,7 @@ internal object MimeMessage {
 
     /** The line break of a mail, the format of RFC 2822 asks for CRLF. */
     private const val LINE_BREAK: String = "\r\n"
+
+    /** The version of MIME the mail is written in. */
+    private const val MIME_VERSION: String = "1.0"
 }
