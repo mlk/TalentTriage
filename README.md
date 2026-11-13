@@ -675,6 +675,11 @@ the log:
 {"timestamp":"…","level":"INFO","event":"process-inbox.draft_written","message":"A draft that asks the recruiter for the missing information was written","attributes":{"id":"…","draft":"…","reason":"the message states no pay"}}
 ```
 
+A label that cannot be applied after the draft was written is the other way
+round: the message keeps its draft and no label, so the next run writes a second
+draft for it. The error of the API ends the run, the job seeker finds both drafts
+in the mailbox and sends the one they want.
+
 The pipeline is a scheduled job, so it only processes the mail that arrived
 since the last run: the search is `is:inbox` with every state label excluded
 and `after:<time>` added. The time is the moment of the last successful run,

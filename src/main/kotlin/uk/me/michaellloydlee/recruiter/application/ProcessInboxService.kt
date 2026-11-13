@@ -242,6 +242,9 @@ class ProcessInboxService(
                             "reason" to reasonOf(evaluation),
                         ),
                 )
+                // A label that cannot be applied leaves the mail with its draft
+                // and without a label: the next run writes a second draft for
+                // the same mail.
                 stateManager.apply(message.id, evaluation.state)
             }
 

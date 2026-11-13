@@ -439,6 +439,8 @@ class ProcessInboxServiceTest {
             val requests = gmail.requestHistory
             val draft = requests.indexOfFirst { it.url.encodedPath.endsWith("/users/me/drafts") }
             val label = requests.indexOfFirst { it.url.encodedPath.endsWith("/modify") }
+            assertTrue(draft >= 0, "The draft was written")
+            assertTrue(label >= 0, "The state label was applied")
             assertTrue(draft < label, "The draft is written before the state label is applied")
         }
 
