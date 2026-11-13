@@ -209,9 +209,9 @@ class ProcessInboxService(
             stateManager.apply(message.id, state)
             counters.count(state)
         } catch (error: GmailApiException) {
-            labelFailed(message, counters, error.message.orEmpty())
+            labelFailed(message, counters, reasonOf(error))
         } catch (error: IOException) {
-            labelFailed(message, counters, error.message.orEmpty())
+            labelFailed(message, counters, reasonOf(error))
         }
     }
 
@@ -238,6 +238,18 @@ class ProcessInboxService(
                 ),
         )
     }
+
+    /**
+     * The reason of a failure of the API.
+     *
+     * The name of the error is part of the reason: an operator that reads the
+     * log has to know what went wrong.
+     *
+     * @param error the error of the API.
+     * @return the reason of the failure.
+     */
+    private fun reasonOf(error: Exception): String =
+        error.message?.let { "${error.javaClass.simpleName}: $it" } ?: error.javaClass.simpleName
 
     /**
      * Writes the draft that asks the recruiter for the missing information and

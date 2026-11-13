@@ -376,7 +376,7 @@ class ProcessInboxServiceTest {
         }
 
     @Test
-    fun labelsTheMailAfterTheDraftWasWritten() =
+    fun labelsTheMailThatNeedsMoreInformation() =
         runTest {
             val gmail = gmailEngine()
             val model = modelEngine(officeDays = "unclear")

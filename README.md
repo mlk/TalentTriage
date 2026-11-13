@@ -355,7 +355,7 @@ message:
 | `process-inbox.draft_failed` | WARN | no draft could be written, the mail keeps no label (`id`, `reason`) |
 | `process-inbox.label_failed` | WARN | the state label could not be applied, the mail keeps no label (`id`, `reason`) |
 | `process-inbox.window_fallback` | WARN | the moment of the last run is not in the past (`last_run`) |
-| `process-inbox.window_kept` | WARN | the moment of the last successful run is not moved, a mail waits for its draft (`failed`) |
+| `process-inbox.window_kept` | WARN | the moment of the last successful run is not moved, a mail of the run stays pending (`failed`) |
 | `process-inbox.completed` | INFO | the run is done, the attributes are the counters of the run and what the calls to the models took, the id of the message instead of the window for a run of one message |
 | `pending.listed` / `pending.message` | INFO | the messages that were not processed yet |
 | `requirements.started` / `requirements.completed` | INFO | the requirements were written from the CV |
@@ -692,7 +692,11 @@ The window of the run is in the log of the run.
 
 A run that left a mail pending does not move that moment: the mail that waits
 for its draft keeps no label and the next run has to look at it again. The run
-says so in the log, the window stays open until a run has no failed mail:
+says so in the log, the window stays open until a run has no failed mail. A run
+that keeps failing holds the window open the way a run that crashes holds it:
+the mail is looked at again until it is in a state, and the mail that was
+filtered out is screened again with it. The window closes when the failure is
+gone or when the job seeker removes the mail from the inbox.
 
 ```json
 {"timestamp":"…","level":"WARN","event":"process-inbox.window_kept","message":"The moment of the last successful run is not moved: the next run looks at the same window again","attributes":{"failed":"1"}}
