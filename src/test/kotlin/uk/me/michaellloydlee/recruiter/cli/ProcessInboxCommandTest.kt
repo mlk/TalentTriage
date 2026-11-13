@@ -14,6 +14,7 @@ import io.ktor.http.content.TextContent
 import io.ktor.http.headersOf
 import io.ktor.serialization.kotlinx.json.json
 import kotlinx.coroutines.test.runTest
+import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
 import uk.me.michaellloydlee.recruiter.infrastructure.logging.LogRecord
@@ -27,6 +28,7 @@ import kotlin.io.path.createTempDirectory
 import kotlin.io.path.writeText
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
@@ -337,22 +339,13 @@ class ProcessInboxCommandTest {
             val engine = engine(brokenAnswer = true)
             val token = tokenFile()
 
-            val code =
-                runCli(
-                    arrayOf(
-                        "process-inbox",
-                        "--credentials",
-                        credentialsFile().toString(),
-                        "--token",
-                        token.toString(),
-                        "--requirements",
-                        requirementsFile().toString(),
-                    ),
-                    StructuredLogger(sink),
-                    cli(sink, Clock.fixed(NOW, ZoneOffset.UTC)) { mockClient(engine) },
-                )
-
-            assertEquals(1, code)
+            assertFailsWith<SerializationException> {
+                cli(sink, Clock.fixed(NOW, ZoneOffset.UTC)) { mockClient(engine) }
+                    .test(
+                        "process-inbox --credentials ${credentialsFile()} " +
+                            "--token $token --requirements ${requirementsFile()}",
+                    )
+            }
             assertNull(FileLastRunStore.nextTo(token).load())
         }
 
