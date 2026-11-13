@@ -1,5 +1,6 @@
 package uk.me.michaellloydlee.recruiter.application.draft
 
+import uk.me.michaellloydlee.recruiter.application.reasonOf
 import uk.me.michaellloydlee.recruiter.domain.evaluation.MissingInformation
 import uk.me.michaellloydlee.recruiter.domain.gmail.EmailDraft
 import uk.me.michaellloydlee.recruiter.domain.gmail.EmailMessage
@@ -125,18 +126,6 @@ class DraftWriter(
         error: Exception,
     ): DraftOutcome =
         DraftOutcome.Failed("The draft of the mail ${message.id} could not be written: ${reasonOf(error)}")
-
-    /**
-     * The reason of a failure.
-     *
-     * The name of the error is part of the reason: an operator that reads the
-     * log has to know what went wrong.
-     *
-     * @param error the error.
-     * @return the reason of the failure.
-     */
-    private fun reasonOf(error: Exception): String =
-        error.message?.let { "${error.javaClass.simpleName}: $it" } ?: error.javaClass.simpleName
 
     /**
      * The draft of a mail, a reply in the thread of the mail.

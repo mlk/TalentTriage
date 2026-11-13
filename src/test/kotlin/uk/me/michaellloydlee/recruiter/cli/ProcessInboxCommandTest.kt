@@ -14,7 +14,6 @@ import io.ktor.http.content.TextContent
 import io.ktor.http.headersOf
 import io.ktor.serialization.kotlinx.json.json
 import kotlinx.coroutines.test.runTest
-import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
 import uk.me.michaellloydlee.recruiter.infrastructure.logging.LogRecord
@@ -330,16 +329,40 @@ class ProcessInboxCommandTest {
         }
 
     @Test
-    fun doesNotRememberTheMomentOfARunThatBroke() =
+    fun doesNotRememberTheMomentOfARunWhoseAnswerCouldNotBeRead() =
         runTest {
-            // The answer of the API cannot be read: the run breaks, the moment
-            // of the last successful run is not written and the window stays
-            // open.
+            // The answer of the API cannot be read: the mail is counted as
+            // failed, the run goes on with the other mails and the moment of
+            // the last successful run is not written.
             val sink = StringBuilder()
             val engine = engine(brokenAnswer = true)
             val token = tokenFile()
 
-            assertFailsWith<SerializationException> {
+            val result =
+                cli(sink, Clock.fixed(NOW, ZoneOffset.UTC)) { mockClient(engine) }
+                    .test(
+                        "process-inbox --credentials ${credentialsFile()} " +
+                            "--token $token --requirements ${requirementsFile()}",
+                    )
+
+            assertEquals(0, result.statusCode)
+            assertNull(FileLastRunStore.nextTo(token).load())
+            val completed = records(sink).last()
+            assertEquals("process-inbox.completed", completed.event)
+            assertEquals("1", completed.attributes["failed"])
+        }
+
+    @Test
+    fun doesNotRememberTheMomentOfARunThatBroke() =
+        runTest {
+            // The API answers with something the pipeline did not expect: the
+            // run breaks, the moment of the last successful run is not written
+            // and the window stays open.
+            val sink = StringBuilder()
+            val engine = engine(modifyThrows = true)
+            val token = tokenFile()
+
+            assertFailsWith<IllegalStateException> {
                 cli(sink, Clock.fixed(NOW, ZoneOffset.UTC)) { mockClient(engine) }
                     .test(
                         "process-inbox --credentials ${credentialsFile()} " +
@@ -513,11 +536,16 @@ class ProcessInboxCommandTest {
         chatAnswers: Boolean = true,
         brokenAnswer: Boolean = false,
         modifyFails: Boolean = false,
+        modifyThrows: Boolean = false,
     ): MockEngine =
         MockEngine { request ->
             when {
                 request.url.encodedPath.endsWith("/api/chat") && !chatAnswers -> {
                     respond(content = "boom", status = HttpStatusCode.InternalServerError)
+                }
+
+                request.url.encodedPath.endsWith("/modify") && modifyThrows -> {
+                    error("the API answered with something unexpected")
                 }
 
                 request.url.encodedPath.endsWith("/modify") && brokenAnswer -> {
