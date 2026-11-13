@@ -249,7 +249,7 @@ class ProcessInboxCommand(
             // single message does not move that moment: it looked at one mail
             // only, the mail of the window is still waiting.
             if (target is RunTarget.Window) {
-                lastRunStore().save(startedAt)
+                rememberTheRun(startedAt, summary)
             }
             logger.info(
                 event = "$COMMAND_NAME.completed",
@@ -257,6 +257,34 @@ class ProcessInboxCommand(
                 attributes = summary.attributes(startedAt),
             )
         }
+    }
+
+    /**
+     * Remembers the moment of the run for the next run.
+     *
+     * The moment of the last successful run is the beginning of the window of
+     * the next run. A run that left a mail pending does not move it: the mail
+     * that waits for its draft keeps no label and the next run looks at it
+     * again.
+     *
+     * @param startedAt the moment the run began.
+     * @param summary what the run did.
+     */
+    private suspend fun rememberTheRun(
+        startedAt: Instant,
+        summary: ProcessInboxSummary,
+    ) {
+        if (summary.failed > 0) {
+            logger.warn(
+                event = "$COMMAND_NAME.window_kept",
+                message =
+                    "The moment of the last successful run is not moved: " +
+                        "the next run looks at the same window again",
+                attributes = mapOf("failed" to summary.failed.toString()),
+            )
+            return
+        }
+        lastRunStore().save(startedAt)
     }
 
     /**

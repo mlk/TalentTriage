@@ -264,6 +264,46 @@ class ProcessInboxCommandTest {
         }
 
     @Test
+    fun doesNotRememberTheMomentOfARunThatLeftAMailPending() =
+        runTest {
+            // The draft of the mail could not be written: the mail keeps no
+            // label, so the moment of the run is not moved and the next run
+            // looks at the mail again.
+            val sink = StringBuilder()
+            val engine = engine(officeDays = "unclear", chatAnswers = false)
+            val token = tokenFile()
+
+            val result =
+                cli(sink, Clock.fixed(NOW, ZoneOffset.UTC)) { mockClient(engine) }
+                    .test(
+                        "process-inbox --credentials ${credentialsFile()} " +
+                            "--token $token --requirements ${requirementsFile()}",
+                    )
+
+            assertEquals(0, result.statusCode)
+            assertNull(FileLastRunStore.nextTo(token).load())
+            val completed = records(sink).last()
+            assertEquals("process-inbox.completed", completed.event)
+            assertEquals("1", completed.attributes["failed"])
+        }
+
+    @Test
+    fun saysThatTheWindowOfTheRunIsKept() =
+        runTest {
+            val sink = StringBuilder()
+            val engine = engine(officeDays = "unclear", chatAnswers = false)
+
+            cli(sink, Clock.fixed(NOW, ZoneOffset.UTC)) { mockClient(engine) }
+                .test(
+                    "process-inbox --credentials ${credentialsFile()} " +
+                        "--token ${tokenFile()} --requirements ${requirementsFile()}",
+                )
+
+            val records = records(sink)
+            assertTrue(records.any { it.event == "process-inbox.window_kept" })
+        }
+
+    @Test
     fun warnsWhenTheMomentOfTheLastRunIsInTheFuture() =
         runTest {
             val sink = StringBuilder()
@@ -422,19 +462,29 @@ class ProcessInboxCommandTest {
             assertTrue(result.output.contains("The id of a message is not empty"))
         }
 
-    private fun engine(): MockEngine =
+    private fun engine(
+        officeDays: String = "matches",
+        chatAnswers: Boolean = true,
+    ): MockEngine =
         MockEngine { request ->
-            respond(
-                content = contentFor(request),
-                status = HttpStatusCode.OK,
-                headers = jsonHeaders(),
-            )
+            if (request.url.encodedPath.endsWith("/api/chat") && !chatAnswers) {
+                respond(content = "boom", status = HttpStatusCode.InternalServerError)
+            } else {
+                respond(
+                    content = contentFor(request, officeDays),
+                    status = HttpStatusCode.OK,
+                    headers = jsonHeaders(),
+                )
+            }
         }
 
-    private fun contentFor(request: HttpRequestData): String =
+    private fun contentFor(
+        request: HttpRequestData,
+        officeDays: String,
+    ): String =
         when {
             request.url.encodedPath.endsWith("/v1/systemone") -> {
-                decisionAnswer(request)
+                decisionAnswer(request, officeDays)
             }
 
             request.url.encodedPath.endsWith("/api/chat") -> {
@@ -458,7 +508,10 @@ class ProcessInboxCommandTest {
      * The answer of the decision model: the recruiter question of the screening
      * and the criteria of the evaluation are answered differently.
      */
-    private fun decisionAnswer(request: HttpRequestData): String {
+    private fun decisionAnswer(
+        request: HttpRequestData,
+        officeDays: String,
+    ): String {
         val body = (request.body as TextContent).text
         val questions = Json.parseToJsonElement(body).jsonObject["questions"]!!.jsonObject
         val answer =
@@ -466,7 +519,8 @@ class ProcessInboxCommandTest {
                 val choice =
                     when (name) {
                         "recruiter" -> "from a recruiter"
-                        "jd_matches", "office_days" -> "matches"
+                        "jd_matches" -> "matches"
+                        "office_days" -> officeDays
                         else -> "does not match"
                     }
                 """"$name":{"type":"choice","choice":"$choice","confidence":0.9}"""

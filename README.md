@@ -354,6 +354,7 @@ message:
 | `process-inbox.draft_written` | INFO | a draft was written (`id`, `draft`, `reason`) |
 | `process-inbox.draft_failed` | WARN | no draft could be written, the mail keeps no label (`id`, `reason`) |
 | `process-inbox.window_fallback` | WARN | the moment of the last run is not in the past (`last_run`) |
+| `process-inbox.window_kept` | WARN | the moment of the last successful run is not moved, a mail waits for its draft (`failed`) |
 | `process-inbox.completed` | INFO | the run is done, the attributes are the counters of the run and what the calls to the models took, the id of the message instead of the window for a run of one message |
 | `pending.listed` / `pending.message` | INFO | the messages that were not processed yet |
 | `requirements.started` / `requirements.completed` | INFO | the requirements were written from the CV |
@@ -686,6 +687,14 @@ and `after:<time>` added. The time is the moment of the last successful run,
 so the run looks at every mail exactly once. `--since` says how far back the
 run looks instead: `PT24H` or `P1D` are the same, `P7D` looks a week back.
 The window of the run is in the log of the run.
+
+A run that left a mail pending does not move that moment: the mail that waits
+for its draft keeps no label and the next run has to look at it again. The run
+says so in the log, the window stays open until a run has no failed mail:
+
+```json
+{"timestamp":"…","level":"WARN","event":"process-inbox.window_kept","message":"The moment of the last successful run is not moved: the next run looks at the same window again","attributes":{"failed":"1"}}
+```
 
 `recruiter-cli pending` lists the messages that were not processed yet, it is
 the quickest way to check that the credentials work. It takes the same window
