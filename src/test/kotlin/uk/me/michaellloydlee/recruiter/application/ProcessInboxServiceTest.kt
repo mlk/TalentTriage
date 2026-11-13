@@ -394,9 +394,52 @@ class ProcessInboxServiceTest {
 
             val summary = service(gmail, model, log).run(WINDOW)
 
-            assertEquals(2, summary.needsMoreInformation)
+            assertEquals(2, summary.failed)
+            assertEquals(0, summary.needsMoreInformation)
             assertEquals(0, summary.drafts)
             assertTrue(log.toString().contains("process-inbox.draft_failed"))
+        }
+
+    @Test
+    fun leavesTheMailWithoutALabelWhenTheDraftCouldNotBeWritten() =
+        runTest {
+            val gmail = gmailEngine()
+            val model = modelEngine(officeDays = "unclear", chatAnswers = false)
+
+            service(gmail, model).run(WINDOW)
+
+            val labels = gmail.requestHistory.filter { it.url.encodedPath.endsWith("/modify") }
+            assertTrue(labels.isEmpty())
+        }
+
+    @Test
+    fun labelsTheMailAfterTheDraftWasWritten() =
+        runTest {
+            val gmail = gmailEngine()
+            val model = modelEngine(officeDays = "unclear")
+
+            service(gmail, model).run(WINDOW)
+
+            val labels = gmail.requestHistory.filter { it.url.encodedPath.endsWith("/modify") }
+            assertEquals(2, labels.size)
+            labels.forEach { label ->
+                val body = (label.body as TextContent).text
+                assertTrue(body.contains("Label_needsmoreinformation"))
+            }
+        }
+
+    @Test
+    fun writesTheDraftBeforeTheStateLabelIsApplied() =
+        runTest {
+            val gmail = gmailEngine()
+            val model = modelEngine(officeDays = "unclear")
+
+            service(gmail, model).run(WINDOW)
+
+            val requests = gmail.requestHistory
+            val draft = requests.indexOfFirst { it.url.encodedPath.endsWith("/users/me/drafts") }
+            val label = requests.indexOfFirst { it.url.encodedPath.endsWith("/modify") }
+            assertTrue(draft < label, "The draft is written before the state label is applied")
         }
 
     private suspend fun service(

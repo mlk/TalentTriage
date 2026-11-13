@@ -412,6 +412,7 @@ class ProcessInboxCommand(
             put("needs_more_information", needsMoreInformation.toString())
             put("trashed", trashed.toString())
             put("drafts", drafts.toString())
+            put("failed", failed.toString())
             put("unknown", unknown.toString())
             put("model_calls", models.calls.toString())
             put("input_tokens", models.inputTokens.toString())

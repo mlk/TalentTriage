@@ -54,6 +54,7 @@ class ProcessInboxCommandTest {
             assertEquals("1", completed.attributes["recruiters"])
             assertEquals("1", completed.attributes["worth_follow_up"])
             assertEquals("0", completed.attributes["needs_more_information"])
+            assertEquals("0", completed.attributes["failed"])
             assertTrue(engine.requestHistory.any { it.url.encodedPath.endsWith("/v1/systemone") })
         }
 

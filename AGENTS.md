@@ -111,6 +111,10 @@ of the four state labels below `Recruiters/` — `JobListing`, `WorthFollowUp`,
   of the subject decide it without a model, the model is the fallback for the mails the rules do
   not catch. A listing is not evaluated — it is not one job.
 * The state is derived from the evaluation, never from the exception of the model.
+* The state label is applied **after** the draft that asks the recruiter is written: a mail that waits
+  for the job seeker always carries the draft that asks the recruiter. A draft that could not be
+  written is a failure of the mail: the mail keeps no label, the run counts it as `failed` and the
+  next run looks at it again.
 * The state of an evaluation is a type of its own (`domain/evaluation/EvaluationState.kt`): it holds
   the three states an evaluation can lead to and the label of each of them. A job listing is a
   decision of the screening — a listing is not one job and it is not evaluated — so it is not a
@@ -165,8 +169,10 @@ cannot change it, the mail is trashed and no draft is written.
 * The attachments are not part of the prompt, they are not quoted.
 * The minimum pay of the job seeker is only named when `share_minimum_pay` says so.
 * A mail the model could not evaluate gets no draft: the model does not know what is missing.
-* A draft is not a state of the pipeline. The mail keeps the label `Recruiters/NeedsMoreInformation`
-  and the draft is written once.
+* A draft is not a state of the pipeline. The draft is written before the state label is applied, the
+  mail keeps the label `Recruiters/NeedsMoreInformation` and the draft is written once. A draft that
+  could not be written is a failure of the mail: the mail keeps no label and the next run looks at it
+  again.
 
 ### The requirements of the job seeker
 

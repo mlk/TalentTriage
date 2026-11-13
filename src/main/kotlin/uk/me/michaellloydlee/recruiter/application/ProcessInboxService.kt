@@ -26,8 +26,9 @@ import java.time.Duration
  * say everything the job seeker needs to know gets a draft that asks the
  * recruiter about it.
  *
- * The run applies the state of the mail: the label of the state is what
- * keeps the next run from looking at the mail again.
+ * The draft is written before the state of the mail is applied: a mail that
+ * waits for the job seeker always carries the draft that asks the recruiter,
+ * or it keeps no state at all and the next run looks at it again.
  *
  * The run looks at what its target says: the messages of the inbox that
  * arrived after a moment, or one message the job seeker asks for by its id.
@@ -78,6 +79,7 @@ class ProcessInboxService(
             needsMoreInformation = counters.needsMoreInformation,
             trashed = counters.trashed,
             drafts = counters.drafts,
+            failed = counters.failed,
             models = usageCounter.usage(),
             durationMillis = Duration.between(startedAt, clock.instant()).toMillis(),
         )
@@ -177,9 +179,7 @@ class ProcessInboxService(
             }
 
             EvaluationState.NEEDS_MORE_INFORMATION -> {
-                counters.needsMoreInformation++
-                stateManager.apply(message.id, evaluation.state)
-                askForInformation(message, evaluation, counters)
+                needsMoreInformation(message, evaluation, counters)
             }
 
             EvaluationState.TRASH -> {
@@ -190,10 +190,14 @@ class ProcessInboxService(
     }
 
     /**
-     * Writes the draft that asks the recruiter for the missing information.
+     * Writes the draft that asks the recruiter for the missing information and
+     * puts the mail into its state.
      *
-     * The mail keeps the label `Recruiters/NeedsMoreInformation`: the draft
-     * waits in the mailbox of the job seeker and the mail is not asked again.
+     * The draft is written before the state label is applied: a mail that
+     * waits for the job seeker always carries the draft that asks the
+     * recruiter. A draft that could not be written is a failure of the mail:
+     * the mail keeps no label and the next run looks at it again.
+     *
      * A mail the model could not evaluate gets no draft: the model does not
      * know what is missing. A mail whose only gap is a criterion the model was
      * not sure about gets no draft either: the recruiter cannot be asked
@@ -203,7 +207,7 @@ class ProcessInboxService(
      * @param evaluation the evaluation of the job description.
      * @param counters the counters of the run.
      */
-    private suspend fun askForInformation(
+    private suspend fun needsMoreInformation(
         message: EmailMessage,
         evaluation: JobDescriptionEvaluation,
         counters: Counters,
@@ -211,14 +215,23 @@ class ProcessInboxService(
         val missing =
             when (evaluation) {
                 is JobDescriptionEvaluation.Evaluated -> evaluation.missingInformation
-                is JobDescriptionEvaluation.Unknown -> return
+
+                // The model could not evaluate the job description: it does
+                // not know what the mail is missing, the recruiter is not
+                // asked about it.
+                is JobDescriptionEvaluation.Unknown -> null
             }
-        if (!missing.asksAboutPay && !missing.asksAboutOfficeDays) {
+        if (missing == null || (!missing.asksAboutPay && !missing.asksAboutOfficeDays)) {
+            // The recruiter is not asked about anything: the mail waits for
+            // the job seeker.
+            counters.needsMoreInformation++
+            stateManager.apply(message.id, evaluation.state)
             return
         }
         when (val outcome = drafts.write(message, missing, requirements)) {
             is DraftOutcome.Written -> {
                 counters.drafts++
+                counters.needsMoreInformation++
                 logger.info(
                     event = EVENT_DRAFT_WRITTEN,
                     message = "A draft that asks the recruiter for the missing information was written",
@@ -229,9 +242,13 @@ class ProcessInboxService(
                             "reason" to reasonOf(evaluation),
                         ),
                 )
+                stateManager.apply(message.id, evaluation.state)
             }
 
             is DraftOutcome.Failed -> {
+                // The mail keeps no label: the next run looks at it again and
+                // writes the draft.
+                counters.failed++
                 logger.warn(
                     event = EVENT_DRAFT_FAILED,
                     message = "The draft that asks the recruiter for the missing information was not written",
@@ -274,6 +291,7 @@ class ProcessInboxService(
         var needsMoreInformation: Int = 0
         var trashed: Int = 0
         var drafts: Int = 0
+        var failed: Int = 0
     }
 
     companion object {

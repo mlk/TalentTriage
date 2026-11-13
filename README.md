@@ -322,7 +322,7 @@ object per line — to standard output:
 
 ```json
 {"timestamp":"2026-10-24T07:57:23.916683Z","level":"INFO","event":"process-inbox.started","message":"Inbox triage run started","attributes":{"trigger":"cli"}}
-{"timestamp":"2026-10-24T07:57:23.926923Z","level":"INFO","event":"process-inbox.completed","message":"Inbox triage run completed","attributes":{"screened":"3","recruiters":"1","filtered_out":"1","job_listings":"1","worth_follow_up":"0","needs_more_information":"1","trashed":"0","drafts":"1","unknown":"0","model_calls":"3","input_tokens":"8142","output_tokens":"217","duration_ms":"48210","window":"PT1H","since":"2026-10-24T06:57:23.916683Z"}}
+{"timestamp":"2026-10-24T07:57:23.926923Z","level":"INFO","event":"process-inbox.completed","message":"Inbox triage run completed","attributes":{"screened":"3","recruiters":"1","filtered_out":"1","job_listings":"1","worth_follow_up":"0","needs_more_information":"1","trashed":"0","drafts":"1","failed":"0","unknown":"0","model_calls":"3","input_tokens":"8142","output_tokens":"217","duration_ms":"48210","window":"PT1H","since":"2026-10-24T06:57:23.916683Z"}}
 ```
 
 The run says what the calls to the models took: `model_calls` is the number of the
@@ -352,7 +352,7 @@ message:
 | `process-inbox.evaluated` | INFO | a job description was evaluated (`id`, `state`, `reason`) |
 | `process-inbox.attachment_failed` | INFO | an attachment could not be read (`id`, `file`, `reason`) |
 | `process-inbox.draft_written` | INFO | a draft was written (`id`, `draft`, `reason`) |
-| `process-inbox.draft_failed` | WARN | no draft could be written (`id`, `reason`) |
+| `process-inbox.draft_failed` | WARN | no draft could be written, the mail keeps no label (`id`, `reason`) |
 | `process-inbox.window_fallback` | WARN | the moment of the last run is not in the past (`last_run`) |
 | `process-inbox.completed` | INFO | the run is done, the attributes are the counters of the run and what the calls to the models took, the id of the message instead of the window for a run of one message |
 | `pending.listed` / `pending.message` | INFO | the messages that were not processed yet |
@@ -663,10 +663,13 @@ writes from an address nobody reads names the address of the recruiter in its
 own and a `MIME-Version`, and it replies to the `Message-ID` of the original
 message.
 
-The message keeps the label `Recruiters/NeedsMoreInformation`: the search of the
-pending messages skips it and the draft is written once. A message the model
-could not evaluate gets no draft - the model does not know what is missing. The
-run reports the drafts it wrote in the log:
+The draft is written before the label of the state is applied. The message keeps the
+label `Recruiters/NeedsMoreInformation`: the search of the pending messages skips
+it and the draft is written once. A draft that could not be written is a failure
+of the message: it keeps no label, the run counts it as `failed` and the next
+run looks at it again. A message the model could not evaluate gets no draft -
+the model does not know what is missing. The run reports the drafts it wrote in
+the log:
 
 ```json
 {"timestamp":"…","level":"INFO","event":"process-inbox.draft_written","message":"A draft that asks the recruiter for the missing information was written","attributes":{"id":"…","draft":"…","reason":"the message states no pay"}}
