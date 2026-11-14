@@ -178,70 +178,74 @@ fun gmailEngine(
     draftFails: Boolean = false,
 ): MockEngine =
     MockEngine { request ->
-        when {
-            request.url.encodedPath.endsWith("/users/me/messages") -> {
-                respond(
-                    content = MESSAGE_LIST,
-                    status = HttpStatusCode.OK,
-                    headers = jsonHeaders(),
-                )
-            }
-
-            request.url.encodedPath.endsWith("/users/me/labels") && request.method.value == "GET" -> {
-                respond(
-                    content = """{"labels":[{"id":"Label_worthfollowup","name":"Recruiters/WorthFollowUp"}]}""",
-                    status = HttpStatusCode.OK,
-                    headers = jsonHeaders(),
-                )
-            }
-
-            request.url.encodedPath.endsWith("/users/me/labels") -> {
-                val name =
-                    Json
-                        .parseToJsonElement((request.body as TextContent).text)
-                        .jsonObject["name"]!!
-                        .jsonPrimitive
-                        .content
-                respond(
-                    content = """{"id":"${idOf(name)}","name":"$name"}""",
-                    status = HttpStatusCode.OK,
-                    headers = jsonHeaders(),
-                )
-            }
-
-            request.url.encodedPath.endsWith("/users/me/drafts") && draftFails -> {
-                respond(
-                    content = """{"error":"the draft cannot be written"}""",
-                    status = HttpStatusCode.InternalServerError,
-                    headers = jsonHeaders(),
-                )
-            }
-
-            request.url.encodedPath.endsWith("/users/me/drafts") -> {
-                respond(
-                    content = """{"id":"draft-id"}""",
-                    status = HttpStatusCode.OK,
-                    headers = jsonHeaders(),
-                )
-            }
-
-            request.url.encodedPath.endsWith("/modify") && modifyFails -> {
-                respond(
-                    content = """{"error":"the labels cannot be changed"}""",
-                    status = HttpStatusCode.InternalServerError,
-                    headers = jsonHeaders(),
-                )
-            }
-
-            else -> {
-                respond(
-                    content = message(idOf(request), listing, labels),
-                    status = HttpStatusCode.OK,
-                    headers = jsonHeaders(),
-                )
-            }
-        }
+        val answer = answerOf(request, listing, labels, modifyFails, draftFails)
+        respond(content = answer.content, status = answer.status, headers = jsonHeaders())
     }
+
+/**
+ * The answer of the API of Gmail for a request.
+ *
+ * @param request the request of the API.
+ * @param listing whether the messages are the alerts of a job board.
+ * @param labels the labels the messages carry.
+ * @param modifyFails whether the labels of a message cannot be changed.
+ * @param draftFails whether a draft cannot be written.
+ * @return the answer of the API.
+ */
+private fun answerOf(
+    request: HttpRequestData,
+    listing: Boolean,
+    labels: List<String>,
+    modifyFails: Boolean,
+    draftFails: Boolean,
+): Answer {
+    val path = request.url.encodedPath
+    return when {
+        path.endsWith("/users/me/messages") -> Answer(MESSAGE_LIST)
+
+        path.endsWith("/users/me/labels") && request.method.value == "GET" -> Answer(LABEL_LIST)
+
+        path.endsWith("/users/me/labels") -> Answer(labelOf(request))
+
+        path.endsWith("/users/me/drafts") && draftFails -> Answer(DRAFT_ERROR, HttpStatusCode.InternalServerError)
+
+        path.endsWith("/users/me/drafts") -> Answer(DRAFT)
+
+        // The API answers a delete with an empty body.
+        request.method.value == "DELETE" -> Answer("")
+
+        path.endsWith("/modify") && modifyFails -> Answer(MODIFY_ERROR, HttpStatusCode.InternalServerError)
+
+        else -> Answer(message(idOf(request), listing, labels))
+    }
+}
+
+/**
+ * The label the API creates.
+ *
+ * @param request the request of the API.
+ * @return the answer of the API.
+ */
+private fun labelOf(request: HttpRequestData): String {
+    val name =
+        Json
+            .parseToJsonElement((request.body as TextContent).text)
+            .jsonObject["name"]!!
+            .jsonPrimitive
+            .content
+    return """{"id":"${idOf(name)}","name":"$name"}"""
+}
+
+/**
+ * The answer of the API of the tests.
+ *
+ * @property content the body of the answer.
+ * @property status the status of the answer.
+ */
+private data class Answer(
+    val content: String,
+    val status: HttpStatusCode = HttpStatusCode.OK,
+)
 
 /**
  * The id of a label of the mailbox.
@@ -374,6 +378,19 @@ internal const val DECISION_ANSWER =
 /** The answer of the chat model of the tests. */
 internal const val CHAT_ANSWER =
     """{"message":{"role":"assistant","content":"the reply of the model"},"done":true}"""
+
+/** The labels of the mailbox of the tests. */
+internal const val LABEL_LIST: String =
+    """{"labels":[{"id":"Label_worthfollowup","name":"Recruiters/WorthFollowUp"}]}"""
+
+/** The draft the mailbox of the tests writes. */
+internal const val DRAFT: String = """{"id":"draft-id"}"""
+
+/** The answer of the mailbox of the tests when a draft cannot be written. */
+internal const val DRAFT_ERROR: String = """{"error":"the draft cannot be written"}"""
+
+/** The answer of the mailbox of the tests when the labels cannot be changed. */
+internal const val MODIFY_ERROR: String = """{"error":"the labels cannot be changed"}"""
 
 /** The list of the messages of the tests. */
 internal const val MESSAGE_LIST =

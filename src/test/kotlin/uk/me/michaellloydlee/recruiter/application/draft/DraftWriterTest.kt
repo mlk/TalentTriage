@@ -342,9 +342,10 @@ class DraftWriterTest {
     @Test
     fun removesTheDraftFromTheMailbox() =
         runTest {
+            // The API answers a delete with an empty body.
             val gmail =
                 MockEngine {
-                    respond(content = "{}", status = HttpStatusCode.OK)
+                    respond(content = "", status = HttpStatusCode.OK)
                 }
 
             val failure = writer(modelEngine(), gmail).delete("draft-id")
