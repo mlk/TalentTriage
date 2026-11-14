@@ -171,23 +171,23 @@ cannot change it, the mail is trashed and no draft is written.
 * The minimum pay of the job seeker is only named when `share_minimum_pay` says so.
 * A mail the model could not evaluate gets no draft: the model does not know what is missing.
 * A draft is not a state of the pipeline. The draft is written before the state label is applied, the
-  mail keeps the label `Recruiters/NeedsMoreInformation` and the draft is written once. A draft that
-  could not be written is a failure of the mail: the mail keeps no label and the next run looks at it
-  again.
+  mail keeps the label `Recruiters/NeedsMoreInformation` and the label keeps the next run from writing
+  the draft again. A draft that could not be written is a failure of the mail: the mail keeps no label
+  and the next run looks at it again.
 * A state label that cannot be applied is a failure of the mail, like a draft that could not be
   written: the mail keeps no label, the run counts it as `failed` and the next run looks at it again.
   The guarantee does not depend on the error ending the run — it is the counter that holds the window
   open.
-* A state label that cannot be applied after the draft was written leaves the mail without a label: the
-  draft the pipeline wrote is removed again, so the next run writes it again and the job seeker does
-  not find two drafts for the same mail.
 * The pipeline never guesses whether a request was applied: the mailbox is the state store, it says
   whether the label is on the mail. A mail that carries the label is in its state, a mail that does
   not carry it keeps no label.
-* The draft of a mail is only removed when the API rejected the request (a status of the client, a
-  4xx) and the mailbox says the label is not on the mail. A request the API failed on, or whose
-  answer was lost or could not be read, may still be in flight: the draft stays, because a mail with
-  a label and without a draft would wait for the job seeker forever.
+* The draft of a mail whose label could not be applied is removed again, so the job seeker does not
+  find two drafts for the same mail and the next run writes the draft once more. It is only removed
+  when the API rejected the request (a status of the client, a 4xx) and the mailbox says the label is
+  not on the mail. A request the API failed on, or whose answer was lost or could not be read, may
+  still be in flight: the draft stays — a mail with a label and without a draft would wait for the job
+  seeker forever — and the next run writes a second draft for it, one more draft on every run while
+  the failure lasts.
 * The label of a job listing is applied by the screening, not by the run: a listing whose label cannot
   be applied breaks the run. The window stays open either way — the moment of the last successful run
   is not written.
