@@ -100,9 +100,13 @@ is validated like input:
 * **Unknown keys fail.** A typo in a key is an error, never a silent keep-the-code-default. The
   job seeker believes their rules are applied; a silent ignore is a lie.
 * **Words are trimmed on the way in.** A whitespace-padded word is a rule that matches nothing.
-* **A blank word is an error**, an empty file is an error, both name the file.
-* **The defaults apply only when nothing was provided.** No file → the documented defaults. A
-  file named on the command line that does not exist → an error, never a silent fallback.
+* **A blank word is an error**, an empty file — no parseable content, zero bytes or whitespace
+  only — is an error, both name the file. A file holding `{}` is not empty: it provides no keys
+  and gets the defaults.
+* **Defaults fill the keys the file does not provide.** No file → the documented defaults; a file
+  that provides no keys (`{}`) → exactly the defaults; a file that provides some keys → those
+  keys win, the rest are the defaults. A file named on the command line that does not exist → an
+  error, never a silent fallback.
 * **User-authored strings are data.** They are matched literally (`contains`), never compiled into
   a regular expression.
 * **A default has one source of truth.** The constructor and the loader reference the same
