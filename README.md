@@ -690,9 +690,13 @@ The pipeline never guesses whether the request was applied: the mailbox is the
 state store, so the run reads the message and looks for the label. A message
 that carries the label is in its state — the draft stays and the run counts it
 as such. A message that does not carry it keeps no label: the draft is removed
-and the next run writes it again. Only when the mailbox itself cannot be read
-the run gives up on the answer and keeps the draft, because a message with a
-label and without a draft would wait for the job seeker forever.
+and the next run writes it again.
+
+The draft is only removed when the API rejected the request (a status of the
+client, a 4xx). A request the API failed on, or whose answer was lost or could
+not be read, may still be in flight: the draft stays then, and when the mailbox
+itself cannot be read, because a message with a label and without a draft would
+wait for the job seeker forever.
 
 The label of a job listing is applied by the screening, not by the run: a
 listing whose label cannot be applied breaks the run. The window stays open

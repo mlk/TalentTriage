@@ -218,18 +218,18 @@ class ProcessInboxService(
                 counters.count(state)
                 null
             } catch (error: GmailApiException) {
-                reasonOf(error)
+                Failure(reasonOf(error), rejected = isRejected(error))
             } catch (error: IOException) {
-                reasonOf(error)
+                Failure(reasonOf(error), rejected = false)
             } catch (error: SerializationException) {
-                reasonOf(error)
+                Failure(reasonOf(error), rejected = false)
             }
         if (failure == null) {
             return LabelOutcome.APPLIED
         }
-        val outcome = presenceOf(message, state)
-        if (outcome == LabelOutcome.APPLIED) {
-            // The label was applied after all: the mail is in its state.
+        val presence = presenceOf(message, state)
+        if (presence == LabelOutcome.APPLIED) {
+            // The label is on the mail: the mail is in its state.
             counters.count(state)
             return LabelOutcome.APPLIED
         }
@@ -241,12 +241,32 @@ class ProcessInboxService(
                 mapOf(
                     "id" to message.id,
                     "state" to state.name,
-                    "label" to outcome.name,
-                    "reason" to failure,
+                    "outcome" to presence.name,
+                    "reason" to failure.reason,
                 ),
         )
-        return outcome
+        // The draft of the mail is only removed when the API rejected the
+        // request and the mailbox says the label is not on the mail: a request
+        // that was not rejected may still be in flight.
+        return if (failure.rejected && presence == LabelOutcome.NOT_APPLIED) {
+            LabelOutcome.NOT_APPLIED
+        } else {
+            LabelOutcome.UNKNOWN
+        }
     }
+
+    /**
+     * Whether the API rejected the request.
+     *
+     * A request the API answered with an error of the client was not applied.
+     * A request the API answered with an error of the server, or whose answer
+     * was lost, may still be in flight.
+     *
+     * @param error the error of the API.
+     * @return whether the request was rejected.
+     */
+    private fun isRejected(error: GmailApiException): Boolean =
+        error.statusCode in CLIENT_ERROR_STATUS..SERVER_ERROR_STATUS
 
     /**
      * Whether the mail carries the label of its state.
@@ -429,6 +449,17 @@ class ProcessInboxService(
         }
 
     /**
+     * The failure of a state label.
+     *
+     * @property reason what went wrong, it goes into the log.
+     * @property rejected whether the API rejected the request.
+     */
+    private data class Failure(
+        val reason: String,
+        val rejected: Boolean,
+    )
+
+    /**
      * What happened to the state label of a mail.
      *
      * The label of a mail is applied with a request to the API: the request
@@ -478,6 +509,12 @@ class ProcessInboxService(
     }
 
     companion object {
+        /** The status of a request the API rejected: nothing was applied. */
+        private const val CLIENT_ERROR_STATUS: Int = 400
+
+        /** The status of a request the API failed on: it may be in flight. */
+        private const val SERVER_ERROR_STATUS: Int = 499
+
         /** The event of the log of a screened message. */
         const val EVENT_SCREENED: String = "process-inbox.screened"
 

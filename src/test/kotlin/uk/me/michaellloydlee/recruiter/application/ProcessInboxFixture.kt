@@ -208,9 +208,19 @@ internal fun gmailEngine(
  *   applied.
  */
 internal enum class MailboxFailure {
+    /** Every request succeeds. */
     NONE,
+
+    /** The API rejects the request: the label was not applied. */
     REJECTED,
+
+    /** The API fails: the request may still be in flight. */
+    SERVER_ERROR,
+
+    /** The answer of the API never arrives: the request may still be in flight. */
     LOST,
+
+    /** The answer of the API cannot be read: the label was applied. */
     UNREADABLE,
 
     /**
@@ -271,10 +281,11 @@ private fun modifyAnswer(
 ): Answer =
     when (failure) {
         MailboxFailure.NONE -> Answer(message(idOf(request)))
-        MailboxFailure.REJECTED -> Answer(MODIFY_ERROR, HttpStatusCode.InternalServerError)
+        MailboxFailure.REJECTED -> Answer(MODIFY_ERROR, HttpStatusCode.Forbidden)
+        MailboxFailure.SERVER_ERROR -> Answer(MODIFY_ERROR, HttpStatusCode.InternalServerError)
         MailboxFailure.LOST -> throw IOException("the network is down")
         MailboxFailure.UNREADABLE -> Answer("this is not json")
-        MailboxFailure.MAILBOX_LOST -> Answer(MODIFY_ERROR, HttpStatusCode.InternalServerError)
+        MailboxFailure.MAILBOX_LOST -> Answer(MODIFY_ERROR, HttpStatusCode.Forbidden)
     }
 
 /**

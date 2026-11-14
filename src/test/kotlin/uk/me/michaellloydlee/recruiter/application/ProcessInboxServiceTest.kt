@@ -444,6 +444,7 @@ class ProcessInboxServiceTest {
 
             assertEquals(2, summary.failed)
             assertEquals(0, summary.worthFollowUp)
+            assertEquals(0, summary.trashed)
         }
 
     @Test
@@ -491,11 +492,11 @@ class ProcessInboxServiceTest {
         }
 
     @Test
-    fun removesTheDraftWhenTheMailboxSaysTheLabelIsNotThere() =
+    fun keepsTheDraftWhenTheRequestMayStillBeInFlight() =
         runTest {
-            // The answer of the API was lost, but the mailbox says the label
-            // is not on the mail: the draft is removed and the next run
-            // writes it again.
+            // The answer of the API was lost: the request may still be in
+            // flight, so the draft stays. A mail with a label and without a
+            // draft would wait for the job seeker forever.
             val gmail = gmailEngine(failure = MailboxFailure.LOST)
             val model = modelEngine(officeDays = "unclear")
 
@@ -503,8 +504,26 @@ class ProcessInboxServiceTest {
 
             assertEquals(2, summary.drafts)
             assertEquals(2, summary.failed)
+            assertEquals(0, summary.needsMoreInformation)
             val deletions = gmail.requestHistory.filter { it.method.value == "DELETE" }
-            assertEquals(2, deletions.size)
+            assertTrue(deletions.isEmpty())
+        }
+
+    @Test
+    fun keepsTheDraftWhenTheApiFailed() =
+        runTest {
+            // The API answered with an error of the server: the request may
+            // still be in flight, so the draft stays.
+            val gmail = gmailEngine(failure = MailboxFailure.SERVER_ERROR)
+            val model = modelEngine(officeDays = "unclear")
+
+            val summary = service(gmail, model).run(WINDOW)
+
+            assertEquals(2, summary.drafts)
+            assertEquals(2, summary.failed)
+            assertEquals(0, summary.needsMoreInformation)
+            val deletions = gmail.requestHistory.filter { it.method.value == "DELETE" }
+            assertTrue(deletions.isEmpty())
         }
 
     @Test
@@ -521,6 +540,7 @@ class ProcessInboxServiceTest {
 
             val summary = service(gmail, model).run(WINDOW)
 
+            assertEquals(2, summary.drafts)
             assertEquals(2, summary.needsMoreInformation)
             assertEquals(0, summary.failed)
             val deletions = gmail.requestHistory.filter { it.method.value == "DELETE" }
@@ -544,6 +564,23 @@ class ProcessInboxServiceTest {
         }
 
     @Test
+    fun keepsTheDraftWhenTheAnswerOfTheLabelCannotBeRead() =
+        runTest {
+            // The answer of the API cannot be read: the request may still be in
+            // flight, so the draft stays.
+            val gmail = gmailEngine(failure = MailboxFailure.UNREADABLE)
+            val model = modelEngine(officeDays = "unclear")
+
+            val summary = service(gmail, model).run(WINDOW)
+
+            assertEquals(2, summary.drafts)
+            assertEquals(2, summary.failed)
+            assertEquals(0, summary.needsMoreInformation)
+            val deletions = gmail.requestHistory.filter { it.method.value == "DELETE" }
+            assertTrue(deletions.isEmpty())
+        }
+
+    @Test
     fun countsAMailWhoseLabelCannotBeReadAnywayAsInItsState() =
         runTest {
             // The answer of the API cannot be read, but the mailbox says the
@@ -558,6 +595,7 @@ class ProcessInboxServiceTest {
 
             val summary = service(gmail, model).run(WINDOW)
 
+            assertEquals(2, summary.drafts)
             assertEquals(2, summary.needsMoreInformation)
             assertEquals(0, summary.failed)
             val deletions = gmail.requestHistory.filter { it.method.value == "DELETE" }
@@ -570,8 +608,11 @@ class ProcessInboxServiceTest {
             val gmail = gmailEngine()
             val model = modelEngine(officeDays = "unclear")
 
-            service(gmail, model).run(WINDOW)
+            val summary = service(gmail, model).run(WINDOW)
 
+            assertEquals(2, summary.drafts)
+            assertEquals(2, summary.needsMoreInformation)
+            assertEquals(0, summary.failed)
             val deletions = gmail.requestHistory.filter { it.method.value == "DELETE" }
             assertTrue(deletions.isEmpty())
         }

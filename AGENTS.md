@@ -180,13 +180,14 @@ cannot change it, the mail is trashed and no draft is written.
   open.
 * A state label that cannot be applied after the draft was written leaves the mail without a label: the
   draft the pipeline wrote is removed again, so the next run writes it again and the job seeker does
-  not find two drafts for the same mail. The draft is only removed when the mailbox says the label
-  is not on the mail: when the answer of the API was lost or could not be read, the mailbox says
-  whether the label was applied, and a mail with a label and without a draft would wait for the job
-  seeker forever.
+  not find two drafts for the same mail.
 * The pipeline never guesses whether a request was applied: the mailbox is the state store, it says
   whether the label is on the mail. A mail that carries the label is in its state, a mail that does
   not carry it keeps no label.
+* The draft of a mail is only removed when the API rejected the request (a status of the client, a
+  4xx) and the mailbox says the label is not on the mail. A request the API failed on, or whose
+  answer was lost or could not be read, may still be in flight: the draft stays, because a mail with
+  a label and without a draft would wait for the job seeker forever.
 * The label of a job listing is applied by the screening, not by the run: a listing whose label cannot
   be applied breaks the run. The window stays open either way — the moment of the last successful run
   is not written.
