@@ -685,6 +685,11 @@ the pipeline wrote is removed again, so the job seeker does not find two drafts
 for the same mail — the run counts the message as `failed` and goes on with the
 other mails.
 
+The draft is only removed when the API rejected the request. When the answer of
+the API was lost or could not be read, the label may have been applied: the
+draft stays, because a message with a label and without a draft would wait for
+the job seeker forever.
+
 The label of a job listing is applied by the screening, not by the run: a
 listing whose label cannot be applied breaks the run. The window stays open
 either way, the moment of the last successful run is not written.

@@ -178,9 +178,11 @@ cannot change it, the mail is trashed and no draft is written.
   written: the mail keeps no label, the run counts it as `failed` and the next run looks at it again.
   The guarantee does not depend on the error ending the run — it is the counter that holds the window
   open.
-* A state label that cannot be applied after the draft was written leaves the mail without a label:
-  the draft the pipeline wrote is removed again, so the next run writes it again and the job seeker
-  does not find two drafts for the same mail.
+* A state label that cannot be applied after the draft was written leaves the mail without a label: the
+  draft the pipeline wrote is removed again, so the next run writes it again and the job seeker does
+  not find two drafts for the same mail. The draft is only removed when the API rejected the request
+  (`GmailApiException`): when the answer of the API was lost or could not be read, the label may have
+  been applied, and a mail with a label and without a draft would wait for the job seeker forever.
 * The label of a job listing is applied by the screening, not by the run: a listing whose label cannot
   be applied breaks the run. The window stays open either way — the moment of the last successful run
   is not written.

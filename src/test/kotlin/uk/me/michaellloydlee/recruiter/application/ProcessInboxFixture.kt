@@ -38,6 +38,7 @@ import uk.me.michaellloydlee.recruiter.infrastructure.llm.ModelUsageCounter
 import uk.me.michaellloydlee.recruiter.infrastructure.llm.OllamaChatClient
 import uk.me.michaellloydlee.recruiter.infrastructure.llm.OllamaDecisionClient
 import uk.me.michaellloydlee.recruiter.infrastructure.logging.StructuredLogger
+import java.io.IOException
 import java.time.Instant
 import java.util.Base64
 
@@ -168,19 +169,36 @@ fun modelEngine(
  *
  * @param listing whether the messages are the alerts of a job board.
  * @param labels the labels the messages carry.
- * @param modifyFails whether the labels of a message cannot be changed.
+ * @param failure what the mailbox does when the labels of a message change.
  * @return the engine of the API of Gmail.
  */
-fun gmailEngine(
+internal fun gmailEngine(
     listing: Boolean = false,
     labels: List<String> = listOf("INBOX"),
-    modifyFails: Boolean = false,
+    failure: MailboxFailure = MailboxFailure.NONE,
     draftFails: Boolean = false,
 ): MockEngine =
     MockEngine { request ->
-        val answer = answerOf(request, listing, labels, modifyFails, draftFails)
+        val answer = answerOf(request, listing, labels, failure, draftFails)
         respond(content = answer.content, status = answer.status, headers = jsonHeaders())
     }
+
+/**
+ * What the mailbox does when the labels of a message change.
+ *
+ * @property NONE the request succeeds.
+ * @property REJECTED the API answers with an error: the label was not applied.
+ * @property LOST the answer of the API never arrives: the label may have been
+ *   applied.
+ * @property UNREADABLE the answer of the API cannot be read: the label was
+ *   applied.
+ */
+internal enum class MailboxFailure {
+    NONE,
+    REJECTED,
+    LOST,
+    UNREADABLE,
+}
 
 /**
  * The answer of the API of Gmail for a request.
@@ -188,7 +206,7 @@ fun gmailEngine(
  * @param request the request of the API.
  * @param listing whether the messages are the alerts of a job board.
  * @param labels the labels the messages carry.
- * @param modifyFails whether the labels of a message cannot be changed.
+ * @param failure what the mailbox does when the labels of a message change.
  * @param draftFails whether a draft cannot be written.
  * @return the answer of the API.
  */
@@ -196,7 +214,7 @@ private fun answerOf(
     request: HttpRequestData,
     listing: Boolean,
     labels: List<String>,
-    modifyFails: Boolean,
+    failure: MailboxFailure,
     draftFails: Boolean,
 ): Answer {
     val path = request.url.encodedPath
@@ -214,11 +232,29 @@ private fun answerOf(
         // The API answers a delete with an empty body.
         request.method.value == "DELETE" -> Answer("")
 
-        path.endsWith("/modify") && modifyFails -> Answer(MODIFY_ERROR, HttpStatusCode.InternalServerError)
+        path.endsWith("/modify") -> modifyAnswer(request, failure)
 
         else -> Answer(message(idOf(request), listing, labels))
     }
 }
+
+/**
+ * The answer of the API when the labels of a message change.
+ *
+ * @param request the request of the API.
+ * @param failure what the mailbox does.
+ * @return the answer of the API.
+ */
+private fun modifyAnswer(
+    request: HttpRequestData,
+    failure: MailboxFailure,
+): Answer =
+    when (failure) {
+        MailboxFailure.NONE -> Answer(message(idOf(request)))
+        MailboxFailure.REJECTED -> Answer(MODIFY_ERROR, HttpStatusCode.InternalServerError)
+        MailboxFailure.LOST -> throw IOException("the network is down")
+        MailboxFailure.UNREADABLE -> Answer("this is not json")
+    }
 
 /**
  * The label the API creates.

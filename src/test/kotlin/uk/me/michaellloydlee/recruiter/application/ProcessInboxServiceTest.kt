@@ -437,7 +437,7 @@ class ProcessInboxServiceTest {
     @Test
     fun countsAMailWhoseLabelCouldNotBeAppliedAsFailed() =
         runTest {
-            val gmail = gmailEngine(modifyFails = true)
+            val gmail = gmailEngine(failure = MailboxFailure.REJECTED)
             val model = modelEngine()
 
             val summary = service(gmail, model).run(WINDOW)
@@ -449,7 +449,7 @@ class ProcessInboxServiceTest {
     @Test
     fun goesOnWithTheOtherMailsWhenALabelCouldNotBeApplied() =
         runTest {
-            val gmail = gmailEngine(modifyFails = true)
+            val gmail = gmailEngine(failure = MailboxFailure.REJECTED)
             val model = modelEngine()
 
             val summary = service(gmail, model).run(WINDOW)
@@ -461,7 +461,7 @@ class ProcessInboxServiceTest {
     @Test
     fun theLogSaysThatTheLabelCouldNotBeApplied() =
         runTest {
-            val gmail = gmailEngine(modifyFails = true)
+            val gmail = gmailEngine(failure = MailboxFailure.REJECTED)
             val model = modelEngine()
             val log = StringBuilder()
 
@@ -473,10 +473,10 @@ class ProcessInboxServiceTest {
     @Test
     fun countsAMailWhoseDraftWasWrittenAndWhoseLabelFailedAsFailed() =
         runTest {
-            // The draft is written, the label cannot be applied: the draft is
-            // removed again, the mail keeps no label and the next run writes
-            // the draft again.
-            val gmail = gmailEngine(modifyFails = true)
+            // The API rejected the request, the label was not applied: the
+            // draft is removed again, the mail keeps no label and the next run
+            // writes the draft again.
+            val gmail = gmailEngine(failure = MailboxFailure.REJECTED)
             val model = modelEngine(officeDays = "unclear")
 
             val summary = service(gmail, model).run(WINDOW)
@@ -488,6 +488,39 @@ class ProcessInboxServiceTest {
             assertEquals(2, labels.size)
             val deletions = gmail.requestHistory.filter { it.method.value == "DELETE" }
             assertEquals(2, deletions.size)
+        }
+
+    @Test
+    fun keepsTheDraftWhenTheAnswerOfTheLabelWasLost() =
+        runTest {
+            // The answer of the API was lost: the label may have been applied,
+            // so the draft stays. A mail with a label and without a draft
+            // would wait for the job seeker forever.
+            val gmail = gmailEngine(failure = MailboxFailure.LOST)
+            val model = modelEngine(officeDays = "unclear")
+
+            val summary = service(gmail, model).run(WINDOW)
+
+            assertEquals(2, summary.drafts)
+            assertEquals(2, summary.failed)
+            val deletions = gmail.requestHistory.filter { it.method.value == "DELETE" }
+            assertTrue(deletions.isEmpty())
+        }
+
+    @Test
+    fun keepsTheDraftWhenTheAnswerOfTheLabelCannotBeRead() =
+        runTest {
+            // The answer of the API cannot be read: the label was applied, so
+            // the draft stays.
+            val gmail = gmailEngine(failure = MailboxFailure.UNREADABLE)
+            val model = modelEngine(officeDays = "unclear")
+
+            val summary = service(gmail, model).run(WINDOW)
+
+            assertEquals(2, summary.drafts)
+            assertEquals(2, summary.failed)
+            val deletions = gmail.requestHistory.filter { it.method.value == "DELETE" }
+            assertTrue(deletions.isEmpty())
         }
 
     @Test

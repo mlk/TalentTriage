@@ -200,31 +200,35 @@ class ProcessInboxService(
      * @param message the mail of the recruiter.
      * @param state the state the mail changes to.
      * @param counters the counters of the run.
-     * @return whether the label was applied.
+     * @return what happened to the label.
      */
     private suspend fun applyState(
         message: EmailMessage,
         state: EvaluationState,
         counters: Counters,
-    ): Boolean {
-        // The reason of the failure, null when the label was applied.
-        val failure =
+    ): LabelOutcome {
+        val outcome =
             try {
                 stateManager.apply(message.id, state)
                 counters.count(state)
-                null
+                LabelOutcome.APPLIED
             } catch (error: GmailApiException) {
-                reasonOf(error)
+                // The API answered with an error: the request was rejected and
+                // the label was not applied.
+                labelFailed(message, state, counters, reasonOf(error))
+                LabelOutcome.REJECTED
             } catch (error: IOException) {
-                reasonOf(error)
+                // The answer of the API was lost: the label may have been
+                // applied, the draft of the mail has to stay.
+                labelFailed(message, state, counters, reasonOf(error))
+                LabelOutcome.UNKNOWN
             } catch (error: SerializationException) {
-                reasonOf(error)
+                // The answer of the API could not be read: the label was
+                // applied, the draft of the mail has to stay.
+                labelFailed(message, state, counters, reasonOf(error))
+                LabelOutcome.UNKNOWN
             }
-        if (failure != null) {
-            labelFailed(message, state, counters, failure)
-            return false
-        }
-        return true
+        return outcome
     }
 
     /**
@@ -305,10 +309,11 @@ class ProcessInboxService(
                             "reason" to reasonOf(evaluation),
                         ),
                 )
-                if (!applyState(message, evaluation.state, counters)) {
-                    // The label could not be applied: the draft the pipeline
-                    // wrote is removed, the next run writes it again and the
-                    // job seeker does not find two drafts for the same mail.
+                if (applyState(message, evaluation.state, counters) == LabelOutcome.REJECTED) {
+                    // The API rejected the request, the label was not applied:
+                    // the draft the pipeline wrote is removed, the next run
+                    // writes it again and the job seeker does not find two
+                    // drafts for the same mail.
                     removeDraft(message, outcome.draftId)
                 }
             }
@@ -384,6 +389,31 @@ class ProcessInboxService(
                 "The model could not evaluate the job description: ${evaluation.reason}"
             }
         }
+
+    /**
+     * What happened to the state label of a mail.
+     *
+     * The label of a mail is applied with a request to the API: the request
+     * can be rejected, its answer can be lost or it can be read. Only a
+     * rejected request says that the label was not applied — the draft of the
+     * mail may only be removed then.
+     */
+    private enum class LabelOutcome {
+        /** The label was applied, the mail carries the state. */
+        APPLIED,
+
+        /**
+         * The API answered with an error: the request was rejected and the
+         * label was not applied.
+         */
+        REJECTED,
+
+        /**
+         * The answer of the API was lost or could not be read: the label may
+         * have been applied.
+         */
+        UNKNOWN,
+    }
 
     /**
      * The counters of a run.

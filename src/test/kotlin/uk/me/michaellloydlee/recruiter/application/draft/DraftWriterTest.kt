@@ -36,6 +36,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
+import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
@@ -364,10 +365,9 @@ class DraftWriterTest {
                     respond(content = """{"error":"quota"}""", status = HttpStatusCode.Forbidden)
                 }
 
-            val failure = writer(modelEngine(), gmail).delete("draft-id")
+            val reason = assertNotNull(writer(modelEngine(), gmail).delete("draft-id"))
 
-            assertTrue(failure != null)
-            assertTrue(failure.contains("GmailApiException"))
+            assertTrue(reason.contains("GmailApiException"))
         }
 
     private suspend fun writer(
