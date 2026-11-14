@@ -81,11 +81,12 @@ record holds the stack trace in its message, the log of a run stays one JSON obj
 entry point catches what the pipeline throws at it and logs it — the exception is not hidden.
 
 Translate exceptions at the boundary. When the layer below throws, catch what it actually throws —
-`IOException` from the file system, `SerializationException` from the parser — and re-throw the
-error type the caller handles, with a message that says what actually failed. A message that
-blames the wrong cause ("could not be read" for a file that is not valid JSON, or for an empty
-file) sends the job seeker down the wrong path — name the file and the problem. The same for a
-file that vanished between the check and the read: it is not "missing, use the defaults".
+`IOException` from the file system, `kotlinx.serialization.SerializationException` from the parser —
+and re-throw the error type the caller handles, with the original exception as the cause and a message
+that says what actually failed. A message that blames the wrong cause ("could not be read" for a file
+that is not valid JSON, or for an empty file) sends the job seeker down the wrong path — name the
+file and the problem. The same for a file that vanished between the check and the read: it is not
+"missing, use the defaults".
 
 ### Everything is injected
 
