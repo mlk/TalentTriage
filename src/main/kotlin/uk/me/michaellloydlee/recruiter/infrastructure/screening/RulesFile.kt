@@ -44,7 +44,9 @@ data class ScreeningRules(
  * ```
  *
  * A field that is not in the file keeps the rule of the code, a field that is
- * in the file replaces the list of the code, an empty list empties it.
+ * in the file replaces the list of the code, an empty list empties it. A key
+ * that is not one of the four fields is an error, so a typo in the file does
+ * not silently keep the rule of the code. An empty file is an error too.
  */
 object RulesFile {
     /**
@@ -57,33 +59,13 @@ object RulesFile {
      */
     fun load(
         path: Path,
-        json: Json = Json { ignoreUnknownKeys = true },
+        json: Json = Json { ignoreUnknownKeys = false },
     ): ScreeningRules {
         require(Files.exists(path)) {
             "Rules file not found: $path"
         }
-        val text =
-            try {
-                Files.readString(path)
-            } catch (error: IOException) {
-                throw IllegalArgumentException("Rules file $path could not be read: ${error.message}", error)
-            }
-        val file =
-            try {
-                json.decodeFromString(Rules.serializer(), text)
-            } catch (error: IllegalArgumentException) {
-                throw IllegalArgumentException("Rules file $path could not be read: ${error.message}", error)
-            }
-        listOf(
-            "recruiter_keywords" to file.recruiterKeywords,
-            "recruiter_sender_hints" to file.recruiterSenderHints,
-            "job_board_senders" to file.jobBoardSenders,
-            "job_listing_phrases" to file.jobListingPhrases,
-        ).forEach { (name, words) ->
-            require(words == null || words.none { it.isBlank() }) {
-                "Rules file $path holds a blank word in $name"
-            }
-        }
+        val file = decode(path, read(path), json)
+        validate(path, file)
         return ScreeningRules(
             recruiter =
                 RecruiterHeuristics(
@@ -96,6 +78,46 @@ object RulesFile {
                     phrases = file.jobListingPhrases ?: JobListingHeuristics.DEFAULT_PHRASES,
                 ),
         )
+    }
+
+    private fun read(path: Path): String {
+        val text =
+            try {
+                Files.readString(path)
+            } catch (error: IOException) {
+                throw IllegalArgumentException("Rules file $path could not be read: ${error.message}", error)
+            }
+        require(text.isNotBlank()) {
+            "Rules file $path is empty"
+        }
+        return text
+    }
+
+    private fun decode(
+        path: Path,
+        text: String,
+        json: Json,
+    ): Rules =
+        try {
+            json.decodeFromString(Rules.serializer(), text)
+        } catch (error: IllegalArgumentException) {
+            throw IllegalArgumentException("Rules file $path could not be read: ${error.message}", error)
+        }
+
+    private fun validate(
+        path: Path,
+        file: Rules,
+    ) {
+        listOf(
+            "recruiter_keywords" to file.recruiterKeywords,
+            "recruiter_sender_hints" to file.recruiterSenderHints,
+            "job_board_senders" to file.jobBoardSenders,
+            "job_listing_phrases" to file.jobListingPhrases,
+        ).forEach { (name, words) ->
+            require(words == null || words.none { it.isBlank() }) {
+                "Rules file $path holds a blank word in $name"
+            }
+        }
     }
 
     @Serializable

@@ -93,6 +93,24 @@ class RulesFileTest {
     }
 
     @Test
+    fun failsWhenTheFileIsEmpty() {
+        val file = rulesFile("")
+
+        val error = assertFailsWith<IllegalArgumentException> { RulesFile.load(file) }
+
+        assertTrue(error.message!!.contains("is empty"))
+    }
+
+    @Test
+    fun failsWhenTheFileHoldsAnUnknownKey() {
+        val file = rulesFile("""{"recruiter_keyword": ["stellenangebot"]}""")
+
+        val error = assertFailsWith<IllegalArgumentException> { RulesFile.load(file) }
+
+        assertTrue(error.message!!.contains("recruiter_keyword"))
+    }
+
+    @Test
     fun failsWhenTheFileIsNotValidJson() {
         val file = rulesFile("not json at all")
 
