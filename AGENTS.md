@@ -111,6 +111,11 @@ of the four state labels below `Recruiters/` — `JobListing`, `WorthFollowUp`,
   of the subject decide it without a model, the model is the fallback for the mails the rules do
   not catch. A listing is not evaluated — it is not one job.
 * The state is derived from the evaluation, never from the exception of the model.
+* The state label is applied **after** the draft that asks the recruiter is written: a mail that waits
+  for the job seeker always carries the draft that asks the recruiter. A draft that could not be
+  written is a failure of the mail: the mail keeps no label, the run counts it as `failed` and the
+  next run looks at it again — the moment of the last successful run is not moved, so the window of
+  the next run still reaches the mail.
 * The state of an evaluation is a type of its own (`domain/evaluation/EvaluationState.kt`): it holds
   the three states an evaluation can lead to and the label of each of them. A job listing is a
   decision of the screening — a listing is not one job and it is not evaluated — so it is not a
@@ -165,8 +170,20 @@ cannot change it, the mail is trashed and no draft is written.
 * The attachments are not part of the prompt, they are not quoted.
 * The minimum pay of the job seeker is only named when `share_minimum_pay` says so.
 * A mail the model could not evaluate gets no draft: the model does not know what is missing.
-* A draft is not a state of the pipeline. The mail keeps the label `Recruiters/NeedsMoreInformation`
-  and the draft is written once.
+* A draft is not a state of the pipeline. The draft is written before the state label is applied, the
+  mail keeps the label `Recruiters/NeedsMoreInformation` and the draft is written once. A draft that
+  could not be written is a failure of the mail: the mail keeps no label and the next run looks at it
+  again.
+* A state label that cannot be applied is a failure of the mail, like a draft that could not be
+  written: the mail keeps no label, the run counts it as `failed` and the next run looks at it again.
+  The guarantee does not depend on the error ending the run — it is the counter that holds the window
+  open.
+* A state label that cannot be applied after the draft was written leaves the mail without a label:
+  the draft the pipeline wrote is removed again, so the next run writes it again and the job seeker
+  does not find two drafts for the same mail.
+* The label of a job listing is applied by the screening, not by the run: a listing whose label cannot
+  be applied breaks the run. The window stays open either way — the moment of the last successful run
+  is not written.
 
 ### The requirements of the job seeker
 
@@ -325,8 +342,13 @@ A story has to be readable on its own, so a ticket follows a fixed shape:
   less is rejected.
 * **The window of a run is the gap since the last successful run.** The moment of the last
   successful run is kept next to the token (`token.json.last-run`) and is written after a
-  successful run only. The run looks back to that moment, so every mail is looked at once and the
-  mail of an outage is not lost. A window on the command line wins over the gap.
+  successful run only — a run that left a mail pending does not write it, so the next run looks at
+  that mail again. The run looks back to that moment, so every mail of the window is looked at
+  once: a mail that reached a state is skipped by its label, a mail that was filtered out keeps no
+  label and is not looked at again because the window moves. The mail of an outage is not lost. A
+  run that keeps failing holds the window open: the mail is looked at again until it is in a state
+  and the mail that was filtered out is screened again with it. A window on the command line wins
+  over the gap.
 * **The Ollama API streams by default.** The `stream` field of a chat request has no default on
   purpose: a field with a default is left out of the payload when the encoder does not write the
   defaults, and the API then answers with a stream of JSON lines that the client cannot read.

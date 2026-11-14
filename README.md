@@ -322,7 +322,7 @@ object per line — to standard output:
 
 ```json
 {"timestamp":"2026-10-24T07:57:23.916683Z","level":"INFO","event":"process-inbox.started","message":"Inbox triage run started","attributes":{"trigger":"cli"}}
-{"timestamp":"2026-10-24T07:57:23.926923Z","level":"INFO","event":"process-inbox.completed","message":"Inbox triage run completed","attributes":{"screened":"3","recruiters":"1","filtered_out":"1","job_listings":"1","worth_follow_up":"0","needs_more_information":"1","trashed":"0","drafts":"1","unknown":"0","model_calls":"3","input_tokens":"8142","output_tokens":"217","duration_ms":"48210","window":"PT1H","since":"2026-10-24T06:57:23.916683Z"}}
+{"timestamp":"2026-10-24T07:57:23.926923Z","level":"INFO","event":"process-inbox.completed","message":"Inbox triage run completed","attributes":{"screened":"3","recruiters":"1","filtered_out":"1","job_listings":"1","worth_follow_up":"0","needs_more_information":"1","trashed":"0","drafts":"1","failed":"0","unknown":"0","model_calls":"3","input_tokens":"8142","output_tokens":"217","duration_ms":"48210","window":"PT1H","since":"2026-10-24T06:57:23.916683Z"}}
 ```
 
 The run says what the calls to the models took: `model_calls` is the number of the
@@ -352,8 +352,12 @@ message:
 | `process-inbox.evaluated` | INFO | a job description was evaluated (`id`, `state`, `reason`) |
 | `process-inbox.attachment_failed` | INFO | an attachment could not be read (`id`, `file`, `reason`) |
 | `process-inbox.draft_written` | INFO | a draft was written (`id`, `draft`, `reason`) |
-| `process-inbox.draft_failed` | WARN | no draft could be written (`id`, `reason`) |
+| `process-inbox.draft_failed` | WARN | no draft could be written, the mail keeps no label (`id`, `reason`) |
+| `process-inbox.label_failed` | WARN | the state label could not be applied, the mail keeps no label (`id`, `state`, `reason`) |
+| `process-inbox.draft_rolled_back` | INFO | the draft of a mail whose label failed was removed again (`id`, `draft`) |
+| `process-inbox.draft_rollback_failed` | WARN | the draft of a mail whose label failed could not be removed (`id`, `draft`, `reason`) |
 | `process-inbox.window_fallback` | WARN | the moment of the last run is not in the past (`last_run`) |
+| `process-inbox.window_kept` | WARN | the moment of the last successful run is not moved, a mail of the run stays pending (`failed`) |
 | `process-inbox.completed` | INFO | the run is done, the attributes are the counters of the run and what the calls to the models took, the id of the message instead of the window for a run of one message |
 | `pending.listed` / `pending.message` | INFO | the messages that were not processed yet |
 | `requirements.started` / `requirements.completed` | INFO | the requirements were written from the CV |
@@ -663,21 +667,51 @@ writes from an address nobody reads names the address of the recruiter in its
 own and a `MIME-Version`, and it replies to the `Message-ID` of the original
 message.
 
-The message keeps the label `Recruiters/NeedsMoreInformation`: the search of the
-pending messages skips it and the draft is written once. A message the model
-could not evaluate gets no draft - the model does not know what is missing. The
-run reports the drafts it wrote in the log:
+The draft is written before the label of the state is applied. The message keeps the
+label `Recruiters/NeedsMoreInformation`: the search of the pending messages skips
+it and the draft is written once. A draft that could not be written is a failure
+of the message: it keeps no label, the run counts it as `failed` and the next
+run looks at it again. A message the model could not evaluate gets no draft -
+the model does not know what is missing. The run reports the drafts it wrote in
+the log:
 
 ```json
 {"timestamp":"…","level":"INFO","event":"process-inbox.draft_written","message":"A draft that asks the recruiter for the missing information was written","attributes":{"id":"…","draft":"…","reason":"the message states no pay"}}
 ```
 
+A label that cannot be applied after the draft was written is the other way
+round: the message keeps no label, so the next run looks at it again. The draft
+the pipeline wrote is removed again, so the job seeker does not find two drafts
+for the same mail — the run counts the message as `failed` and goes on with the
+other mails.
+
+The label of a job listing is applied by the screening, not by the run: a
+listing whose label cannot be applied breaks the run. The window stays open
+either way, the moment of the last successful run is not written.
+
 The pipeline is a scheduled job, so it only processes the mail that arrived
 since the last run: the search is `is:inbox` with every state label excluded
 and `after:<time>` added. The time is the moment of the last successful run,
-so the run looks at every mail exactly once. `--since` says how far back the
-run looks instead: `PT24H` or `P1D` are the same, `P7D` looks a week back.
-The window of the run is in the log of the run.
+so the run looks at every mail of the window exactly once: a mail that reached
+a state is skipped by its label, a mail that was filtered out keeps no label
+and is not looked at again because the window moves. `--since` says how far
+back the run looks instead: `PT24H` or `P1D` are the same, `P7D` looks a week
+back. The window of the run is in the log of the run.
+
+A run that left a mail pending does not move that moment: the mail that waits
+for its draft keeps no label and the next run has to look at it again. The run
+says so in the log, the window stays open until a run has no failed mail. A run
+that keeps failing holds the window open the way a run that crashes holds it:
+the mail is looked at again until it is in a state, and the mail that was
+filtered out is screened again with it. The window closes when the failure is
+gone or when the job seeker removes the mail from the inbox. A window on the
+command line wins over the moment: `--since PT24H` looks at the last day of mail
+whatever the moment says, so a mail that is older than the window is not looked
+at again.
+
+```json
+{"timestamp":"…","level":"WARN","event":"process-inbox.window_kept","message":"The moment of the last successful run is not moved: a mail of the run stays pending","attributes":{"failed":"1"}}
+```
 
 `recruiter-cli pending` lists the messages that were not processed yet, it is
 the quickest way to check that the credentials work. It takes the same window
