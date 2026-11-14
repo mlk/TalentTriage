@@ -80,10 +80,34 @@ A failure nobody expected is a record of the log at the entry point: the `recrui
 record holds the stack trace in its message, the log of a run stays one JSON object per line. The
 entry point catches what the pipeline throws at it and logs it — the exception is not hidden.
 
+Translate exceptions at the boundary. When the layer below throws, catch what it actually throws —
+`IOException` from the file system, `SerializationException` from the parser — and re-throw the
+error type the caller handles, with a message that says what actually failed. A message that
+blames the wrong cause ("could not be read" for a file that is not valid JSON, or for an empty
+file) sends the job seeker down the wrong path — name the file and the problem. The same for a
+file that vanished between the check and the read: it is not "missing, use the defaults".
+
 ### Everything is injected
 
 The clock, the HTTP client, the sinks and the parsers are constructor parameters with a default.
 That is what makes the code testable without a network and without a file system.
+
+### Files the job seeker writes
+
+A file the job seeker edits by hand (`rules.json`, `requirements.json`) is input to the pipeline and
+is validated like input:
+
+* **Unknown keys fail.** A typo in a key is an error, never a silent keep-the-code-default. The
+  job seeker believes their rules are applied; a silent ignore is a lie.
+* **Words are trimmed on the way in.** A whitespace-padded word is a rule that matches nothing.
+* **A blank word is an error**, an empty file is an error, both name the file.
+* **The defaults apply only when nothing was provided.** No file → the documented defaults. A
+  file named on the command line that does not exist → an error, never a silent fallback.
+* **User-authored strings are data.** They are matched literally (`contains`), never compiled into
+  a regular expression.
+* **A default has one source of truth.** The constructor and the loader reference the same
+  constants, and a test pins it (`load("{}")` equals `defaults()`). If two paths can produce the
+  "same" default, they will drift.
 
 ### The states of a message
 
@@ -218,9 +242,13 @@ All of them run in CI, and they fail the build:
 * `kotlin.test` on top of the JUnit 5 platform: `kotlin.test.Test`, `assertEquals`, `assertTrue`.
 * Test names are camelCase function names (`fun handlesEmptyInbox()`), not backticked strings.
 * Prefer real collaborators over mocks: a PDF is built with PDFBox, an HTTP call goes through the
-  Ktor `MockEngine`, a file goes into a temporary directory.
+  Ktor `MockEngine`, a file goes into a temporary directory that is deleted when the test is done.
 * A test must not depend on the machine it runs on — no file of the working directory, no
-  network, no clock of the host.
+  network, no clock of the host. Inject the path (a temporary directory) instead of relying on the
+  current directory: a developer with a `rules.json` in the project root must not get a red build.
+* Assert the contract, not the exit code. A failing command is asserted by its message, the log
+  record it writes or the label it applies — a bare `assertEquals(1, result.statusCode)` also
+  passes when the failure comes from somewhere else entirely.
 
 ### Do not test the libraries
 
