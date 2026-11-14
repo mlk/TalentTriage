@@ -42,7 +42,7 @@ class ProcessInboxCommandTest {
                     .test(
                         "process-inbox --credentials ${credentialsFile()} " +
                             "--token ${tokenFile()} " +
-                            "--requirements ${requirementsFile()}",
+                            "--requirements ${requirementsFile()} --rules ${missingRulesFile()}",
                     )
 
             assertEquals(0, result.statusCode)
@@ -69,7 +69,7 @@ class ProcessInboxCommandTest {
                         "process-inbox --recruiter-verification=llm " +
                             "--credentials ${credentialsFile()} " +
                             "--token ${tokenFile()} " +
-                            "--requirements ${requirementsFile()}",
+                            "--requirements ${requirementsFile()} --rules ${missingRulesFile()}",
                     )
 
             assertEquals(0, result.statusCode)
@@ -112,7 +112,7 @@ class ProcessInboxCommandTest {
                     .test(
                         "process-inbox --credentials ${credentialsFile()} " +
                             "--token ${tokenFile()} " +
-                            "--requirements ${requirementsFile()} " +
+                            "--requirements ${requirementsFile()} --rules ${missingRulesFile()} " +
                             "--recruiter-verification-endpoint http://screening.example:11434 " +
                             "--job-description-evaluation-endpoint http://evaluation.example:8000",
                     )
@@ -133,7 +133,7 @@ class ProcessInboxCommandTest {
                     "process-inbox --recruiter-verification-endpoint localhost:11434 " +
                         "--credentials ${credentialsFile()} " +
                         "--token ${tokenFile()} " +
-                        "--requirements ${requirementsFile()}",
+                        "--requirements ${requirementsFile()} --rules ${missingRulesFile()}",
                 )
 
             assertEquals(1, result.statusCode)
@@ -149,7 +149,7 @@ class ProcessInboxCommandTest {
                     "process-inbox --recruiter-verification-timeout soon " +
                         "--credentials ${credentialsFile()} " +
                         "--token ${tokenFile()} " +
-                        "--requirements ${requirementsFile()}",
+                        "--requirements ${requirementsFile()} --rules ${missingRulesFile()}",
                 )
 
             assertEquals(1, result.statusCode)
@@ -167,7 +167,7 @@ class ProcessInboxCommandTest {
                         "process-inbox --since PT6H " +
                             "--credentials ${credentialsFile()} " +
                             "--token ${tokenFile()} " +
-                            "--requirements ${requirementsFile()}",
+                            "--requirements ${requirementsFile()} --rules ${missingRulesFile()}",
                     )
 
             assertEquals(0, result.statusCode)
@@ -190,7 +190,7 @@ class ProcessInboxCommandTest {
                         "process-inbox --since PT6H " +
                             "--credentials ${credentialsFile()} " +
                             "--token ${tokenFile()} " +
-                            "--requirements ${requirementsFile()}",
+                            "--requirements ${requirementsFile()} --rules ${missingRulesFile()}",
                     )
 
             assertEquals(0, result.statusCode)
@@ -210,7 +210,7 @@ class ProcessInboxCommandTest {
                 cli(sink, Clock.fixed(NOW, ZoneOffset.UTC)) { mockClient(engine) }
                     .test(
                         "process-inbox --credentials ${credentialsFile()} " +
-                            "--token $token --requirements ${requirementsFile()}",
+                            "--token $token --requirements ${requirementsFile()} --rules ${missingRulesFile()}",
                     )
 
             assertEquals(0, result.statusCode)
@@ -237,7 +237,7 @@ class ProcessInboxCommandTest {
                     .test(
                         "process-inbox --since PT6H " +
                             "--credentials ${credentialsFile()} " +
-                            "--token $token --requirements ${requirementsFile()}",
+                            "--token $token --requirements ${requirementsFile()} --rules ${missingRulesFile()}",
                     )
 
             assertEquals(0, result.statusCode)
@@ -255,7 +255,7 @@ class ProcessInboxCommandTest {
                 cli(sink, Clock.fixed(NOW, ZoneOffset.UTC)) { mockClient(engine) }
                     .test(
                         "process-inbox --credentials ${credentialsFile()} " +
-                            "--token $token --requirements ${requirementsFile()}",
+                            "--token $token --requirements ${requirementsFile()} --rules ${missingRulesFile()}",
                     )
 
             assertEquals(0, result.statusCode)
@@ -274,7 +274,7 @@ class ProcessInboxCommandTest {
                 cli(sink, Clock.fixed(NOW, ZoneOffset.UTC)) { mockClient(engine) }
                     .test(
                         "process-inbox --credentials ${credentialsFile()} " +
-                            "--token $token --requirements ${requirementsFile()}",
+                            "--token $token --requirements ${requirementsFile()} --rules ${missingRulesFile()}",
                     )
 
             assertEquals(0, result.statusCode)
@@ -292,7 +292,7 @@ class ProcessInboxCommandTest {
                 cli(sink, Clock.fixed(NOW, ZoneOffset.UTC)) { mockClient(engine) }
                     .test(
                         "process-inbox --credentials ${credentialsFile()} " +
-                            "--token $token --requirements ${requirementsFile()}",
+                            "--token $token --requirements ${requirementsFile()} --rules ${missingRulesFile()}",
                     )
 
             assertEquals(1, result.statusCode)
@@ -309,7 +309,7 @@ class ProcessInboxCommandTest {
                     "process-inbox --since 3y " +
                         "--credentials ${credentialsFile()} " +
                         "--token ${tokenFile()} " +
-                        "--requirements ${requirementsFile()}",
+                        "--requirements ${requirementsFile()} --rules ${missingRulesFile()}",
                 )
 
             assertEquals(1, result.statusCode)
@@ -325,7 +325,7 @@ class ProcessInboxCommandTest {
                     "process-inbox --since PT0S " +
                         "--credentials ${credentialsFile()} " +
                         "--token ${tokenFile()} " +
-                        "--requirements ${requirementsFile()}",
+                        "--requirements ${requirementsFile()} --rules ${missingRulesFile()}",
                 )
 
             assertEquals(1, result.statusCode)
@@ -353,7 +353,7 @@ class ProcessInboxCommandTest {
                         "process-inbox --id message-id " +
                             "--credentials ${credentialsFile()} " +
                             "--token ${tokenFile()} " +
-                            "--requirements ${requirementsFile()}",
+                            "--requirements ${requirementsFile()} --rules ${missingRulesFile()}",
                     )
 
             assertEquals(0, result.statusCode)
@@ -376,7 +376,7 @@ class ProcessInboxCommandTest {
                     .test(
                         "process-inbox --id message-id " +
                             "--credentials ${credentialsFile()} " +
-                            "--token $token --requirements ${requirementsFile()}",
+                            "--token $token --requirements ${requirementsFile()} --rules ${missingRulesFile()}",
                     )
 
             assertEquals(0, result.statusCode)
@@ -394,7 +394,7 @@ class ProcessInboxCommandTest {
                     .test(
                         "process-inbox --id message-id " +
                             "--credentials ${credentialsFile()} " +
-                            "--token ${tokenFile()} --requirements ${requirementsFile()}",
+                            "--token ${tokenFile()} --requirements ${requirementsFile()} --rules ${missingRulesFile()}",
                     )
 
             assertEquals(0, result.statusCode)
@@ -414,11 +414,93 @@ class ProcessInboxCommandTest {
                         "process-inbox --id= " +
                             "--credentials ${credentialsFile()} " +
                             "--token ${tokenFile()} " +
-                            "--requirements ${requirementsFile()}",
+                            "--requirements ${requirementsFile()} --rules ${missingRulesFile()}",
                     )
 
             assertEquals(1, result.statusCode)
             assertTrue(result.output.contains("The id of a message is not empty"))
+        }
+
+    @Test
+    fun usesTheRulesOfTheFile() =
+        runTest {
+            val sink = StringBuilder()
+            val engine = engine()
+            val rules = rulesFile("""{"job_listing_phrases": ["your cv"]}""")
+
+            val result =
+                cli(sink) { mockClient(engine) }
+                    .test(
+                        "process-inbox --credentials ${credentialsFile()} " +
+                            "--token ${tokenFile()} " +
+                            "--requirements ${requirementsFile()} " +
+                            "--rules $rules",
+                    )
+
+            assertEquals(0, result.statusCode)
+            val completed = records(sink).last()
+            assertEquals("1", completed.attributes["job_listings"])
+            assertEquals("0", completed.attributes["recruiters"])
+        }
+
+    @Test
+    fun aRuleTheFileReplacesIsNotUsed() =
+        runTest {
+            val sink = StringBuilder()
+            val engine = engine()
+            val rules =
+                rulesFile("""{"recruiter_keywords": ["zzz-not-in-the-message"], "recruiter_sender_hints": []}""")
+
+            val result =
+                cli(sink) { mockClient(engine) }
+                    .test(
+                        "process-inbox --credentials ${credentialsFile()} " +
+                            "--token ${tokenFile()} " +
+                            "--requirements ${requirementsFile()} " +
+                            "--rules $rules",
+                    )
+
+            assertEquals(0, result.statusCode)
+            val completed = records(sink).last()
+            assertEquals("0", completed.attributes["recruiters"])
+            assertEquals("1", completed.attributes["filtered_out"])
+            assertTrue(engine.requestHistory.none { it.url.encodedPath.endsWith("/v1/systemone") })
+        }
+
+    @Test
+    fun failsWhenTheRulesFileIsNotValidJson() =
+        runTest {
+            val sink = StringBuilder()
+            val rules = rulesFile("not json at all")
+
+            val result =
+                cli(sink).test(
+                    "process-inbox --credentials ${credentialsFile()} " +
+                        "--token ${tokenFile()} " +
+                        "--requirements ${requirementsFile()} " +
+                        "--rules $rules",
+                )
+
+            assertEquals(1, result.statusCode)
+        }
+
+    @Test
+    fun usesTheRulesOfTheCodeWhenTheRulesFileIsMissing() =
+        runTest {
+            val sink = StringBuilder()
+            val engine = engine()
+
+            val result =
+                cli(sink) { mockClient(engine) }
+                    .test(
+                        "process-inbox --credentials ${credentialsFile()} " +
+                            "--token ${tokenFile()} " +
+                            "--requirements ${requirementsFile()} " +
+                            "--rules ${missingRulesFile()}",
+                    )
+
+            assertEquals(0, result.statusCode)
+            assertTrue(records(sink).any { it.event == "process-inbox.rules_default" })
         }
 
     private fun engine(): MockEngine =
@@ -490,6 +572,14 @@ class ProcessInboxCommandTest {
         file.writeText("""{"client_id":"client-id","client_secret":"client-secret"}""")
         return file
     }
+
+    private fun rulesFile(content: String): Path {
+        val file = createTempDirectory("rules").resolve("rules.json")
+        file.writeText(content)
+        return file
+    }
+
+    private fun missingRulesFile(): Path = createTempDirectory("rules").resolve("rules.json")
 
     private fun requirementsFile(): Path {
         val file = createTempDirectory("requirements").resolve("requirements.json")

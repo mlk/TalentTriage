@@ -26,8 +26,6 @@ import uk.me.michaellloydlee.recruiter.domain.gmail.RunTarget
 import uk.me.michaellloydlee.recruiter.domain.gmail.messageWindow
 import uk.me.michaellloydlee.recruiter.domain.gmail.runWindow
 import uk.me.michaellloydlee.recruiter.domain.requirements.JobRequirements
-import uk.me.michaellloydlee.recruiter.domain.screening.JobListingHeuristics
-import uk.me.michaellloydlee.recruiter.domain.screening.RecruiterHeuristics
 import uk.me.michaellloydlee.recruiter.infrastructure.gmail.FileOAuth2TokenStore
 import uk.me.michaellloydlee.recruiter.infrastructure.gmail.GmailApiException
 import uk.me.michaellloydlee.recruiter.infrastructure.gmail.GmailAuthenticationException
@@ -42,6 +40,9 @@ import uk.me.michaellloydlee.recruiter.infrastructure.llm.OllamaException
 import uk.me.michaellloydlee.recruiter.infrastructure.logging.StructuredLogger
 import uk.me.michaellloydlee.recruiter.infrastructure.requirements.RequirementsFile
 import uk.me.michaellloydlee.recruiter.infrastructure.run.FileLastRunStore
+import uk.me.michaellloydlee.recruiter.infrastructure.screening.RulesFile
+import uk.me.michaellloydlee.recruiter.infrastructure.screening.ScreeningRules
+import java.nio.file.Files
 import java.nio.file.Path
 import java.time.Clock
 import java.time.Duration
@@ -60,6 +61,12 @@ import java.time.Instant
  * The `--id` option looks at one message instead of the inbox: the run
  * screens that message as if it were pending and it does not move the moment
  * of the last successful run.
+ *
+ * The `--rules` option points at the file with the rules of the screening.
+ * The file holds the words a recruiter mail talks about, the senders of a
+ * recruiter and the senders and phrases of the job boards, a field that is
+ * not in the file keeps the rule of the code. A missing file is not an
+ * error: the rules of the code are used.
  *
  * @param logger sink for the structured log output of the run.
  * @param httpClientFactory creates the client used to talk to Google and to
@@ -122,6 +129,14 @@ class ProcessInboxCommand(
             "-q",
             help = "The file with the requirements of the job seeker",
         ).default(DEFAULT_REQUIREMENTS_FILE)
+
+    private val rulesFile: String by
+        option(
+            "--rules",
+            help =
+                "The file with the rules of the screening, " +
+                    "the rules of the code are used when the file does not exist",
+        ).default(DEFAULT_RULES_FILE)
 
     private val since: String? by
         option(
@@ -206,6 +221,7 @@ class ProcessInboxCommand(
         val target = target(startedAt)
         val credentials = credentials()
         val requirements = requirements()
+        val screeningRules = screeningRules()
         httpClientFactory().use { client ->
             val gmail =
                 GmailServices.create(
@@ -222,8 +238,8 @@ class ProcessInboxCommand(
                         messages = gmail.messages,
                         screening =
                             ScreeningService(
-                                heuristics = RecruiterHeuristics(),
-                                jobListings = JobListingHeuristics(),
+                                heuristics = screeningRules.recruiter,
+                                jobListings = screeningRules.jobListings,
                                 verifier = verifier(client, usage),
                                 stateManager = gmail.stateManager,
                             ),
@@ -399,6 +415,29 @@ class ProcessInboxCommand(
         }
 
     /**
+     * The rules of the screening, read from the file of the run.
+     *
+     * A file that does not exist is not an error: the rules of the code are
+     * used, the file only holds what the job seeker wants to change.
+     */
+    private fun screeningRules(): ScreeningRules {
+        val path = Path.of(rulesFile)
+        if (!Files.exists(path)) {
+            logger.info(
+                event = "$COMMAND_NAME.rules_default",
+                message = "No rules file at $path, the rules of the code are used",
+                attributes = mapOf("rules" to path.toString()),
+            )
+            return ScreeningRules.defaults()
+        }
+        return try {
+            RulesFile.load(path)
+        } catch (error: IllegalArgumentException) {
+            throw CommandFailedException(error.message.orEmpty(), error)
+        }
+    }
+
+    /**
      * The counters of the run, they go into the log.
      *
      * @param now the moment of the run.
@@ -507,6 +546,9 @@ class ProcessInboxCommand(
 
         /** The file with the requirements of the job seeker. */
         const val DEFAULT_REQUIREMENTS_FILE: String = "requirements.json"
+
+        /** The file with the rules of the screening. */
+        const val DEFAULT_RULES_FILE: String = "rules.json"
 
         /** How long the evaluation of a job description may take, in milliseconds. */
         const val DEFAULT_EVALUATION_TIMEOUT_MILLIS: Long = 600_000
