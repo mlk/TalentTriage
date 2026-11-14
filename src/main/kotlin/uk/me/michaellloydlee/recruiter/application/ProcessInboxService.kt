@@ -193,6 +193,11 @@ class ProcessInboxService(
     /**
      * Applies the state label of a mail and counts it.
      *
+     * The label is applied with a request to the API. When the request fails,
+     * the mailbox says what happened: a mail that carries the label is in its
+     * state, a mail that does not carry it keeps no label. The pipeline does
+     * not guess whether the request was applied.
+     *
      * A label that cannot be applied is a failure of the mail: the mail keeps
      * no label, the run counts it as failed and the next run looks at it
      * again. The run goes on with the other mails.
@@ -207,44 +212,27 @@ class ProcessInboxService(
         state: EvaluationState,
         counters: Counters,
     ): LabelOutcome {
-        val outcome =
+        val failure =
             try {
                 stateManager.apply(message.id, state)
                 counters.count(state)
-                LabelOutcome.APPLIED
+                null
             } catch (error: GmailApiException) {
-                // The API answered with an error: the request was rejected and
-                // the label was not applied.
-                labelFailed(message, state, counters, reasonOf(error))
-                LabelOutcome.REJECTED
+                reasonOf(error)
             } catch (error: IOException) {
-                // The answer of the API was lost: the label may have been
-                // applied, the draft of the mail has to stay.
-                labelFailed(message, state, counters, reasonOf(error))
-                LabelOutcome.UNKNOWN
+                reasonOf(error)
             } catch (error: SerializationException) {
-                // The answer of the API could not be read: the label was
-                // applied, the draft of the mail has to stay.
-                labelFailed(message, state, counters, reasonOf(error))
-                LabelOutcome.UNKNOWN
+                reasonOf(error)
             }
-        return outcome
-    }
-
-    /**
-     * Counts a mail whose state label could not be applied.
-     *
-     * @param message the mail of the recruiter.
-     * @param state the state the mail was to change to.
-     * @param counters the counters of the run.
-     * @param reason what went wrong, it goes into the log.
-     */
-    private fun labelFailed(
-        message: EmailMessage,
-        state: EvaluationState,
-        counters: Counters,
-        reason: String,
-    ) {
+        if (failure == null) {
+            return LabelOutcome.APPLIED
+        }
+        val outcome = presenceOf(message, state)
+        if (outcome == LabelOutcome.APPLIED) {
+            // The label was applied after all: the mail is in its state.
+            counters.count(state)
+            return LabelOutcome.APPLIED
+        }
         counters.failed++
         logger.warn(
             event = EVENT_LABEL_FAILED,
@@ -253,6 +241,57 @@ class ProcessInboxService(
                 mapOf(
                     "id" to message.id,
                     "state" to state.name,
+                    "label" to outcome.name,
+                    "reason" to failure,
+                ),
+        )
+        return outcome
+    }
+
+    /**
+     * Whether the mail carries the label of its state.
+     *
+     * @param message the mail of the recruiter.
+     * @param state the state the mail was to change to.
+     * @return whether the label is on the mail.
+     */
+    private suspend fun presenceOf(
+        message: EmailMessage,
+        state: EvaluationState,
+    ): LabelOutcome =
+        try {
+            if (stateManager.carries(message.id, state.label)) {
+                LabelOutcome.APPLIED
+            } else {
+                LabelOutcome.NOT_APPLIED
+            }
+        } catch (error: GmailApiException) {
+            mailboxUnreadable(message, reasonOf(error))
+            LabelOutcome.UNKNOWN
+        } catch (error: IOException) {
+            mailboxUnreadable(message, reasonOf(error))
+            LabelOutcome.UNKNOWN
+        } catch (error: SerializationException) {
+            mailboxUnreadable(message, reasonOf(error))
+            LabelOutcome.UNKNOWN
+        }
+
+    /**
+     * Records that the state of a mail could not be read.
+     *
+     * @param message the mail of the recruiter.
+     * @param reason what went wrong, it goes into the log.
+     */
+    private fun mailboxUnreadable(
+        message: EmailMessage,
+        reason: String,
+    ) {
+        logger.warn(
+            event = EVENT_LABEL_UNKNOWN,
+            message = "The state of the mail could not be read",
+            attributes =
+                mapOf(
+                    "id" to message.id,
                     "reason" to reason,
                 ),
         )
@@ -309,11 +348,10 @@ class ProcessInboxService(
                             "reason" to reasonOf(evaluation),
                         ),
                 )
-                if (applyState(message, evaluation.state, counters) == LabelOutcome.REJECTED) {
-                    // The API rejected the request, the label was not applied:
-                    // the draft the pipeline wrote is removed, the next run
-                    // writes it again and the job seeker does not find two
-                    // drafts for the same mail.
+                if (applyState(message, evaluation.state, counters) == LabelOutcome.NOT_APPLIED) {
+                    // The label is not on the mail: the draft the pipeline
+                    // wrote is removed, the next run writes it again and the
+                    // job seeker does not find two drafts for the same mail.
                     removeDraft(message, outcome.draftId)
                 }
             }
@@ -394,23 +432,19 @@ class ProcessInboxService(
      * What happened to the state label of a mail.
      *
      * The label of a mail is applied with a request to the API: the request
-     * can be rejected, its answer can be lost or it can be read. Only a
-     * rejected request says that the label was not applied — the draft of the
-     * mail may only be removed then.
+     * can fail and the answer can be lost. The mailbox says whether the label
+     * is on the mail — the draft of the mail may only be removed when it is
+     * not.
      */
     private enum class LabelOutcome {
-        /** The label was applied, the mail carries the state. */
+        /** The label is on the mail: the mail is in its state. */
         APPLIED,
 
-        /**
-         * The API answered with an error: the request was rejected and the
-         * label was not applied.
-         */
-        REJECTED,
+        /** The label is not on the mail: the mail keeps no state. */
+        NOT_APPLIED,
 
         /**
-         * The answer of the API was lost or could not be read: the label may
-         * have been applied.
+         * The mailbox could not be read: the label may be on the mail.
          */
         UNKNOWN,
     }
@@ -458,6 +492,9 @@ class ProcessInboxService(
 
         /** The event of the log of a state label that could not be applied. */
         const val EVENT_LABEL_FAILED: String = "process-inbox.label_failed"
+
+        /** The event of the log of a state of a mail that could not be read. */
+        const val EVENT_LABEL_UNKNOWN: String = "process-inbox.label_unknown"
 
         /** The event of the log of a draft that was removed again. */
         const val EVENT_DRAFT_ROLLED_BACK: String = "process-inbox.draft_rolled_back"

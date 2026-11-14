@@ -177,11 +177,25 @@ internal fun gmailEngine(
     labels: List<String> = listOf("INBOX"),
     failure: MailboxFailure = MailboxFailure.NONE,
     draftFails: Boolean = false,
-): MockEngine =
-    MockEngine { request ->
-        val answer = answerOf(request, listing, labels, failure, draftFails)
+): MockEngine {
+    // The ids of the messages whose labels were changed, the mailbox knows
+    // them once the request was answered.
+    val changed = mutableSetOf<String>()
+    return MockEngine { request ->
+        val path = request.url.encodedPath
+        val id = idOf(request)
+        if (path.endsWith("/modify")) {
+            changed.add(id)
+        }
+        val answer =
+            if (failure == MailboxFailure.MAILBOX_LOST && id in changed) {
+                Answer(MAILBOX_ERROR, HttpStatusCode.InternalServerError)
+            } else {
+                answerOf(request, listing, labels, failure, draftFails)
+            }
         respond(content = answer.content, status = answer.status, headers = jsonHeaders())
     }
+}
 
 /**
  * What the mailbox does when the labels of a message change.
@@ -198,6 +212,12 @@ internal enum class MailboxFailure {
     REJECTED,
     LOST,
     UNREADABLE,
+
+    /**
+     * The mailbox cannot be read after the failure of the label: the run
+     * cannot find out whether the label was applied.
+     */
+    MAILBOX_LOST,
 }
 
 /**
@@ -254,6 +274,7 @@ private fun modifyAnswer(
         MailboxFailure.REJECTED -> Answer(MODIFY_ERROR, HttpStatusCode.InternalServerError)
         MailboxFailure.LOST -> throw IOException("the network is down")
         MailboxFailure.UNREADABLE -> Answer("this is not json")
+        MailboxFailure.MAILBOX_LOST -> Answer(MODIFY_ERROR, HttpStatusCode.InternalServerError)
     }
 
 /**
@@ -427,6 +448,9 @@ internal const val DRAFT_ERROR: String = """{"error":"the draft cannot be writte
 
 /** The answer of the mailbox of the tests when the labels cannot be changed. */
 internal const val MODIFY_ERROR: String = """{"error":"the labels cannot be changed"}"""
+
+/** The answer of the mailbox of the tests when the mailbox cannot be read. */
+internal const val MAILBOX_ERROR: String = """{"error":"the mailbox cannot be read"}"""
 
 /** The list of the messages of the tests. */
 internal const val MESSAGE_LIST =

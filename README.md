@@ -353,7 +353,8 @@ message:
 | `process-inbox.attachment_failed` | INFO | an attachment could not be read (`id`, `file`, `reason`) |
 | `process-inbox.draft_written` | INFO | a draft was written (`id`, `draft`, `reason`) |
 | `process-inbox.draft_failed` | WARN | no draft could be written, the mail keeps no label (`id`, `reason`) |
-| `process-inbox.label_failed` | WARN | the state label could not be applied, the mail keeps no label (`id`, `state`, `reason`) |
+| `process-inbox.label_failed` | WARN | the state label could not be applied, the mail keeps no label (`id`, `state`, `label`, `reason`) |
+| `process-inbox.label_unknown` | WARN | the state of the mail could not be read, the label may be on it (`id`, `reason`) |
 | `process-inbox.draft_rolled_back` | INFO | the draft of a mail whose label failed was removed again (`id`, `draft`) |
 | `process-inbox.draft_rollback_failed` | WARN | the draft of a mail whose label failed could not be removed (`id`, `draft`, `reason`) |
 | `process-inbox.window_fallback` | WARN | the moment of the last run is not in the past (`last_run`) |
@@ -685,10 +686,13 @@ the pipeline wrote is removed again, so the job seeker does not find two drafts
 for the same mail — the run counts the message as `failed` and goes on with the
 other mails.
 
-The draft is only removed when the API rejected the request. When the answer of
-the API was lost or could not be read, the label may have been applied: the
-draft stays, because a message with a label and without a draft would wait for
-the job seeker forever.
+The pipeline never guesses whether the request was applied: the mailbox is the
+state store, so the run reads the message and looks for the label. A message
+that carries the label is in its state — the draft stays and the run counts it
+as such. A message that does not carry it keeps no label: the draft is removed
+and the next run writes it again. Only when the mailbox itself cannot be read
+the run gives up on the answer and keeps the draft, because a message with a
+label and without a draft would wait for the job seeker forever.
 
 The label of a job listing is applied by the screening, not by the run: a
 listing whose label cannot be applied breaks the run. The window stays open

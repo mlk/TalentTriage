@@ -491,12 +491,48 @@ class ProcessInboxServiceTest {
         }
 
     @Test
-    fun keepsTheDraftWhenTheAnswerOfTheLabelWasLost() =
+    fun removesTheDraftWhenTheMailboxSaysTheLabelIsNotThere() =
         runTest {
-            // The answer of the API was lost: the label may have been applied,
-            // so the draft stays. A mail with a label and without a draft
-            // would wait for the job seeker forever.
+            // The answer of the API was lost, but the mailbox says the label
+            // is not on the mail: the draft is removed and the next run
+            // writes it again.
             val gmail = gmailEngine(failure = MailboxFailure.LOST)
+            val model = modelEngine(officeDays = "unclear")
+
+            val summary = service(gmail, model).run(WINDOW)
+
+            assertEquals(2, summary.drafts)
+            assertEquals(2, summary.failed)
+            val deletions = gmail.requestHistory.filter { it.method.value == "DELETE" }
+            assertEquals(2, deletions.size)
+        }
+
+    @Test
+    fun countsAMailWhoseLabelWasAppliedAnywayAsInItsState() =
+        runTest {
+            // The answer of the API was lost, but the mailbox says the label
+            // is on the mail: the mail is in its state and the draft stays.
+            val gmail =
+                gmailEngine(
+                    failure = MailboxFailure.LOST,
+                    labels = listOf("INBOX", "Label_needsmoreinformation"),
+                )
+            val model = modelEngine(officeDays = "unclear")
+
+            val summary = service(gmail, model).run(WINDOW)
+
+            assertEquals(2, summary.needsMoreInformation)
+            assertEquals(0, summary.failed)
+            val deletions = gmail.requestHistory.filter { it.method.value == "DELETE" }
+            assertTrue(deletions.isEmpty())
+        }
+
+    @Test
+    fun keepsTheDraftWhenTheMailboxCannotBeRead() =
+        runTest {
+            // The mailbox cannot be read after the failure: the label may be
+            // on the mail, so the draft stays.
+            val gmail = gmailEngine(failure = MailboxFailure.MAILBOX_LOST)
             val model = modelEngine(officeDays = "unclear")
 
             val summary = service(gmail, model).run(WINDOW)
@@ -508,17 +544,22 @@ class ProcessInboxServiceTest {
         }
 
     @Test
-    fun keepsTheDraftWhenTheAnswerOfTheLabelCannotBeRead() =
+    fun countsAMailWhoseLabelCannotBeReadAnywayAsInItsState() =
         runTest {
-            // The answer of the API cannot be read: the label was applied, so
-            // the draft stays.
-            val gmail = gmailEngine(failure = MailboxFailure.UNREADABLE)
+            // The answer of the API cannot be read, but the mailbox says the
+            // label is on the mail: the mail is in its state and the draft
+            // stays.
+            val gmail =
+                gmailEngine(
+                    failure = MailboxFailure.UNREADABLE,
+                    labels = listOf("INBOX", "Label_needsmoreinformation"),
+                )
             val model = modelEngine(officeDays = "unclear")
 
             val summary = service(gmail, model).run(WINDOW)
 
-            assertEquals(2, summary.drafts)
-            assertEquals(2, summary.failed)
+            assertEquals(2, summary.needsMoreInformation)
+            assertEquals(0, summary.failed)
             val deletions = gmail.requestHistory.filter { it.method.value == "DELETE" }
             assertTrue(deletions.isEmpty())
         }
