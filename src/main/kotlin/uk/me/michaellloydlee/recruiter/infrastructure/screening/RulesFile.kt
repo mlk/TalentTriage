@@ -53,18 +53,14 @@ object RulesFile {
      * Loads the rules of the screening.
      *
      * @param path location of the file.
-     * @param json parser used to read the file.
      * @return the rules of the screening, the fields the file does not hold are the rules of the code.
      * @throws IllegalArgumentException when the file is missing, cannot be read or holds a blank word.
      */
-    fun load(
-        path: Path,
-        json: Json = Json { ignoreUnknownKeys = false },
-    ): ScreeningRules {
+    fun load(path: Path): ScreeningRules {
         require(Files.exists(path)) {
             "Rules file not found: $path"
         }
-        val file = decode(path, read(path), json)
+        val file = decode(path, read(path))
         validate(path, file)
         val defaults = ScreeningRules.defaults()
         return ScreeningRules(
@@ -97,10 +93,9 @@ object RulesFile {
     private fun decode(
         path: Path,
         text: String,
-        json: Json,
     ): Rules =
         try {
-            json.decodeFromString(Rules.serializer(), text)
+            parser.decodeFromString(Rules.serializer(), text)
         } catch (error: IllegalArgumentException) {
             throw IllegalArgumentException("Rules file $path could not be read: ${error.message}", error)
         }
@@ -120,6 +115,8 @@ object RulesFile {
             }
         }
     }
+
+    private val parser: Json = Json { ignoreUnknownKeys = false }
 
     @Serializable
     private data class Rules(

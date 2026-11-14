@@ -80,6 +80,16 @@ class RulesFileTest {
     }
 
     @Test
+    fun aWordWithRegexMetacharactersMatchesLiterally() {
+        val rules = RulesFile.load(rulesFile("""{"recruiter_keywords": ["c++", "c#", ".net"]}"""))
+
+        assertTrue(rules.recruiter.isCandidate(message(subject = "Senior C++ engineer needed")))
+        assertTrue(rules.recruiter.isCandidate(message(subject = "C# developer")))
+        assertTrue(rules.recruiter.isCandidate(message(subject = "ASP.NET Core team")))
+        assertFalse(rules.recruiter.isCandidate(message(subject = "Senior Cxx engineer needed")))
+    }
+
+    @Test
     fun failsWhenTheFileHoldsAnUnknownKey() {
         val file = rulesFile("""{"recruiter_keyword": ["stellenangebot"]}""")
 
