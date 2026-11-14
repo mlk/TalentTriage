@@ -102,8 +102,8 @@ is validated like input:
   job seeker believes their rules are applied; a silent ignore is a lie.
 * **Words are trimmed on the way in.** A whitespace-padded word is a rule that matches nothing.
 * **A blank word is an error**, and an empty file — zero bytes or whitespace only — is an error;
-  both name the file. Content that fails to parse is invalid JSON, not an empty file. A file
-  holding `{}` is not empty: it provides no keys and gets the defaults.
+  both name the file. A file holding `{}` is not empty: it provides no keys and gets the defaults.
+  Any other content — not empty, but failing to parse — is invalid JSON, not an empty file.
 * **Defaults fill the keys the file does not provide.** No file → the documented defaults; a file
   that provides no keys (`{}`) → exactly the defaults; a file that provides some keys → those
   keys win, the rest are the defaults. A file named on the command line that does not exist → an
