@@ -23,7 +23,19 @@ data class ScreeningRules(
         /**
          * The rules of the code.
          */
-        fun defaults(): ScreeningRules = ScreeningRules(RecruiterHeuristics(), JobListingHeuristics())
+        fun defaults(): ScreeningRules =
+            ScreeningRules(
+                recruiter =
+                    RecruiterHeuristics(
+                        keywords = RecruiterHeuristics.DEFAULT_KEYWORDS,
+                        senderHints = RecruiterHeuristics.DEFAULT_SENDER_HINTS,
+                    ),
+                jobListings =
+                    JobListingHeuristics(
+                        senderHints = JobListingHeuristics.DEFAULT_SENDER_HINTS,
+                        phrases = JobListingHeuristics.DEFAULT_PHRASES,
+                    ),
+            )
     }
 }
 

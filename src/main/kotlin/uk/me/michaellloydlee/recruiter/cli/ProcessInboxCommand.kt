@@ -76,11 +76,15 @@ import java.time.Instant
  *   time.
  * @param clock source of the current time, it decides how far back the run
  *   looks for messages.
+ * @param defaultRulesFile the file the run reads the rules of the screening
+ *   from when `--rules` is not given, a missing file keeps the rules of the
+ *   code.
  */
 class ProcessInboxCommand(
     private val logger: StructuredLogger,
     private val httpClientFactory: () -> HttpClient = { GmailHttpClientFactory.create() },
     private val clock: Clock = Clock.systemUTC(),
+    private val defaultRulesFile: Path = Path.of(DEFAULT_RULES_FILE),
 ) : SuspendingCliktCommand(name = COMMAND_NAME) {
     private val credentialsFile: String by
         option(
@@ -426,7 +430,7 @@ class ProcessInboxCommand(
      */
     private fun screeningRules(): ScreeningRules {
         val explicit = rulesFile
-        val path = Path.of(explicit ?: DEFAULT_RULES_FILE)
+        val path = explicit?.let(Path::of) ?: defaultRulesFile
         if (!Files.exists(path)) {
             if (explicit != null) {
                 throw CommandFailedException("Rules file not found: $path")

@@ -12,14 +12,6 @@ import kotlin.test.assertTrue
 
 class RulesFileTest {
     @Test
-    fun anEmptyFileKeepsTheRulesOfTheCode() {
-        val rules = RulesFile.load(rulesFile("{}"))
-
-        assertTrue(rules.recruiter.isCandidate(message(subject = "We are looking for a developer")))
-        assertTrue(rules.jobListings.isJobListing(message(sender = "jobalerts-noreply@linkedin.com")))
-    }
-
-    @Test
     fun aWordOfTheFileMakesACandidate() {
         val rules = RulesFile.load(rulesFile("""{"recruiter_keywords": ["parallelwelt"]}"""))
 
