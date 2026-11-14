@@ -5,6 +5,7 @@ import java.nio.file.Path
 import kotlin.io.path.createTempDirectory
 import kotlin.io.path.writeText
 import kotlin.test.Test
+import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
@@ -61,6 +62,34 @@ class RulesFileTest {
     @Test
     fun failsWhenTheFileIsMissing() {
         assertFailsWith<IllegalArgumentException> { RulesFile.load(Path.of("/does/not/exist/rules.json")) }
+    }
+
+    @Test
+    fun anEmptyFileBehavesLikeTheRulesOfTheCode() {
+        val fromFile = RulesFile.load(rulesFile("{}"))
+        val defaults = ScreeningRules.defaults()
+        val messages =
+            listOf(
+                message(subject = "We are looking for a developer"),
+                message(subject = "Your invoice of April"),
+                message(sender = "jobalerts-noreply@linkedin.com"),
+                message(subject = "new jobs for you"),
+                message(subject = "Hello", sender = "someone@example.com"),
+            )
+
+        messages.forEach { message ->
+            assertEquals(defaults.recruiter.isCandidate(message), fromFile.recruiter.isCandidate(message))
+            assertEquals(defaults.jobListings.isJobListing(message), fromFile.jobListings.isJobListing(message))
+        }
+    }
+
+    @Test
+    fun failsWhenTheFileIsADirectory() {
+        val directory = createTempDirectory("rules")
+
+        val error = assertFailsWith<IllegalArgumentException> { RulesFile.load(directory) }
+
+        assertTrue(error.message!!.contains("could not be read"))
     }
 
     @Test

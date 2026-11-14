@@ -5,6 +5,7 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import uk.me.michaellloydlee.recruiter.domain.screening.JobListingHeuristics
 import uk.me.michaellloydlee.recruiter.domain.screening.RecruiterHeuristics
+import java.io.IOException
 import java.nio.file.Files
 import java.nio.file.Path
 
@@ -61,9 +62,15 @@ object RulesFile {
         require(Files.exists(path)) {
             "Rules file not found: $path"
         }
+        val text =
+            try {
+                Files.readString(path)
+            } catch (error: IOException) {
+                throw IllegalArgumentException("Rules file $path could not be read: ${error.message}", error)
+            }
         val file =
             try {
-                json.decodeFromString(Rules.serializer(), Files.readString(path))
+                json.decodeFromString(Rules.serializer(), text)
             } catch (error: IllegalArgumentException) {
                 throw IllegalArgumentException("Rules file $path could not be read: ${error.message}", error)
             }

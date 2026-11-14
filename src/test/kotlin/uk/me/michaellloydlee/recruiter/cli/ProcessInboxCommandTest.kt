@@ -468,6 +468,23 @@ class ProcessInboxCommandTest {
         }
 
     @Test
+    fun failsWhenTheRulesFileIsNotReadable() =
+        runTest {
+            val sink = StringBuilder()
+            val rules = createTempDirectory("rules")
+
+            val result =
+                cli(sink).test(
+                    "process-inbox --credentials ${credentialsFile()} " +
+                        "--token ${tokenFile()} " +
+                        "--requirements ${requirementsFile()} " +
+                        "--rules $rules",
+                )
+
+            assertEquals(1, result.statusCode)
+        }
+
+    @Test
     fun failsWhenTheRulesFileIsNotValidJson() =
         runTest {
             val sink = StringBuilder()
