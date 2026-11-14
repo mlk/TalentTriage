@@ -65,8 +65,9 @@ import java.time.Instant
  * The `--rules` option points at the file with the rules of the screening.
  * The file holds the words a recruiter mail talks about, the senders of a
  * recruiter and the senders and phrases of the job boards, a field that is
- * not in the file keeps the rule of the code. A missing file is not an
- * error: the rules of the code are used.
+ * not in the file keeps the rule of the code. Without the option the file is
+ * `rules.json` in the working directory; a missing default file keeps the
+ * rules of the code, a named file that does not exist is an error.
  *
  * @param logger sink for the structured log output of the run.
  * @param httpClientFactory creates the client used to talk to Google and to
@@ -130,13 +131,14 @@ class ProcessInboxCommand(
             help = "The file with the requirements of the job seeker",
         ).default(DEFAULT_REQUIREMENTS_FILE)
 
-    private val rulesFile: String by
+    private val rulesFile: String? by
         option(
             "--rules",
             help =
-                "The file with the rules of the screening, " +
-                    "the rules of the code are used when the file does not exist",
-        ).default(DEFAULT_RULES_FILE)
+                "The file with the rules of the screening, defaults to rules.json in the working directory. " +
+                    "A missing default file keeps the rules of the code, " +
+                    "a file that is named here and does not exist fails the run",
+        )
 
     private val since: String? by
         option(
@@ -417,12 +419,18 @@ class ProcessInboxCommand(
     /**
      * The rules of the screening, read from the file of the run.
      *
-     * A file that does not exist is not an error: the rules of the code are
-     * used, the file only holds what the job seeker wants to change.
+     * Without `--rules` the file is `rules.json` in the working directory: a
+     * file that does not exist is not an error and the rules of the code are
+     * used. A file that is named on the command line and does not exist is an
+     * error.
      */
     private fun screeningRules(): ScreeningRules {
-        val path = Path.of(rulesFile)
+        val explicit = rulesFile
+        val path = Path.of(explicit ?: DEFAULT_RULES_FILE)
         if (!Files.exists(path)) {
+            if (explicit != null) {
+                throw CommandFailedException("Rules file not found: $path")
+            }
             logger.info(
                 event = "$COMMAND_NAME.rules_default",
                 message = "No rules file at $path, the rules of the code are used",

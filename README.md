@@ -180,8 +180,9 @@ the senders of the job boards and the phrases of a job listing — are the rules
 
 A field that is not in the file keeps the rule of the code, a field that is in the file replaces
 it — an empty list empties the rule. The words are matched as a part of a word, without the case.
-The file is optional: without it the rules of the code are used, and it is git-ignored like the
-credentials.
+Without `--rules` the file is `rules.json` in the working directory: if it does not exist the
+rules of the code are used. A file that is named with `--rules` and does not exist fails the run.
+The file is git-ignored like the credentials.
 
 The requirements of the job seeker — the pay, the profile and the number of
 days of office a job may demand — are read from `requirements.json` in the
@@ -258,7 +259,7 @@ need a paid plan or usage credits. A local model works as well: `nimble`, `tev1`
 | `process-inbox` | `--credentials`, `-c` | The file with the OAuth2 client credentials | `credentials.json` |
 | `process-inbox` | `--token`, `-t` | The file the OAuth2 token is stored in | `token.json` |
 | `process-inbox` | `--requirements`, `-q` | The file with the requirements of the job seeker | `requirements.json` |
-| `process-inbox` | `--rules` | The file with the rules of the screening | `rules.json` |
+| `process-inbox` | `--rules` | The file with the rules of the screening; a named file must exist, the missing default `rules.json` keeps the rules of the code | `rules.json` |
 | `process-inbox` | `--since` | How far back the messages are looked for, an ISO-8601 duration | the gap since the last successful run |
 | `process-inbox` | `--id` | The id of the message to process, the run looks at that message only | — |
 | `process-inbox` | `--recruiter-verification`, `-r` | How the recruiter mails are verified: a decision model or a chat model | `decision` |
