@@ -27,6 +27,7 @@ import kotlin.io.path.createTempDirectory
 import kotlin.io.path.writeText
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
@@ -54,6 +55,7 @@ class ProcessInboxCommandTest {
             assertEquals("1", completed.attributes["recruiters"])
             assertEquals("1", completed.attributes["worth_follow_up"])
             assertEquals("0", completed.attributes["needs_more_information"])
+            assertEquals("0", completed.attributes["failed"])
             assertTrue(engine.requestHistory.any { it.url.encodedPath.endsWith("/v1/systemone") })
         }
 
@@ -263,6 +265,114 @@ class ProcessInboxCommandTest {
         }
 
     @Test
+    fun doesNotRememberTheMomentOfARunThatLeftAMailPending() =
+        runTest {
+            // The draft of the mail could not be written: the mail keeps no
+            // label, so the moment of the run is not moved and the next run
+            // looks at the mail again.
+            val sink = StringBuilder()
+            val engine = engine(officeDays = "unclear", chatAnswers = false)
+            val token = tokenFile()
+
+            val result =
+                cli(sink, Clock.fixed(NOW, ZoneOffset.UTC)) { mockClient(engine) }
+                    .test(
+                        "process-inbox --credentials ${credentialsFile()} " +
+                            "--token $token --requirements ${requirementsFile()}",
+                    )
+
+            assertEquals(0, result.statusCode)
+            assertNull(FileLastRunStore.nextTo(token).load())
+            val completed = records(sink).last()
+            assertEquals("process-inbox.completed", completed.event)
+            assertEquals("1", completed.attributes["failed"])
+        }
+
+    @Test
+    fun saysThatTheWindowOfTheRunIsKept() =
+        runTest {
+            val sink = StringBuilder()
+            val engine = engine(officeDays = "unclear", chatAnswers = false)
+
+            cli(sink, Clock.fixed(NOW, ZoneOffset.UTC)) { mockClient(engine) }
+                .test(
+                    "process-inbox --credentials ${credentialsFile()} " +
+                        "--token ${tokenFile()} --requirements ${requirementsFile()}",
+                )
+
+            val records = records(sink)
+            assertTrue(records.any { it.event == "process-inbox.window_kept" })
+        }
+
+    @Test
+    fun doesNotRememberTheMomentOfARunWhoseLabelCouldNotBeApplied() =
+        runTest {
+            // The label cannot be applied: the mail keeps no label, so the
+            // moment of the run is not moved and the next run looks at it
+            // again.
+            val sink = StringBuilder()
+            val engine = engine(modifyFails = true)
+            val token = tokenFile()
+
+            val result =
+                cli(sink, Clock.fixed(NOW, ZoneOffset.UTC)) { mockClient(engine) }
+                    .test(
+                        "process-inbox --credentials ${credentialsFile()} " +
+                            "--token $token --requirements ${requirementsFile()}",
+                    )
+
+            assertEquals(0, result.statusCode)
+            assertNull(FileLastRunStore.nextTo(token).load())
+            val completed = records(sink).last()
+            assertEquals("process-inbox.completed", completed.event)
+            assertEquals("1", completed.attributes["failed"])
+        }
+
+    @Test
+    fun doesNotRememberTheMomentOfARunWhoseAnswerCouldNotBeRead() =
+        runTest {
+            // The answer of the API cannot be read: the mail is counted as
+            // failed, the run goes on with the other mails and the moment of
+            // the last successful run is not written.
+            val sink = StringBuilder()
+            val engine = engine(brokenAnswer = true)
+            val token = tokenFile()
+
+            val result =
+                cli(sink, Clock.fixed(NOW, ZoneOffset.UTC)) { mockClient(engine) }
+                    .test(
+                        "process-inbox --credentials ${credentialsFile()} " +
+                            "--token $token --requirements ${requirementsFile()}",
+                    )
+
+            assertEquals(0, result.statusCode)
+            assertNull(FileLastRunStore.nextTo(token).load())
+            val completed = records(sink).last()
+            assertEquals("process-inbox.completed", completed.event)
+            assertEquals("1", completed.attributes["failed"])
+        }
+
+    @Test
+    fun doesNotRememberTheMomentOfARunThatBroke() =
+        runTest {
+            // The API answers with something the pipeline did not expect: the
+            // run breaks, the moment of the last successful run is not written
+            // and the window stays open.
+            val sink = StringBuilder()
+            val engine = engine(modifyThrows = true)
+            val token = tokenFile()
+
+            assertFailsWith<IllegalStateException> {
+                cli(sink, Clock.fixed(NOW, ZoneOffset.UTC)) { mockClient(engine) }
+                    .test(
+                        "process-inbox --credentials ${credentialsFile()} " +
+                            "--token $token --requirements ${requirementsFile()}",
+                    )
+            }
+            assertNull(FileLastRunStore.nextTo(token).load())
+        }
+
+    @Test
     fun warnsWhenTheMomentOfTheLastRunIsInTheFuture() =
         runTest {
             val sink = StringBuilder()
@@ -421,19 +531,56 @@ class ProcessInboxCommandTest {
             assertTrue(result.output.contains("The id of a message is not empty"))
         }
 
-    private fun engine(): MockEngine =
+    private fun engine(
+        officeDays: String = "matches",
+        chatAnswers: Boolean = true,
+        brokenAnswer: Boolean = false,
+        modifyFails: Boolean = false,
+        modifyThrows: Boolean = false,
+    ): MockEngine =
         MockEngine { request ->
-            respond(
-                content = contentFor(request),
-                status = HttpStatusCode.OK,
-                headers = jsonHeaders(),
-            )
+            when {
+                request.url.encodedPath.endsWith("/api/chat") && !chatAnswers -> {
+                    respond(content = "boom", status = HttpStatusCode.InternalServerError)
+                }
+
+                request.url.encodedPath.endsWith("/modify") && modifyThrows -> {
+                    error("the API answered with something unexpected")
+                }
+
+                request.url.encodedPath.endsWith("/modify") && brokenAnswer -> {
+                    respond(
+                        content = """{"error":"the answer cannot be read"}""",
+                        status = HttpStatusCode.OK,
+                        headers = jsonHeaders(),
+                    )
+                }
+
+                request.url.encodedPath.endsWith("/modify") && modifyFails -> {
+                    respond(
+                        content = """{"error":"the labels cannot be changed"}""",
+                        status = HttpStatusCode.InternalServerError,
+                        headers = jsonHeaders(),
+                    )
+                }
+
+                else -> {
+                    respond(
+                        content = contentFor(request, officeDays),
+                        status = HttpStatusCode.OK,
+                        headers = jsonHeaders(),
+                    )
+                }
+            }
         }
 
-    private fun contentFor(request: HttpRequestData): String =
+    private fun contentFor(
+        request: HttpRequestData,
+        officeDays: String,
+    ): String =
         when {
             request.url.encodedPath.endsWith("/v1/systemone") -> {
-                decisionAnswer(request)
+                decisionAnswer(request, officeDays)
             }
 
             request.url.encodedPath.endsWith("/api/chat") -> {
@@ -457,7 +604,10 @@ class ProcessInboxCommandTest {
      * The answer of the decision model: the recruiter question of the screening
      * and the criteria of the evaluation are answered differently.
      */
-    private fun decisionAnswer(request: HttpRequestData): String {
+    private fun decisionAnswer(
+        request: HttpRequestData,
+        officeDays: String,
+    ): String {
         val body = (request.body as TextContent).text
         val questions = Json.parseToJsonElement(body).jsonObject["questions"]!!.jsonObject
         val answer =
@@ -465,7 +615,8 @@ class ProcessInboxCommandTest {
                 val choice =
                     when (name) {
                         "recruiter" -> "from a recruiter"
-                        "jd_matches", "office_days" -> "matches"
+                        "jd_matches" -> "matches"
+                        "office_days" -> officeDays
                         else -> "does not match"
                     }
                 """"$name":{"type":"choice","choice":"$choice","confidence":0.9}"""

@@ -54,6 +54,25 @@ class GmailLabelStateManager(
     }
 
     /**
+     * Whether a message carries a state label.
+     *
+     * The mailbox is the state store of the pipeline: it says whether a state
+     * label was applied, even when the answer of the API was lost.
+     *
+     * @param messageId the id of the message.
+     * @param label the state label.
+     * @return whether the message carries the label.
+     */
+    suspend fun carries(
+        messageId: String,
+        label: RecruiterLabel,
+    ): Boolean {
+        val message = messages.getMessage(messageId)
+        val id = stateLabelIds()[label]
+        return id != null && id in message.labelIds
+    }
+
+    /**
      * Removes the state of a message.
      *
      * The message carries no state label afterwards and it is in the inbox

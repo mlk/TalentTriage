@@ -1,5 +1,6 @@
 package uk.me.michaellloydlee.recruiter.application
 
+import kotlinx.serialization.SerializationException
 import uk.me.michaellloydlee.recruiter.application.draft.DraftOutcome
 import uk.me.michaellloydlee.recruiter.application.draft.DraftWriter
 import uk.me.michaellloydlee.recruiter.application.evaluation.EvaluationService
@@ -10,10 +11,12 @@ import uk.me.michaellloydlee.recruiter.domain.gmail.EmailMessage
 import uk.me.michaellloydlee.recruiter.domain.gmail.RunTarget
 import uk.me.michaellloydlee.recruiter.domain.requirements.JobRequirements
 import uk.me.michaellloydlee.recruiter.domain.screening.ScreeningDecision
+import uk.me.michaellloydlee.recruiter.infrastructure.gmail.GmailApiException
 import uk.me.michaellloydlee.recruiter.infrastructure.gmail.GmailLabelStateManager
 import uk.me.michaellloydlee.recruiter.infrastructure.gmail.GmailMessagesApi
 import uk.me.michaellloydlee.recruiter.infrastructure.llm.ModelUsageCounter
 import uk.me.michaellloydlee.recruiter.infrastructure.logging.StructuredLogger
+import java.io.IOException
 import java.time.Clock
 import java.time.Duration
 
@@ -25,6 +28,10 @@ import java.time.Duration
  * end in one of the states of the pipeline. A mail that matches but does not
  * say everything the job seeker needs to know gets a draft that asks the
  * recruiter about it.
+ *
+ * The draft is written before the state of the mail is applied: a mail that
+ * waits for the job seeker always carries the draft that asks the recruiter,
+ * or it keeps no state at all and the next run looks at it again.
  *
  * The run looks at what its target says: the messages of the inbox that
  * arrived after a moment, or one message the job seeker asks for by its id.
@@ -75,6 +82,7 @@ class ProcessInboxService(
             needsMoreInformation = counters.needsMoreInformation,
             trashed = counters.trashed,
             drafts = counters.drafts,
+            failed = counters.failed,
             models = usageCounter.usage(),
             durationMillis = Duration.between(startedAt, clock.instant()).toMillis(),
         )
@@ -169,25 +177,155 @@ class ProcessInboxService(
         // decision of the screening, it is not evaluated.
         when (evaluation.state) {
             EvaluationState.WORTH_FOLLOW_UP -> {
-                counters.worthFollowUp++
+                applyState(message, evaluation.state, counters)
             }
 
             EvaluationState.NEEDS_MORE_INFORMATION -> {
-                counters.needsMoreInformation++
-                askForInformation(message, evaluation, counters)
+                needsMoreInformation(message, evaluation, counters)
             }
 
             EvaluationState.TRASH -> {
-                counters.trashed++
+                applyState(message, evaluation.state, counters)
             }
         }
     }
 
     /**
-     * Writes the draft that asks the recruiter for the missing information.
+     * Applies the state label of a mail and counts it.
      *
-     * The mail keeps the label `Recruiters/NeedsMoreInformation`: the draft
-     * waits in the mailbox of the job seeker and the mail is not asked again.
+     * The label is applied with a request to the API. When the request fails,
+     * the mailbox says what happened: a mail that carries the label is in its
+     * state, a mail that does not carry it keeps no label. The pipeline does
+     * not guess whether the request was applied.
+     *
+     * A label that cannot be applied is a failure of the mail: the mail keeps
+     * no label, the run counts it as failed and the next run looks at it
+     * again. The run goes on with the other mails.
+     *
+     * @param message the mail of the recruiter.
+     * @param state the state the mail changes to.
+     * @param counters the counters of the run.
+     * @return what happened to the label.
+     */
+    private suspend fun applyState(
+        message: EmailMessage,
+        state: EvaluationState,
+        counters: Counters,
+    ): LabelOutcome {
+        val failure =
+            try {
+                stateManager.apply(message.id, state)
+                counters.count(state)
+                null
+            } catch (error: GmailApiException) {
+                Failure(reasonOf(error), rejected = isRejected(error))
+            } catch (error: IOException) {
+                Failure(reasonOf(error), rejected = false)
+            } catch (error: SerializationException) {
+                Failure(reasonOf(error), rejected = false)
+            }
+        if (failure == null) {
+            return LabelOutcome.APPLIED
+        }
+        val presence = presenceOf(message, state)
+        if (presence == LabelOutcome.APPLIED) {
+            // The label is on the mail: the mail is in its state.
+            counters.count(state)
+            return LabelOutcome.APPLIED
+        }
+        counters.failed++
+        logger.warn(
+            event = EVENT_LABEL_FAILED,
+            message = "The state label of the mail could not be applied",
+            attributes =
+                mapOf(
+                    "id" to message.id,
+                    "state" to state.name,
+                    "outcome" to presence.name,
+                    "reason" to failure.reason,
+                ),
+        )
+        // The draft of the mail is only removed when the API rejected the
+        // request and the mailbox says the label is not on the mail: a request
+        // that was not rejected may still be in flight.
+        return if (failure.rejected && presence == LabelOutcome.NOT_APPLIED) {
+            LabelOutcome.NOT_APPLIED
+        } else {
+            LabelOutcome.UNKNOWN
+        }
+    }
+
+    /**
+     * Whether the API rejected the request.
+     *
+     * A request the API answered with an error of the client was not applied.
+     * A request the API answered with an error of the server, or whose answer
+     * was lost, may still be in flight.
+     *
+     * @param error the error of the API.
+     * @return whether the request was rejected.
+     */
+    private fun isRejected(error: GmailApiException): Boolean =
+        error.statusCode in FIRST_CLIENT_ERROR_STATUS..LAST_CLIENT_ERROR_STATUS
+
+    /**
+     * Whether the mail carries the label of its state.
+     *
+     * @param message the mail of the recruiter.
+     * @param state the state the mail was to change to.
+     * @return whether the label is on the mail.
+     */
+    private suspend fun presenceOf(
+        message: EmailMessage,
+        state: EvaluationState,
+    ): LabelOutcome =
+        try {
+            if (stateManager.carries(message.id, state.label)) {
+                LabelOutcome.APPLIED
+            } else {
+                LabelOutcome.NOT_APPLIED
+            }
+        } catch (error: GmailApiException) {
+            mailboxUnreadable(message, reasonOf(error))
+            LabelOutcome.UNKNOWN
+        } catch (error: IOException) {
+            mailboxUnreadable(message, reasonOf(error))
+            LabelOutcome.UNKNOWN
+        } catch (error: SerializationException) {
+            mailboxUnreadable(message, reasonOf(error))
+            LabelOutcome.UNKNOWN
+        }
+
+    /**
+     * Records that the state of a mail could not be read.
+     *
+     * @param message the mail of the recruiter.
+     * @param reason what went wrong, it goes into the log.
+     */
+    private fun mailboxUnreadable(
+        message: EmailMessage,
+        reason: String,
+    ) {
+        logger.warn(
+            event = EVENT_LABEL_UNKNOWN,
+            message = "The state of the mail could not be read",
+            attributes =
+                mapOf(
+                    "id" to message.id,
+                    "reason" to reason,
+                ),
+        )
+    }
+
+    /**
+     * Writes the draft that asks the recruiter for the missing information and
+     * puts the mail into its state.
+     *
+     * The draft is written before the state label is applied: a mail that
+     * waits for the job seeker always carries the draft that asks the
+     * recruiter. A draft that could not be written is a failure of the mail:
+     * the mail keeps no label and the next run looks at it again.
+     *
      * A mail the model could not evaluate gets no draft: the model does not
      * know what is missing. A mail whose only gap is a criterion the model was
      * not sure about gets no draft either: the recruiter cannot be asked
@@ -197,7 +335,7 @@ class ProcessInboxService(
      * @param evaluation the evaluation of the job description.
      * @param counters the counters of the run.
      */
-    private suspend fun askForInformation(
+    private suspend fun needsMoreInformation(
         message: EmailMessage,
         evaluation: JobDescriptionEvaluation,
         counters: Counters,
@@ -205,9 +343,16 @@ class ProcessInboxService(
         val missing =
             when (evaluation) {
                 is JobDescriptionEvaluation.Evaluated -> evaluation.missingInformation
-                is JobDescriptionEvaluation.Unknown -> return
+
+                // The model could not evaluate the job description: it does
+                // not know what the mail is missing, the recruiter is not
+                // asked about it.
+                is JobDescriptionEvaluation.Unknown -> null
             }
-        if (!missing.asksAboutPay && !missing.asksAboutOfficeDays) {
+        if (missing == null || (!missing.asksAboutPay && !missing.asksAboutOfficeDays)) {
+            // The recruiter is not asked about anything: the mail waits for
+            // the job seeker.
+            applyState(message, evaluation.state, counters)
             return
         }
         when (val outcome = drafts.write(message, missing, requirements)) {
@@ -223,9 +368,18 @@ class ProcessInboxService(
                             "reason" to reasonOf(evaluation),
                         ),
                 )
+                if (applyState(message, evaluation.state, counters) == LabelOutcome.NOT_APPLIED) {
+                    // The label is not on the mail: the draft the pipeline
+                    // wrote is removed, the next run writes it again and the
+                    // job seeker does not find two drafts for the same mail.
+                    removeDraft(message, outcome.draftId)
+                }
             }
 
             is DraftOutcome.Failed -> {
+                // The mail keeps no label: the next run looks at it again and
+                // writes the draft.
+                counters.failed++
                 logger.warn(
                     event = EVENT_DRAFT_FAILED,
                     message = "The draft that asks the recruiter for the missing information was not written",
@@ -236,6 +390,44 @@ class ProcessInboxService(
                         ),
                 )
             }
+        }
+    }
+
+    /**
+     * Removes the draft the pipeline wrote for a mail.
+     *
+     * The mail keeps no label, so the next run writes the draft again. The
+     * draft that stays behind would be a second draft for the same mail.
+     *
+     * @param message the mail of the recruiter.
+     * @param draftId the id of the draft.
+     */
+    private suspend fun removeDraft(
+        message: EmailMessage,
+        draftId: String,
+    ) {
+        val failure = drafts.delete(draftId)
+        if (failure == null) {
+            logger.info(
+                event = EVENT_DRAFT_ROLLED_BACK,
+                message = "The draft of the mail was removed: the next run writes it again",
+                attributes =
+                    mapOf(
+                        "id" to message.id,
+                        "draft" to draftId,
+                    ),
+            )
+        } else {
+            logger.warn(
+                event = EVENT_DRAFT_ROLLBACK_FAILED,
+                message = "The draft of the mail could not be removed",
+                attributes =
+                    mapOf(
+                        "id" to message.id,
+                        "draft" to draftId,
+                        "reason" to failure,
+                    ),
+            )
         }
     }
 
@@ -257,6 +449,38 @@ class ProcessInboxService(
         }
 
     /**
+     * The failure of a state label.
+     *
+     * @property reason what went wrong, it goes into the log.
+     * @property rejected whether the API rejected the request.
+     */
+    private data class Failure(
+        val reason: String,
+        val rejected: Boolean,
+    )
+
+    /**
+     * What happened to the state label of a mail.
+     *
+     * The label of a mail is applied with a request to the API: the request
+     * can fail and the answer can be lost. The mailbox says whether the label
+     * is on the mail — the draft of the mail may only be removed when it is
+     * not.
+     */
+    private enum class LabelOutcome {
+        /** The label is on the mail: the mail is in its state. */
+        APPLIED,
+
+        /** The label is not on the mail: the mail keeps no state. */
+        NOT_APPLIED,
+
+        /**
+         * The mailbox could not be read: the label may be on the mail.
+         */
+        UNKNOWN,
+    }
+
+    /**
      * The counters of a run.
      */
     private class Counters {
@@ -268,9 +492,29 @@ class ProcessInboxService(
         var needsMoreInformation: Int = 0
         var trashed: Int = 0
         var drafts: Int = 0
+        var failed: Int = 0
+
+        /**
+         * Counts a mail that carries the label of its state.
+         *
+         * @param state the state the mail reached.
+         */
+        fun count(state: EvaluationState) {
+            when (state) {
+                EvaluationState.WORTH_FOLLOW_UP -> worthFollowUp++
+                EvaluationState.NEEDS_MORE_INFORMATION -> needsMoreInformation++
+                EvaluationState.TRASH -> trashed++
+            }
+        }
     }
 
     companion object {
+        /** The first status of a request the API rejected: nothing was applied. */
+        private const val FIRST_CLIENT_ERROR_STATUS: Int = 400
+
+        /** The last status of a request the API rejected: nothing was applied. */
+        private const val LAST_CLIENT_ERROR_STATUS: Int = 499
+
         /** The event of the log of a screened message. */
         const val EVENT_SCREENED: String = "process-inbox.screened"
 
@@ -282,5 +526,17 @@ class ProcessInboxService(
 
         /** The event of the log of a draft that could not be written. */
         const val EVENT_DRAFT_FAILED: String = "process-inbox.draft_failed"
+
+        /** The event of the log of a state label that could not be applied. */
+        const val EVENT_LABEL_FAILED: String = "process-inbox.label_failed"
+
+        /** The event of the log of a state of a mail that could not be read. */
+        const val EVENT_LABEL_UNKNOWN: String = "process-inbox.label_unknown"
+
+        /** The event of the log of a draft that was removed again. */
+        const val EVENT_DRAFT_ROLLED_BACK: String = "process-inbox.draft_rolled_back"
+
+        /** The event of the log of a draft that could not be removed. */
+        const val EVENT_DRAFT_ROLLBACK_FAILED: String = "process-inbox.draft_rollback_failed"
     }
 }

@@ -35,6 +35,15 @@ class GmailDraftsApi(
         return api.post(DRAFTS_PATH, body, GmailDraftResource.serializer()).id
     }
 
+    /**
+     * Removes a draft from the mailbox.
+     *
+     * @param draftId the id of the draft.
+     */
+    suspend fun deleteDraft(draftId: String) {
+        api.delete("$DRAFTS_PATH/$draftId")
+    }
+
     companion object {
         /** The path of the endpoint that creates a draft. */
         const val DRAFTS_PATH: String = "users/me/drafts"

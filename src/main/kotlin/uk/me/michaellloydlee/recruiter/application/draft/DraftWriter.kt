@@ -1,5 +1,7 @@
 package uk.me.michaellloydlee.recruiter.application.draft
 
+import kotlinx.serialization.SerializationException
+import uk.me.michaellloydlee.recruiter.application.reasonOf
 import uk.me.michaellloydlee.recruiter.domain.evaluation.MissingInformation
 import uk.me.michaellloydlee.recruiter.domain.gmail.EmailDraft
 import uk.me.michaellloydlee.recruiter.domain.gmail.EmailMessage
@@ -86,13 +88,16 @@ class DraftWriter(
                 ModelReply.Written(content)
             }
         } catch (error: OllamaException) {
-            ModelReply.Failed("The model of the draft answered with an error: ${error.message}")
+            ModelReply.Failed("The model of the draft answered with an error: ${reasonOf(error)}")
         } catch (error: IOException) {
-            ModelReply.Failed("The model of the draft could not be reached: ${error.message}")
+            ModelReply.Failed("The model of the draft could not be reached: ${reasonOf(error)}")
         }
 
     /**
      * Writes the draft into the mailbox.
+     *
+     * A network failure leaves the mail without a draft as well: the mail is
+     * looked at again by the next run.
      *
      * @param message the mail of the recruiter.
      * @param text the reply of the model.
@@ -105,7 +110,47 @@ class DraftWriter(
         try {
             DraftOutcome.Written(drafts.createDraft(draft(message, text)))
         } catch (error: GmailApiException) {
-            DraftOutcome.Failed("The draft of the mail ${message.id} could not be written: ${error.message}")
+            notWritten(message, error)
+        } catch (error: IOException) {
+            notWritten(message, error)
+        } catch (error: SerializationException) {
+            notWritten(message, error)
+        }
+
+    /**
+     * The draft could not be written into the mailbox.
+     *
+     * @param message the mail of the recruiter.
+     * @param error what went wrong.
+     * @return the outcome of the draft.
+     */
+    private fun notWritten(
+        message: EmailMessage,
+        error: Exception,
+    ): DraftOutcome =
+        DraftOutcome.Failed("The draft of the mail ${message.id} could not be written: ${reasonOf(error)}")
+
+    /**
+     * Removes a draft from the mailbox.
+     *
+     * The draft of a mail whose state label could not be applied is removed:
+     * the mail keeps no label, so the next run writes the draft again and the
+     * job seeker does not find two drafts for the same mail.
+     *
+     * @param draftId the id of the draft.
+     * @return the reason the draft could not be removed, null when it was
+     *   removed.
+     */
+    suspend fun delete(draftId: String): String? =
+        try {
+            drafts.deleteDraft(draftId)
+            null
+        } catch (error: GmailApiException) {
+            reasonOf(error)
+        } catch (error: IOException) {
+            reasonOf(error)
+        } catch (error: SerializationException) {
+            reasonOf(error)
         }
 
     /**

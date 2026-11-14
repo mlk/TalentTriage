@@ -36,6 +36,8 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
+import kotlin.test.assertNotNull
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class DraftWriterTest {
@@ -222,6 +224,17 @@ class DraftWriterTest {
         }
 
     @Test
+    fun aNetworkFailureOfTheMailboxLeavesTheMailWithoutADraft() =
+        runTest {
+            val gmail = MockEngine { throw IOException("the network is down") }
+
+            val outcome = writer(modelEngine(), gmail).write(message(), missingPay(), REQUIREMENTS)
+
+            val failed = assertIs<DraftOutcome.Failed>(outcome)
+            assertTrue(failed.reason.contains("could not be written"))
+        }
+
+    @Test
     fun anEmptyAnswerOfTheModelLeavesTheMailWithoutADraft() =
         runTest {
             val gmail = gmailEngine()
@@ -311,6 +324,50 @@ class DraftWriterTest {
 
             val failed = assertIs<DraftOutcome.Failed>(outcome)
             assertTrue(failed.reason.contains("could not be written"))
+        }
+
+    @Test
+    fun anAnswerOfTheMailboxThatCannotBeReadLeavesTheMailWithoutADraft() =
+        runTest {
+            val gmail =
+                MockEngine {
+                    respond(content = "this is not json", status = HttpStatusCode.OK)
+                }
+
+            val outcome = writer(modelEngine(), gmail).write(message(), missingPay(), REQUIREMENTS)
+
+            val failed = assertIs<DraftOutcome.Failed>(outcome)
+            assertTrue(failed.reason.contains("could not be written"))
+        }
+
+    @Test
+    fun removesTheDraftFromTheMailbox() =
+        runTest {
+            // The API answers a delete with an empty body and no content.
+            val gmail =
+                MockEngine {
+                    respond(content = "", status = HttpStatusCode.NoContent)
+                }
+
+            val failure = writer(modelEngine(), gmail).delete("draft-id")
+
+            assertNull(failure)
+            val request = gmail.requestHistory.single()
+            assertEquals("DELETE", request.method.value)
+            assertTrue(request.url.encodedPath.endsWith("/users/me/drafts/draft-id"))
+        }
+
+    @Test
+    fun saysWhyTheDraftCouldNotBeRemoved() =
+        runTest {
+            val gmail =
+                MockEngine {
+                    respond(content = """{"error":"quota"}""", status = HttpStatusCode.Forbidden)
+                }
+
+            val reason = assertNotNull(writer(modelEngine(), gmail).delete("draft-id"))
+
+            assertTrue(reason.contains("GmailApiException"))
         }
 
     private suspend fun writer(

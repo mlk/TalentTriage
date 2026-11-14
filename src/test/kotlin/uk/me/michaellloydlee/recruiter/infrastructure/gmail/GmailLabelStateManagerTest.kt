@@ -111,6 +111,26 @@ class GmailLabelStateManagerTest {
             assertTrue(modifies.isEmpty())
         }
 
+    @Test
+    fun saysThatAMessageCarriesTheStateLabel() =
+        runTest {
+            val engine = engine(messageLabels = listOf("Label_needsmoreinformation"))
+
+            val carries = stateManager(engine).carries("message-id", RecruiterLabel.NEEDS_MORE_INFORMATION)
+
+            assertTrue(carries)
+        }
+
+    @Test
+    fun saysThatAMessageDoesNotCarryTheStateLabel() =
+        runTest {
+            val engine = engine()
+
+            val carries = stateManager(engine).carries("message-id", RecruiterLabel.NEEDS_MORE_INFORMATION)
+
+            assertFalse(carries)
+        }
+
     private fun message(labelId: String): EmailMessage =
         EmailMessage(
             id = "message-id",
@@ -123,7 +143,10 @@ class GmailLabelStateManagerTest {
 
     private fun bodyOf(engine: MockEngine): String = (engine.requestHistory.last().body as TextContent).text
 
-    private fun engine(existingLabels: List<String> = ALL_LABELS): MockEngine =
+    private fun engine(
+        existingLabels: List<String> = ALL_LABELS,
+        messageLabels: List<String> = emptyList(),
+    ): MockEngine =
         MockEngine { request ->
             when {
                 request.url.encodedPath.endsWith("/users/me/labels") && request.method.value == "GET" -> {
@@ -143,7 +166,11 @@ class GmailLabelStateManagerTest {
                 }
 
                 else -> {
-                    respond(content = """{"id":"message-id"}""", status = HttpStatusCode.OK)
+                    val labels = messageLabels.joinToString(",") { label -> "\"$label\"" }
+                    respond(
+                        content = """{"id":"message-id","labelIds":[$labels]}""",
+                        status = HttpStatusCode.OK,
+                    )
                 }
             }
         }

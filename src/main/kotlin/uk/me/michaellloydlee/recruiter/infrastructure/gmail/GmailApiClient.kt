@@ -69,10 +69,32 @@ class GmailApiClient(
             setBody(body)
         }
 
+    /**
+     * Sends a `DELETE` request.
+     *
+     * The answer of the API is not read: the body of a delete can be empty.
+     *
+     * @param path path of the resource, relative to the base URL.
+     */
+    suspend fun delete(path: String) {
+        bodyOf {
+            method = HttpMethod.Delete
+            url(resolve(path))
+        }
+    }
+
     private suspend fun <T> execute(
         deserializer: DeserializationStrategy<T>,
         request: HttpRequestBuilder.() -> Unit,
-    ): T {
+    ): T = json.decodeFromString(deserializer, bodyOf(request))
+
+    /**
+     * The body of the answer of the API.
+     *
+     * @param request the request to send.
+     * @return the body of the answer.
+     */
+    private suspend fun bodyOf(request: HttpRequestBuilder.() -> Unit): String {
         val response = send(request, tokens.accessToken())
         val authenticated =
             if (response.status == HttpStatusCode.Unauthorized) {
@@ -84,7 +106,7 @@ class GmailApiClient(
         if (!authenticated.status.isSuccess()) {
             throw GmailApiException(authenticated.status.value, body)
         }
-        return json.decodeFromString(deserializer, body)
+        return body
     }
 
     private suspend fun send(
