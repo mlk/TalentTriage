@@ -179,7 +179,8 @@ the senders of the job boards and the phrases of a job listing — are the rules
 ```
 
 A field that is not in the file keeps the rule of the code, a field that is in the file replaces
-it — an empty list empties the rule. The words are matched as a part of a word, without the case.
+it — an empty list empties the rule. A key that is not one of the four fields, or a file that is
+not valid JSON, fails the run. The words are matched as a part of a word, without the case.
 Without `--rules` the file is `rules.json` in the working directory: if it does not exist the
 rules of the code are used. A file that is named with `--rules` and does not exist fails the run.
 The file is git-ignored like the credentials.

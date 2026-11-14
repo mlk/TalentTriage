@@ -57,22 +57,8 @@ class RulesFileTest {
     }
 
     @Test
-    fun anEmptyFileBehavesLikeTheRulesOfTheCode() {
-        val fromFile = RulesFile.load(rulesFile("{}"))
-        val defaults = ScreeningRules.defaults()
-        val messages =
-            listOf(
-                message(subject = "We are looking for a developer"),
-                message(subject = "Your invoice of April"),
-                message(sender = "jobalerts-noreply@linkedin.com"),
-                message(subject = "new jobs for you"),
-                message(subject = "Hello", sender = "someone@example.com"),
-            )
-
-        messages.forEach { message ->
-            assertEquals(defaults.recruiter.isCandidate(message), fromFile.recruiter.isCandidate(message))
-            assertEquals(defaults.jobListings.isJobListing(message), fromFile.jobListings.isJobListing(message))
-        }
+    fun anEmptyFileEqualsTheRulesOfTheCode() {
+        assertEquals(ScreeningRules.defaults(), RulesFile.load(rulesFile("{}")))
     }
 
     @Test

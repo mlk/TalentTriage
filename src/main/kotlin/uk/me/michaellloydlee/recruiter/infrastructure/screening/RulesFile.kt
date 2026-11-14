@@ -23,19 +23,7 @@ data class ScreeningRules(
         /**
          * The rules of the code.
          */
-        fun defaults(): ScreeningRules =
-            ScreeningRules(
-                recruiter =
-                    RecruiterHeuristics(
-                        keywords = RecruiterHeuristics.DEFAULT_KEYWORDS,
-                        senderHints = RecruiterHeuristics.DEFAULT_SENDER_HINTS,
-                    ),
-                jobListings =
-                    JobListingHeuristics(
-                        senderHints = JobListingHeuristics.DEFAULT_SENDER_HINTS,
-                        phrases = JobListingHeuristics.DEFAULT_PHRASES,
-                    ),
-            )
+        fun defaults(): ScreeningRules = ScreeningRules(RecruiterHeuristics(), JobListingHeuristics())
     }
 }
 
@@ -78,16 +66,17 @@ object RulesFile {
         }
         val file = decode(path, read(path), json)
         validate(path, file)
+        val defaults = ScreeningRules.defaults()
         return ScreeningRules(
             recruiter =
                 RecruiterHeuristics(
-                    keywords = file.recruiterKeywords ?: RecruiterHeuristics.DEFAULT_KEYWORDS,
-                    senderHints = file.recruiterSenderHints ?: RecruiterHeuristics.DEFAULT_SENDER_HINTS,
+                    keywords = file.recruiterKeywords ?: defaults.recruiter.keywords,
+                    senderHints = file.recruiterSenderHints ?: defaults.recruiter.senderHints,
                 ),
             jobListings =
                 JobListingHeuristics(
-                    senderHints = file.jobBoardSenders ?: JobListingHeuristics.DEFAULT_SENDER_HINTS,
-                    phrases = file.jobListingPhrases ?: JobListingHeuristics.DEFAULT_PHRASES,
+                    senderHints = file.jobBoardSenders ?: defaults.jobListings.senderHints,
+                    phrases = file.jobListingPhrases ?: defaults.jobListings.phrases,
                 ),
         )
     }
