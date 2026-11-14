@@ -1,5 +1,6 @@
 package uk.me.michaellloydlee.recruiter.infrastructure.screening
 
+import org.junit.jupiter.api.AfterEach
 import uk.me.michaellloydlee.recruiter.domain.gmail.EmailMessage
 import java.nio.file.Path
 import kotlin.io.path.createTempDirectory
@@ -11,6 +12,16 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class RulesFileTest {
+    private val tempDirs = mutableListOf<Path>()
+
+    private fun tempDir(prefix: String): Path = createTempDirectory(prefix).also { tempDirs.add(it) }
+
+    @AfterEach
+    fun cleanupTempDirs() {
+        tempDirs.forEach { it.toFile().deleteRecursively() }
+        tempDirs.clear()
+    }
+
     @Test
     fun aWordOfTheFileMakesACandidate() {
         val rules = RulesFile.load(rulesFile("""{"recruiter_keywords": ["parallelwelt"]}"""))
@@ -63,7 +74,7 @@ class RulesFileTest {
 
     @Test
     fun failsWhenTheFileIsADirectory() {
-        val directory = createTempDirectory("rules")
+        val directory = tempDir("rules")
 
         val error = assertFailsWith<IllegalArgumentException> { RulesFile.load(directory) }
 
@@ -77,6 +88,13 @@ class RulesFileTest {
         val error = assertFailsWith<IllegalArgumentException> { RulesFile.load(file) }
 
         assertTrue(error.message!!.contains("is empty"))
+    }
+
+    @Test
+    fun aWordWithSurroundingSpacesMatchesAfterTrimming() {
+        val rules = RulesFile.load(rulesFile("""{"recruiter_keywords": ["  engineer  "]}"""))
+
+        assertTrue(rules.recruiter.isCandidate(message(subject = "We are looking for an ENGINEER")))
     }
 
     @Test
@@ -117,7 +135,7 @@ class RulesFileTest {
     }
 
     private fun rulesFile(content: String): Path {
-        val file = createTempDirectory("rules").resolve("rules.json")
+        val file = tempDir("rules").resolve("rules.json")
         file.writeText(content)
         return file
     }

@@ -16,6 +16,7 @@ import io.ktor.serialization.kotlinx.json.json
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
+import org.junit.jupiter.api.AfterEach
 import uk.me.michaellloydlee.recruiter.infrastructure.logging.LogRecord
 import uk.me.michaellloydlee.recruiter.infrastructure.logging.StructuredLogger
 import uk.me.michaellloydlee.recruiter.infrastructure.run.FileLastRunStore
@@ -31,6 +32,16 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class ProcessInboxCommandTest {
+    private val tempDirs = mutableListOf<Path>()
+
+    private fun tempDir(prefix: String): Path = createTempDirectory(prefix).also { tempDirs.add(it) }
+
+    @AfterEach
+    fun cleanupTempDirs() {
+        tempDirs.forEach { it.toFile().deleteRecursively() }
+        tempDirs.clear()
+    }
+
     @Test
     fun screensTheUnprocessedMessagesWithTheDecisionModel() =
         runTest {
@@ -471,7 +482,7 @@ class ProcessInboxCommandTest {
     fun failsWhenTheRulesFileIsNotReadable() =
         runTest {
             val sink = StringBuilder()
-            val rules = createTempDirectory("rules")
+            val rules = tempDir("rules")
 
             val result =
                 cli(sink).test(
@@ -482,6 +493,7 @@ class ProcessInboxCommandTest {
                 )
 
             assertEquals(1, result.statusCode)
+            assertTrue(result.output.contains("could not be read"))
         }
 
     @Test
@@ -499,6 +511,7 @@ class ProcessInboxCommandTest {
                 )
 
             assertEquals(1, result.statusCode)
+            assertTrue(result.output.contains("could not be read"))
         }
 
     @Test
@@ -506,7 +519,7 @@ class ProcessInboxCommandTest {
         runTest {
             val sink = StringBuilder()
             val engine = engine()
-            val missing = createTempDirectory("rules").resolve("rules.json")
+            val missing = tempDir("rules").resolve("rules.json")
             val command =
                 ProcessInboxCommand(
                     StructuredLogger(sink),
@@ -540,6 +553,7 @@ class ProcessInboxCommandTest {
                 )
 
             assertEquals(1, result.statusCode)
+            assertTrue(result.output.contains("Rules file not found"))
         }
 
     private fun engine(): MockEngine =
@@ -607,27 +621,27 @@ class ProcessInboxCommandTest {
     ): TriageCli = TriageCli(StructuredLogger(sink), httpClientFactory, clock)
 
     private fun credentialsFile(): Path {
-        val file = createTempDirectory("credentials").resolve("credentials.json")
+        val file = tempDir("credentials").resolve("credentials.json")
         file.writeText("""{"client_id":"client-id","client_secret":"client-secret"}""")
         return file
     }
 
     private fun rulesFile(content: String): Path {
-        val file = createTempDirectory("rules").resolve("rules.json")
+        val file = tempDir("rules").resolve("rules.json")
         file.writeText(content)
         return file
     }
 
-    private fun missingRulesFile(): Path = createTempDirectory("rules").resolve("rules.json")
+    private fun missingRulesFile(): Path = tempDir("rules").resolve("rules.json")
 
     private fun emptyRulesFile(): Path {
-        val file = createTempDirectory("rules").resolve("rules.json")
+        val file = tempDir("rules").resolve("rules.json")
         file.writeText("{}")
         return file
     }
 
     private fun requirementsFile(): Path {
-        val file = createTempDirectory("requirements").resolve("requirements.json")
+        val file = tempDir("requirements").resolve("requirements.json")
         file.writeText(
             """{"maximum_office_days": 2, "profile": "Senior Kotlin engineer"}""",
         )
@@ -635,7 +649,7 @@ class ProcessInboxCommandTest {
     }
 
     private fun tokenFile(): Path {
-        val file = createTempDirectory("token").resolve("token.json")
+        val file = tempDir("token").resolve("token.json")
         val expiry = Instant.now().plusSeconds(3600)
         file.writeText(
             """{"access_token":"access-token","refresh_token":"refresh-token","expires_at":"$expiry"}""",

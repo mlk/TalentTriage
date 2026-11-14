@@ -66,13 +66,17 @@ object RulesFile {
         return ScreeningRules(
             recruiter =
                 RecruiterHeuristics(
-                    keywords = file.recruiterKeywords ?: defaults.recruiter.keywords,
-                    senderHints = file.recruiterSenderHints ?: defaults.recruiter.senderHints,
+                    keywords =
+                        file.recruiterKeywords?.map(String::trim) ?: defaults.recruiter.keywords,
+                    senderHints =
+                        file.recruiterSenderHints?.map(String::trim) ?: defaults.recruiter.senderHints,
                 ),
             jobListings =
                 JobListingHeuristics(
-                    senderHints = file.jobBoardSenders ?: defaults.jobListings.senderHints,
-                    phrases = file.jobListingPhrases ?: defaults.jobListings.phrases,
+                    senderHints =
+                        file.jobBoardSenders?.map(String::trim) ?: defaults.jobListings.senderHints,
+                    phrases =
+                        file.jobListingPhrases?.map(String::trim) ?: defaults.jobListings.phrases,
                 ),
         )
     }
