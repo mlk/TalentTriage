@@ -101,9 +101,9 @@ is validated like input:
 * **Unknown keys fail.** A typo in a key is an error, never a silent keep-the-code-default. The
   job seeker believes their rules are applied; a silent ignore is a lie.
 * **Words are trimmed on the way in.** A whitespace-padded word is a rule that matches nothing.
-* **A blank word is an error**, an empty file — no parseable content, zero bytes or whitespace
-  only — is an error, both name the file. A file holding `{}` is not empty: it provides no keys
-  and gets the defaults.
+* **A blank word is an error**, and an empty file — zero bytes or whitespace only — is an error;
+  both name the file. Content that fails to parse is invalid JSON, not an empty file. A file
+  holding `{}` is not empty: it provides no keys and gets the defaults.
 * **Defaults fill the keys the file does not provide.** No file → the documented defaults; a file
   that provides no keys (`{}`) → exactly the defaults; a file that provides some keys → those
   keys win, the rest are the defaults. A file named on the command line that does not exist → an
@@ -251,9 +251,10 @@ All of them run in CI, and they fail the build:
 * A test must not depend on the machine it runs on — no file of the working directory, no
   network, no clock of the host. Inject the path (a temporary directory) instead of relying on the
   current directory: a developer with a `rules.json` in the project root must not get a red build.
-* Assert the contract, not the exit code. A failing command is asserted by its message, the log
-  record it writes or the label it applies — a bare `assertEquals(1, result.statusCode)` also
-  passes when the failure comes from somewhere else entirely.
+* Assert the contract, not just the exit code. A failing command is asserted by its message, the
+  log record it writes or the label it applies — a bare `assertEquals(1, result.statusCode)` also
+  passes when the failure comes from somewhere else entirely, so keep the exit-code assertion next
+  to the contract assertion.
 
 ### Do not test the libraries
 
