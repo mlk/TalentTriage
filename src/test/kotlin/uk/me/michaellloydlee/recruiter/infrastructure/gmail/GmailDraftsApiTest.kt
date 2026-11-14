@@ -81,10 +81,10 @@ class GmailDraftsApiTest {
     @Test
     fun removesTheDraftFromTheMailbox() =
         runTest {
-            // The API answers a delete with an empty body.
+            // The API answers a delete with an empty body and no content.
             val engine =
                 MockEngine {
-                    respond(content = "", status = HttpStatusCode.OK)
+                    respond(content = "", status = HttpStatusCode.NoContent)
                 }
 
             api(engine).deleteDraft("draft-id")

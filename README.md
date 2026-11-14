@@ -353,7 +353,7 @@ message:
 | `process-inbox.attachment_failed` | INFO | an attachment could not be read (`id`, `file`, `reason`) |
 | `process-inbox.draft_written` | INFO | a draft was written (`id`, `draft`, `reason`) |
 | `process-inbox.draft_failed` | WARN | no draft could be written, the mail keeps no label (`id`, `reason`) |
-| `process-inbox.label_failed` | WARN | the state label could not be applied, the mail keeps no label (`id`, `state`, `label`, `reason`) |
+| `process-inbox.label_failed` | WARN | the state label could not be applied, the mail keeps no label (`id`, `state`, `outcome`, `reason`) |
 | `process-inbox.label_unknown` | WARN | the state of the mail could not be read, the label may be on it (`id`, `reason`) |
 | `process-inbox.draft_rolled_back` | INFO | the draft of a mail whose label failed was removed again (`id`, `draft`) |
 | `process-inbox.draft_rollback_failed` | WARN | the draft of a mail whose label failed could not be removed (`id`, `draft`, `reason`) |

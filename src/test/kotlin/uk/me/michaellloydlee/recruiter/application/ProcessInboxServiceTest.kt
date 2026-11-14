@@ -494,10 +494,10 @@ class ProcessInboxServiceTest {
     @Test
     fun keepsTheDraftWhenTheRequestMayStillBeInFlight() =
         runTest {
-            // The answer of the API was lost: the request may still be in
-            // flight, so the draft stays. A mail with a label and without a
-            // draft would wait for the job seeker forever.
-            val gmail = gmailEngine(failure = MailboxFailure.LOST)
+            // The API failed: the request may still be in flight, so the draft
+            // stays. A mail with a label and without a draft would wait for the
+            // job seeker forever.
+            val gmail = gmailEngine(failure = MailboxFailure.SERVER_ERROR)
             val model = modelEngine(officeDays = "unclear")
 
             val summary = service(gmail, model).run(WINDOW)
@@ -531,11 +531,7 @@ class ProcessInboxServiceTest {
         runTest {
             // The answer of the API was lost, but the mailbox says the label
             // is on the mail: the mail is in its state and the draft stays.
-            val gmail =
-                gmailEngine(
-                    failure = MailboxFailure.LOST,
-                    labels = listOf("INBOX", "Label_needsmoreinformation"),
-                )
+            val gmail = gmailEngine(failure = MailboxFailure.LOST)
             val model = modelEngine(officeDays = "unclear")
 
             val summary = service(gmail, model).run(WINDOW)
@@ -564,33 +560,12 @@ class ProcessInboxServiceTest {
         }
 
     @Test
-    fun keepsTheDraftWhenTheAnswerOfTheLabelCannotBeRead() =
-        runTest {
-            // The answer of the API cannot be read: the request may still be in
-            // flight, so the draft stays.
-            val gmail = gmailEngine(failure = MailboxFailure.UNREADABLE)
-            val model = modelEngine(officeDays = "unclear")
-
-            val summary = service(gmail, model).run(WINDOW)
-
-            assertEquals(2, summary.drafts)
-            assertEquals(2, summary.failed)
-            assertEquals(0, summary.needsMoreInformation)
-            val deletions = gmail.requestHistory.filter { it.method.value == "DELETE" }
-            assertTrue(deletions.isEmpty())
-        }
-
-    @Test
     fun countsAMailWhoseLabelCannotBeReadAnywayAsInItsState() =
         runTest {
             // The answer of the API cannot be read, but the mailbox says the
             // label is on the mail: the mail is in its state and the draft
             // stays.
-            val gmail =
-                gmailEngine(
-                    failure = MailboxFailure.UNREADABLE,
-                    labels = listOf("INBOX", "Label_needsmoreinformation"),
-                )
+            val gmail = gmailEngine(failure = MailboxFailure.UNREADABLE)
             val model = modelEngine(officeDays = "unclear")
 
             val summary = service(gmail, model).run(WINDOW)

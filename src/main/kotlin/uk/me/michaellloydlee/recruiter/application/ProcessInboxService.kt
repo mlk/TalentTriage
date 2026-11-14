@@ -266,7 +266,7 @@ class ProcessInboxService(
      * @return whether the request was rejected.
      */
     private fun isRejected(error: GmailApiException): Boolean =
-        error.statusCode in CLIENT_ERROR_STATUS..SERVER_ERROR_STATUS
+        error.statusCode in FIRST_CLIENT_ERROR_STATUS..LAST_CLIENT_ERROR_STATUS
 
     /**
      * Whether the mail carries the label of its state.
@@ -509,11 +509,11 @@ class ProcessInboxService(
     }
 
     companion object {
-        /** The status of a request the API rejected: nothing was applied. */
-        private const val CLIENT_ERROR_STATUS: Int = 400
+        /** The first status of a request the API rejected: nothing was applied. */
+        private const val FIRST_CLIENT_ERROR_STATUS: Int = 400
 
-        /** The status of a request the API failed on: it may be in flight. */
-        private const val SERVER_ERROR_STATUS: Int = 499
+        /** The last status of a request the API rejected: nothing was applied. */
+        private const val LAST_CLIENT_ERROR_STATUS: Int = 499
 
         /** The event of the log of a screened message. */
         const val EVENT_SCREENED: String = "process-inbox.screened"

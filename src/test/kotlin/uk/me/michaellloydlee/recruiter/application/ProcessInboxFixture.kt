@@ -13,6 +13,7 @@ import io.ktor.http.content.TextContent
 import io.ktor.http.headersOf
 import io.ktor.serialization.kotlinx.json.json
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import uk.me.michaellloydlee.recruiter.application.draft.DraftWriter
@@ -178,23 +179,52 @@ internal fun gmailEngine(
     failure: MailboxFailure = MailboxFailure.NONE,
     draftFails: Boolean = false,
 ): MockEngine {
-    // The ids of the messages whose labels were changed, the mailbox knows
-    // them once the request was answered.
-    val changed = mutableSetOf<String>()
+    // The labels the API applied to the messages: it applies the labels of a
+    // request it processes, even when the answer does not arrive.
+    val applied = mutableMapOf<String, List<String>>()
+    // The reads of every message, the second read is the one that looks for
+    // the label after a failure.
+    val reads = mutableMapOf<String, Int>()
     return MockEngine { request ->
         val path = request.url.encodedPath
         val id = idOf(request)
-        if (path.endsWith("/modify")) {
-            changed.add(id)
+        val read = path.contains("/users/me/messages/") && !path.endsWith("/modify")
+        if (read) {
+            reads[id] = (reads[id] ?: 0) + 1
+        }
+        if (path.endsWith("/modify") && failure.appliesTheLabels()) {
+            applied[id] = labelsOf(request)
         }
         val answer =
-            if (failure == MailboxFailure.MAILBOX_LOST && id in changed) {
+            if (failure == MailboxFailure.MAILBOX_LOST && read && reads[id] == 2) {
                 Answer(MAILBOX_ERROR, HttpStatusCode.InternalServerError)
             } else {
-                answerOf(request, listing, labels, failure, draftFails)
+                answerOf(request, listing, labels + applied[id].orEmpty(), failure, draftFails)
             }
         respond(content = answer.content, status = answer.status, headers = jsonHeaders())
     }
+}
+
+/**
+ * Whether the API applies the labels of a request it processes.
+ *
+ * @return whether the labels of the request are applied.
+ */
+private fun MailboxFailure.appliesTheLabels(): Boolean =
+    this == MailboxFailure.NONE ||
+        this == MailboxFailure.LOST ||
+        this == MailboxFailure.UNREADABLE
+
+/**
+ * The labels a request adds to a message.
+ *
+ * @param request the request of the API.
+ * @return the labels of the request.
+ */
+private fun labelsOf(request: HttpRequestData): List<String> {
+    val body = (request.body as TextContent).text
+    val added = Json.parseToJsonElement(body).jsonObject["addLabelIds"]
+    return added?.jsonArray?.map { it.jsonPrimitive.content } ?: emptyList()
 }
 
 /**
@@ -259,8 +289,8 @@ private fun answerOf(
 
         path.endsWith("/users/me/drafts") -> Answer(DRAFT)
 
-        // The API answers a delete with an empty body.
-        request.method.value == "DELETE" -> Answer("")
+        // The API answers a delete with an empty body and no content.
+        request.method.value == "DELETE" -> Answer("", HttpStatusCode.NoContent)
 
         path.endsWith("/modify") -> modifyAnswer(request, failure)
 
