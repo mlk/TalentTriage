@@ -35,9 +35,9 @@ internal fun message(
 ): String {
     val sender =
         if (listing) {
-            "LinkedIn Job Alerts &lt;jobalerts-noreply@linkedin.com&gt;"
+            "LinkedIn Job Alerts <jobalerts-noreply@linkedin.com>"
         } else {
-            "recruiter@example.com"
+            "Jane Recruiter <recruiter@example.com>"
         }
     return """
         {

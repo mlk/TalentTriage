@@ -43,6 +43,8 @@ import uk.me.michaellloydlee.recruiter.infrastructure.requirements.RequirementsF
 import uk.me.michaellloydlee.recruiter.infrastructure.run.FileLastRunStore
 import uk.me.michaellloydlee.recruiter.infrastructure.screening.RulesFile
 import uk.me.michaellloydlee.recruiter.infrastructure.screening.ScreeningRules
+import java.net.URI
+import java.net.URISyntaxException
 import java.nio.file.Files
 import java.nio.file.Path
 import java.time.Clock
@@ -525,16 +527,19 @@ class ProcessInboxCommand(
         notificationWebhook?.let { WebhookNotifier(httpClient = client, url = webhookUrl(it)) }
 
     /**
-     * The URL of the webhook, it has to look like a URL the client can talk
-     * to. The scheme is matched without a case, as URLs are case insensitive
-     * in the scheme, and the host has to be there. The path and the query
-     * are the webhook's own, they are passed on unchanged.
+     * The URL of the webhook, it has to parse as an absolute http or https
+     * URL with a host. The path and the query are the webhook's own, they are
+     * passed on unchanged.
      */
     private fun webhookUrl(value: String): String {
-        val schemeEnd = value.indexOf(SCHEME_SEPARATOR)
-        val scheme = if (schemeEnd > 0) value.substring(0, schemeEnd).lowercase() else ""
-        val host = if (schemeEnd > 0) value.substring(schemeEnd + SCHEME_SEPARATOR.length).substringBefore('/') else ""
-        if ((scheme != "http" && scheme != "https") || host.isEmpty()) {
+        val uri =
+            try {
+                URI(value)
+            } catch (error: URISyntaxException) {
+                throw CommandFailedException("The webhook '$value' is not a URL: ${error.reason}", error)
+            }
+        val scheme = uri.scheme?.lowercase()
+        if ((scheme != "http" && scheme != "https") || uri.host.isNullOrBlank()) {
             throw CommandFailedException("The webhook '$value' needs a scheme like http:// or https://")
         }
         return value
@@ -623,8 +628,5 @@ class ProcessInboxCommand(
 
         /** How long the evaluation of a job description may take, in milliseconds. */
         const val DEFAULT_EVALUATION_TIMEOUT_MILLIS: Long = 600_000
-
-        /** The separator between the scheme of an URL and the rest of it. */
-        private const val SCHEME_SEPARATOR: String = "://"
     }
 }

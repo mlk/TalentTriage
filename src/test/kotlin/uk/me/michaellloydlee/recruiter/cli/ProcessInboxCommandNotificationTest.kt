@@ -53,9 +53,15 @@ class ProcessInboxCommandNotificationTest {
             )
             mails.forEach { mail ->
                 assertEquals(
-                    "recruiter@example.com",
+                    "Jane Recruiter <recruiter@example.com>",
                     mail.jsonObject
                         .getValue("sender")
+                        .jsonPrimitive.content,
+                )
+                assertEquals(
+                    "Your CV",
+                    mail.jsonObject
+                        .getValue("subject")
                         .jsonPrimitive.content,
                 )
                 assertEquals(

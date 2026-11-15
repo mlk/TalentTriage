@@ -106,7 +106,7 @@ class WebhookNotifier(
         /** How long a call may take, in milliseconds. */
         const val DEFAULT_TIMEOUT_MILLIS: Long = 10_000
 
-        /** How many characters of the error body of the webhook go into the failure reason. */
+        /** How many bytes of the error body of the webhook go into the failure reason. */
         const val MAX_ERROR_BODY_LENGTH: Int = 512
     }
 }

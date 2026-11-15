@@ -84,6 +84,10 @@ internal fun contentFor(
             messageList
         }
 
+        request.url.encodedPath.endsWith("/users/me/drafts") -> {
+            """{"id":"draft-id"}"""
+        }
+
         request.url.encodedPath.endsWith("/users/me/labels") -> {
             if (request.method.value == "GET") {
                 LABEL_LIST

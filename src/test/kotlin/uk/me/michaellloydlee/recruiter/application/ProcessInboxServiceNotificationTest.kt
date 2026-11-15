@@ -41,7 +41,7 @@ class ProcessInboxServiceNotificationTest {
             )
             mails.forEach { mail ->
                 assertEquals(
-                    "recruiter@example.com",
+                    "Jane Recruiter <recruiter@example.com>",
                     mail.jsonObject
                         .getValue("sender")
                         .jsonPrimitive.content,
