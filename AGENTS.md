@@ -85,8 +85,8 @@ Translate exceptions at the boundary. When the layer below throws, catch what it
 and re-throw the error type the caller handles, with the original exception as the cause and a message
 that says what actually failed. A message that blames the wrong cause ("could not be read" for a file
 that is not valid JSON, or for an empty file) sends the job seeker down the wrong path — name the
-file and the problem. The same for a file that vanished between the check and the read: it is not
-"missing, use the defaults".
+file and the problem. The same for a file the user named that vanished between the check and the
+read: it is not "missing, use the defaults".
 
 ### Everything is injected
 
@@ -104,6 +104,8 @@ is validated like input:
 * **A blank word is an error**, and an empty file — zero bytes or whitespace only — is an error;
   both name the file. A file holding `{}` is not empty: it provides no keys and gets the defaults.
   Any other content — not empty, but failing to parse — is invalid JSON, not an empty file.
+* **The file must be a JSON object.** Content that parses but is not an object — `[]`, `null`,
+  `42`, `"text"` — is an error naming the file; it does not count as "provides no keys".
 * **Defaults fill the keys the file does not provide.** No file → the documented defaults; a file
   that provides no keys (`{}`) → exactly the defaults; a file that provides some keys → those
   keys win, the rest are the defaults. A file named on the command line that does not exist → an
