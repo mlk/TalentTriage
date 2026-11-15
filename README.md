@@ -376,7 +376,7 @@ message:
 | `process-inbox.draft_written` | INFO | a draft was written (`id`, `draft`, `reason`) |
 | `process-inbox.draft_failed` | WARN | no draft could be written (`id`, `reason`) |
 | `process-inbox.notification_sent` | INFO | the webhook was called with the mails that need the job seeker (`mails`) |
-| `process-inbox.notification_failed` | WARN | the webhook could not be called (`reason`, `mails`) |
+| `process-inbox.notification_failed` | WARN | the webhook could not be called (`reason`, `mails`, `ids`) |
 | `process-inbox.window_fallback` | WARN | the moment of the last run is not in the past (`last_run`) |
 | `process-inbox.completed` | INFO | the run is done, the attributes are the counters of the run and what the calls to the models took, the id of the message instead of the window for a run of one message |
 | `pending.listed` / `pending.message` | INFO | the messages that were not processed yet |
@@ -411,7 +411,8 @@ One call per run carries every mail of the run that needs the job seeker, each o
 once. The mails that do not need him - a mail that was screened out, a job listing, a mail that was
 trashed - are not in the body, and when no mail needs him the webhook is not called at all. Every
 mail the webhook sees is a mail the run labels: the next run does not look at it again, so it is
-notified once.
+notified once. A run of a single message (`--id`) looks at the mail again on purpose and notifies it
+again.
 
 A webhook that cannot be called, or that answers with an error, is a warning in the log
 (`process-inbox.notification_failed`); the run goes on and the exit code is not affected. Without

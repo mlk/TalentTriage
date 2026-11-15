@@ -12,7 +12,7 @@ import io.ktor.client.statement.bodyAsText
 import io.ktor.http.ContentType
 import io.ktor.http.contentType
 import io.ktor.http.isSuccess
-import java.io.IOException
+import kotlinx.coroutines.CancellationException
 
 /**
  * The client of the webhook the run calls when a mail needs the job seeker.
@@ -48,6 +48,7 @@ class WebhookNotifier(
      * @param mails the mails that need the job seeker.
      * @return what happened to the call.
      */
+    @Suppress("TooGenericExceptionCaught") // The webhook must not take the run down with it.
     suspend fun notify(mails: List<NotificationMail>): WebhookOutcome =
         try {
             val response =
@@ -63,7 +64,12 @@ class WebhookNotifier(
             } else {
                 WebhookOutcome.Sent
             }
-        } catch (error: IOException) {
+        } catch (error: CancellationException) {
+            throw error
+        } catch (error: Exception) {
+            // Broad on purpose: whatever the client throws, the webhook is
+            // not allowed to take the run down with it. A timeout surfaces
+            // here as an IOException.
             WebhookOutcome.Failed("The webhook could not be reached: ${error.message}")
         }
 

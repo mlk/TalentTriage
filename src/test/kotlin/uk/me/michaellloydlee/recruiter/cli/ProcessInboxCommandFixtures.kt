@@ -186,7 +186,10 @@ internal val MESSAGE: String =
       "threadId": "thread-id",
       "payload": {
         "mimeType": "text/plain",
-        "headers": [{"name": "Subject", "value": "Your CV"}],
+        "headers": [
+          {"name": "From", "value": "recruiter@example.com"},
+          {"name": "Subject", "value": "Your CV"}
+        ],
         "body": {"data": "WWUgbG9va2luZyBmb3IgYSBkZXZlbG9wZXI="}
       }
     }

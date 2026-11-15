@@ -11,6 +11,7 @@ import io.ktor.http.HttpStatusCode
 import io.ktor.http.content.TextContent
 import io.ktor.http.headersOf
 import io.ktor.serialization.kotlinx.json.json
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonArray
@@ -78,6 +79,30 @@ class WebhookNotifierTest {
         }
 
     @Test
+    fun reportsAWebhookThatTimesOut() =
+        runTest {
+            val engine =
+                MockEngine {
+                    delay(TOO_LONG)
+                    respond(content = "", status = HttpStatusCode.OK)
+                }
+
+            val outcome =
+                WebhookNotifier(
+                    httpClient =
+                        HttpClient(engine) {
+                            install(HttpTimeout) { this.requestTimeoutMillis = TIMEOUT }
+                            install(ContentNegotiation) { json(JSON) }
+                        },
+                    url = "http://webhook.example/hook",
+                    timeoutMillis = TIMEOUT,
+                ).notify(listOf(mail()))
+
+            val failed = assertIs<WebhookOutcome.Failed>(outcome)
+            assertTrue(failed.reason.isNotBlank())
+        }
+
+    @Test
     fun reportsAWebhookThatCouldNotBeReached() =
         runTest {
             val engine =
@@ -123,5 +148,9 @@ class WebhookNotifierTest {
 
     companion object {
         private val JSON: Json = Json { ignoreUnknownKeys = true }
+
+        private const val TIMEOUT: Long = 1_000
+
+        private const val TOO_LONG: Long = 60_000
     }
 }

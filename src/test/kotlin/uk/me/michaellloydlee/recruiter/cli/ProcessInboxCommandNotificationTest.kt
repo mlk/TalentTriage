@@ -35,6 +35,7 @@ class ProcessInboxCommandNotificationTest {
             assertEquals("POST", notification.method.value)
             val body = (notification.body as TextContent).text
             assertTrue(body.contains("\"id\":\"message-id\""))
+            assertTrue(body.contains("\"sender\":\"recruiter@example.com\""))
             assertTrue(body.contains("\"state\":\"WORTH_FOLLOW_UP\""))
             assertTrue(records(sink).any { it.event == "process-inbox.notification_sent" })
         }

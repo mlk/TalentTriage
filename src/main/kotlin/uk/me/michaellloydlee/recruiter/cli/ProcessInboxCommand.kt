@@ -518,10 +518,23 @@ class ProcessInboxCommand(
 
     /**
      * The webhook the run calls at the end with the mails that need the job
-     * seeker, `null` when no webhook is configured.
+     * seeker, `null` when no webhook is configured. The URL is passed on
+     * unchanged, only its scheme is checked.
      */
     private fun webhook(client: HttpClient): WebhookNotifier? =
-        notificationWebhook?.let { WebhookNotifier(httpClient = client, url = endpoint(it)) }
+        notificationWebhook?.let { WebhookNotifier(httpClient = client, url = webhookUrl(it)) }
+
+    /**
+     * The URL of the webhook, it has to look like a URL the client can talk
+     * to. The path and the query are the webhook's own, they are passed on
+     * unchanged.
+     */
+    private fun webhookUrl(value: String): String =
+        if (value.startsWith("http://") || value.startsWith("https://")) {
+            value
+        } else {
+            throw CommandFailedException("The webhook '$value' needs a scheme like http:// or https://")
+        }
 
     /**
      * The evaluator of the job descriptions, the decision model of Ollama or a
