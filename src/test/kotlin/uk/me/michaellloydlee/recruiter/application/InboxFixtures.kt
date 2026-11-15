@@ -5,7 +5,6 @@ import io.ktor.client.engine.mock.MockEngine
 import io.ktor.client.engine.mock.respond
 import io.ktor.client.plugins.HttpTimeout
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
-import io.ktor.client.request.HttpRequestData
 import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
@@ -24,6 +23,12 @@ import uk.me.michaellloydlee.recruiter.application.screening.ScreeningService
 import uk.me.michaellloydlee.recruiter.domain.gmail.RunTarget
 import uk.me.michaellloydlee.recruiter.domain.requirements.JobRequirements
 import uk.me.michaellloydlee.recruiter.domain.requirements.PayRequirement
+import uk.me.michaellloydlee.recruiter.fixtures.CHAT_ANSWER
+import uk.me.michaellloydlee.recruiter.fixtures.JSON
+import uk.me.michaellloydlee.recruiter.fixtures.idOf
+import uk.me.michaellloydlee.recruiter.fixtures.jsonHeaders
+import uk.me.michaellloydlee.recruiter.fixtures.message
+import uk.me.michaellloydlee.recruiter.fixtures.messageList
 import uk.me.michaellloydlee.recruiter.infrastructure.gmail.GmailApiClient
 import uk.me.michaellloydlee.recruiter.infrastructure.gmail.GmailDraftsApi
 import uk.me.michaellloydlee.recruiter.infrastructure.gmail.GmailLabelStateManager
@@ -39,7 +44,6 @@ import uk.me.michaellloydlee.recruiter.infrastructure.llm.OllamaDecisionClient
 import uk.me.michaellloydlee.recruiter.infrastructure.logging.StructuredLogger
 import uk.me.michaellloydlee.recruiter.infrastructure.notification.WebhookNotifier
 import java.time.Instant
-import java.util.Base64
 
 internal val NOW: Instant = Instant.parse("2026-10-24T08:00:00Z")
 
@@ -59,16 +63,10 @@ internal val REQUIREMENTS_WITH_A_TARGET: JobRequirements =
         profile = "Senior Kotlin engineer",
     )
 
-internal val JSON: Json = Json { ignoreUnknownKeys = true }
-
 internal const val DECISION_ANSWER: String =
     """{"model":"clef:cloud","answers":{},"usage":{"input_tokens":10,"output_tokens":1}}"""
 
-internal const val CHAT_ANSWER: String =
-    """{"message":{"role":"assistant","content":"the reply of the model"},"done":true}"""
-
-internal const val MESSAGE_LIST: String =
-    """{"messages":[{"id":"first","threadId":"thread-1"},{"id":"second","threadId":"thread-2"}]}"""
+private val MESSAGE_LIST: String = messageList("first", "second")
 
 internal fun gmailEngine(
     listing: Boolean = false,
@@ -262,56 +260,9 @@ internal suspend fun service(
 
 private fun idOf(label: String): String = "Label_${label.substringAfterLast('/').lowercase()}"
 
-/**
- * The id of the message the request asks for.
- */
-private fun idOf(request: HttpRequestData): String =
-    request.url.encodedPath
-        .substringAfterLast("/users/me/messages/")
-        .substringBefore("/")
-
-private fun message(
-    id: String,
-    listing: Boolean = false,
-    labels: List<String> = listOf("INBOX"),
-): String {
-    val sender =
-        if (listing) {
-            "LinkedIn Job Alerts &lt;jobalerts-noreply@linkedin.com&gt;"
-        } else {
-            "recruiter@example.com"
-        }
-    val text =
-        """
-        {
-          "id": "$id",
-          "threadId": "thread-$id",
-          "labelIds": [${labels.joinToString(",") { label -> "\"$label\"" }}],
-          "payload": {
-            "mimeType": "text/plain",
-            "headers": [
-              {"name": "From", "value": "$sender"},
-              {"name": "Subject", "value": "Your CV"}
-            ],
-            "body": {"data": "${bodyOf(id)}"}
-          }
-        }
-        """.trimIndent()
-    return text
-}
-
-/**
- * The body of a message, it names the message it belongs to, so a test
- * that fetches two messages can tell them apart.
- */
-private fun bodyOf(id: String): String =
-    Base64.getUrlEncoder().encodeToString("Looking for a developer $id".toByteArray())
-
 private fun token(): OAuth2Token =
     OAuth2Token(
         accessToken = "access-token",
         refreshToken = "refresh-token",
         expiresAt = Instant.now().plusSeconds(600),
     )
-
-private fun jsonHeaders() = headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString())

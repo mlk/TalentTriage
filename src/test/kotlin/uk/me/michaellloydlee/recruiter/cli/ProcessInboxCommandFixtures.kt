@@ -6,22 +6,24 @@ import io.ktor.client.engine.mock.respond
 import io.ktor.client.plugins.HttpTimeout
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.client.request.HttpRequestData
-import io.ktor.http.ContentType
-import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.content.TextContent
-import io.ktor.http.headersOf
 import io.ktor.serialization.kotlinx.json.json
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import uk.me.michaellloydlee.recruiter.fixtures.CHAT_ANSWER
+import uk.me.michaellloydlee.recruiter.fixtures.JSON
+import uk.me.michaellloydlee.recruiter.fixtures.idOf
+import uk.me.michaellloydlee.recruiter.fixtures.jsonHeaders
+import uk.me.michaellloydlee.recruiter.fixtures.message
+import uk.me.michaellloydlee.recruiter.fixtures.messageList
 import uk.me.michaellloydlee.recruiter.infrastructure.logging.LogRecord
 import uk.me.michaellloydlee.recruiter.infrastructure.logging.StructuredLogger
 import java.nio.file.Files
 import java.nio.file.Path
 import java.time.Clock
 import java.time.Instant
-import java.util.Base64
 import kotlin.io.path.writeText
 
 internal val NOW: Instant = Instant.parse("2026-10-30T19:00:00Z")
@@ -33,11 +35,17 @@ internal fun tempDir(
     prefix: String,
 ): Path = Files.createTempDirectory(root, prefix)
 
+internal val MESSAGE_LIST: String = messageList("message-id")
+
+internal val MESSAGE_LIST_TWO: String = messageList("first", "second")
+
 internal fun engine(
     webhookStatus: HttpStatusCode = HttpStatusCode.OK,
     officeDays: String = "matches",
     jdMatches: String = "matches",
     messageList: String = MESSAGE_LIST,
+    listing: Boolean = false,
+    recruiterAnswer: String = "from a recruiter",
 ): MockEngine =
     MockEngine { request ->
         if (request.url.encodedPath == "/hook") {
@@ -48,7 +56,7 @@ internal fun engine(
             )
         } else {
             respond(
-                content = contentFor(request, officeDays, jdMatches, messageList),
+                content = contentFor(request, officeDays, jdMatches, messageList, listing, recruiterAnswer),
                 status = HttpStatusCode.OK,
                 headers = jsonHeaders(),
             )
@@ -60,10 +68,12 @@ internal fun contentFor(
     officeDays: String = "matches",
     jdMatches: String = "matches",
     messageList: String = MESSAGE_LIST,
+    listing: Boolean = false,
+    recruiterAnswer: String = "from a recruiter",
 ): String =
     when {
         request.url.encodedPath.endsWith("/v1/systemone") -> {
-            decisionAnswer(request, officeDays, jdMatches)
+            decisionAnswer(request, officeDays, jdMatches, recruiterAnswer)
         }
 
         request.url.encodedPath.endsWith("/api/chat") -> {
@@ -89,7 +99,7 @@ internal fun contentFor(
         }
 
         else -> {
-            message(idOf(request))
+            message(idOf(request), listing = listing)
         }
     }
 
@@ -101,6 +111,7 @@ internal fun decisionAnswer(
     request: HttpRequestData,
     officeDays: String = "matches",
     jdMatches: String = "matches",
+    recruiterAnswer: String = "from a recruiter",
 ): String {
     val body = (request.body as TextContent).text
     val questions = Json.parseToJsonElement(body).jsonObject["questions"]!!.jsonObject
@@ -108,7 +119,7 @@ internal fun decisionAnswer(
         questions.keys.joinToString(",") { name ->
             val choice =
                 when (name) {
-                    "recruiter" -> "from a recruiter"
+                    "recruiter" -> recruiterAnswer
                     "jd_matches" -> jdMatches
                     "office_days" -> officeDays
                     else -> "does not match"
@@ -147,7 +158,7 @@ internal fun rulesFile(
 
 internal fun missingRulesFile(root: Path): Path = tempDir(root, "rules").resolve("rules.json")
 
-internal fun emptyRulesFile(root: Path): Path {
+internal fun defaultRulesFile(root: Path): Path {
     val file = tempDir(root, "rules").resolve("rules.json")
     file.writeText("{}")
     return file
@@ -183,47 +194,5 @@ internal fun records(sink: StringBuilder): List<LogRecord> =
         .filter { it.isNotBlank() }
         .map { Json.decodeFromString<LogRecord>(it) }
 
-internal fun jsonHeaders() = headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString())
-
-internal val JSON: Json =
-    Json {
-        ignoreUnknownKeys = true
-        encodeDefaults = true
-    }
-
-internal const val CHAT_ANSWER: String =
-    """{"message":{"role":"assistant","content":"no"},"done":true}"""
-
-internal const val MESSAGE_LIST: String =
-    """{"messages":[{"id":"message-id","threadId":"thread-id"}]}"""
-
 internal const val LABEL_LIST: String =
     """{"labels":[{"id":"Label_joblisting","name":"Recruiters/JobListing"}]}"""
-
-internal fun message(id: String): String =
-    """
-    {
-      "id": "$id",
-      "threadId": "thread-$id",
-      "labelIds": ["INBOX"],
-      "payload": {
-        "mimeType": "text/plain",
-        "headers": [
-          {"name": "From", "value": "recruiter@example.com"},
-          {"name": "Subject", "value": "Your CV"}
-        ],
-        "body": {"data": "${bodyOf(id)}"}
-      }
-    }
-    """.trimIndent()
-
-internal const val MESSAGE_LIST_TWO: String =
-    """{"messages":[{"id":"first","threadId":"thread-first"},{"id":"second","threadId":"thread-second"}]}"""
-
-private fun idOf(request: HttpRequestData): String =
-    request.url.encodedPath
-        .substringAfterLast("/users/me/messages/")
-        .substringBefore("/")
-
-private fun bodyOf(id: String): String =
-    Base64.getUrlEncoder().encodeToString("Looking for a developer $id".toByteArray())

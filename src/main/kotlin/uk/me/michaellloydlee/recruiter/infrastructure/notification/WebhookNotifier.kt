@@ -8,12 +8,15 @@ import io.ktor.client.plugins.pluginOrNull
 import io.ktor.client.plugins.timeout
 import io.ktor.client.request.post
 import io.ktor.client.request.setBody
-import io.ktor.client.statement.bodyAsText
+import io.ktor.client.statement.HttpResponse
+import io.ktor.client.statement.bodyAsChannel
 import io.ktor.http.ContentType
 import io.ktor.http.contentType
 import io.ktor.http.isSuccess
+import io.ktor.utils.io.readAvailable
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.ensureActive
+import java.nio.ByteBuffer
 import kotlin.coroutines.coroutineContext
 
 /**
@@ -61,7 +64,7 @@ class WebhookNotifier(
                     setBody(WebhookNotification(mails))
                 }
             if (!response.status.isSuccess()) {
-                val body = response.bodyAsText().take(MAX_ERROR_BODY_LENGTH)
+                val body = errorBody(response)
                 WebhookOutcome.Failed("The webhook answered with ${response.status.value}: $body")
             } else {
                 WebhookOutcome.Sent
@@ -79,6 +82,23 @@ class WebhookNotifier(
             // here as an IOException.
             WebhookOutcome.Failed("The webhook could not be reached: ${reasonOf(error)}")
         }
+
+    /**
+     * Reads at most [MAX_ERROR_BODY_LENGTH] bytes of the error body, a larger
+     * body is truncated and is never buffered whole.
+     */
+    private suspend fun errorBody(response: HttpResponse): String {
+        val bytes = ByteArray(MAX_ERROR_BODY_LENGTH)
+        val buffer = ByteBuffer.wrap(bytes)
+        val channel = response.bodyAsChannel()
+        while (buffer.hasRemaining()) {
+            val read = channel.readAvailable(buffer)
+            if (read <= 0) {
+                break
+            }
+        }
+        return String(bytes, 0, bytes.size - buffer.remaining(), Charsets.UTF_8)
+    }
 
     private fun reasonOf(error: Throwable): String = "${error::class.simpleName}: ${error.message ?: "no details"}"
 

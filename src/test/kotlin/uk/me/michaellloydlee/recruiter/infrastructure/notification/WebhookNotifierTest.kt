@@ -33,16 +33,18 @@ class WebhookNotifierTest {
                 }
 
             val outcome =
-                notifier(engine).notify(
-                    listOf(
-                        NotificationMail(
-                            id = "message-id",
-                            sender = "recruiter@example.com",
-                            subject = "Your CV",
-                            state = "WORTH_FOLLOW_UP",
+                withNotifier(engine) { notifier ->
+                    notifier.notify(
+                        listOf(
+                            NotificationMail(
+                                id = "message-id",
+                                sender = "recruiter@example.com",
+                                subject = "Your CV",
+                                state = "WORTH_FOLLOW_UP",
+                            ),
                         ),
-                    ),
-                )
+                    )
+                }
 
             assertEquals(WebhookOutcome.Sent, outcome)
             val sent = engine.requestHistory.single()
@@ -72,10 +74,28 @@ class WebhookNotifierTest {
                     )
                 }
 
-            val outcome = notifier(engine).notify(listOf(mail()))
+            val outcome = withNotifier(engine) { notifier -> notifier.notify(listOf(mail())) }
 
             val failed = assertIs<WebhookOutcome.Failed>(outcome)
             assertTrue(failed.reason.contains("500"))
+        }
+
+    @Test
+    fun reportsAWebhookThatAnswersWithABodyTooLargeToRead() =
+        runTest {
+            val engine =
+                MockEngine {
+                    respond(
+                        content = "x".repeat(MAX_BODY),
+                        status = HttpStatusCode.InternalServerError,
+                    )
+                }
+
+            val outcome = withNotifier(engine) { notifier -> notifier.notify(listOf(mail())) }
+
+            val failed = assertIs<WebhookOutcome.Failed>(outcome)
+            assertTrue(failed.reason.contains("500"))
+            assertTrue(failed.reason.length < MAX_BODY)
         }
 
     @Test
@@ -88,15 +108,16 @@ class WebhookNotifierTest {
                 }
 
             val outcome =
-                WebhookNotifier(
-                    httpClient =
-                        HttpClient(engine) {
-                            install(HttpTimeout) { this.requestTimeoutMillis = LONG_TIMEOUT }
-                            install(ContentNegotiation) { json(JSON) }
-                        },
-                    url = "http://webhook.example/hook",
-                    timeoutMillis = TIMEOUT,
-                ).notify(listOf(mail()))
+                HttpClient(engine) {
+                    install(HttpTimeout) { this.requestTimeoutMillis = LONG_TIMEOUT }
+                    install(ContentNegotiation) { json(JSON) }
+                }.use { client ->
+                    WebhookNotifier(
+                        httpClient = client,
+                        url = "http://webhook.example/hook",
+                        timeoutMillis = TIMEOUT,
+                    ).notify(listOf(mail()))
+                }
 
             val failed = assertIs<WebhookOutcome.Failed>(outcome)
             assertTrue(failed.reason.contains("timeout", ignoreCase = true), failed.reason)
@@ -110,7 +131,7 @@ class WebhookNotifierTest {
                     throw IOException("connection refused")
                 }
 
-            val outcome = notifier(engine).notify(listOf(mail()))
+            val outcome = withNotifier(engine) { notifier -> notifier.notify(listOf(mail())) }
 
             val failed = assertIs<WebhookOutcome.Failed>(outcome)
             assertTrue(failed.reason.contains("connection refused"))
@@ -120,11 +141,13 @@ class WebhookNotifierTest {
     fun failsWhenTheClientHasNoTimeoutPlugin() {
         val engine = MockEngine { respond("", HttpStatusCode.OK) }
 
-        kotlin.test.assertFailsWith<IllegalArgumentException> {
-            WebhookNotifier(
-                httpClient = HttpClient(engine) { install(ContentNegotiation) { json(JSON) } },
-                url = "http://webhook.example/hook",
-            )
+        HttpClient(engine) { install(ContentNegotiation) { json(JSON) } }.use { client ->
+            kotlin.test.assertFailsWith<IllegalArgumentException> {
+                WebhookNotifier(
+                    httpClient = client,
+                    url = "http://webhook.example/hook",
+                )
+            }
         }
     }
 
@@ -136,15 +159,16 @@ class WebhookNotifierTest {
             state = "WORTH_FOLLOW_UP",
         )
 
-    private fun notifier(engine: MockEngine): WebhookNotifier =
-        WebhookNotifier(
-            httpClient =
-                HttpClient(engine) {
-                    install(HttpTimeout)
-                    install(ContentNegotiation) { json(JSON) }
-                },
-            url = "http://webhook.example/hook",
-        )
+    private suspend fun <T> withNotifier(
+        engine: MockEngine,
+        block: suspend (WebhookNotifier) -> T,
+    ): T =
+        HttpClient(engine) {
+            install(HttpTimeout)
+            install(ContentNegotiation) { json(JSON) }
+        }.use { client ->
+            block(WebhookNotifier(httpClient = client, url = "http://webhook.example/hook"))
+        }
 
     companion object {
         private val JSON: Json = Json { ignoreUnknownKeys = true }
@@ -154,5 +178,7 @@ class WebhookNotifierTest {
         private const val LONG_TIMEOUT: Long = 120_000
 
         private const val TOO_LONG: Long = 60_000
+
+        private const val MAX_BODY: Int = 8_192
     }
 }

@@ -254,7 +254,7 @@ class ProcessInboxService(
             is WebhookOutcome.Failed -> {
                 logger.warn(
                     event = EVENT_NOTIFICATION_FAILED,
-                    message = "The webhook that tells the job seeker about the mails that need him was not called",
+                    message = "The webhook could not tell the job seeker about the mails that need him",
                     attributes =
                         mapOf(
                             "reason" to outcome.reason,

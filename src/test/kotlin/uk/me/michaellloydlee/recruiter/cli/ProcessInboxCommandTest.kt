@@ -31,7 +31,7 @@ class ProcessInboxCommandTest {
                     .test(
                         "process-inbox --credentials ${credentialsFile(root)} " +
                             "--token ${tokenFile(root)} " +
-                            "--requirements ${requirementsFile(root)} --rules ${emptyRulesFile(root)}",
+                            "--requirements ${requirementsFile(root)} --rules ${defaultRulesFile(root)}",
                     )
 
             assertEquals(0, result.statusCode)
@@ -58,7 +58,7 @@ class ProcessInboxCommandTest {
                         "process-inbox --recruiter-verification=llm " +
                             "--credentials ${credentialsFile(root)} " +
                             "--token ${tokenFile(root)} " +
-                            "--requirements ${requirementsFile(root)} --rules ${emptyRulesFile(root)}",
+                            "--requirements ${requirementsFile(root)} --rules ${defaultRulesFile(root)}",
                     )
 
             assertEquals(0, result.statusCode)
@@ -101,7 +101,7 @@ class ProcessInboxCommandTest {
                     .test(
                         "process-inbox --credentials ${credentialsFile(root)} " +
                             "--token ${tokenFile(root)} " +
-                            "--requirements ${requirementsFile(root)} --rules ${emptyRulesFile(root)} " +
+                            "--requirements ${requirementsFile(root)} --rules ${defaultRulesFile(root)} " +
                             "--recruiter-verification-endpoint http://screening.example:11434 " +
                             "--job-description-evaluation-endpoint http://evaluation.example:8000",
                     )
@@ -122,7 +122,7 @@ class ProcessInboxCommandTest {
                     "process-inbox --recruiter-verification-endpoint localhost:11434 " +
                         "--credentials ${credentialsFile(root)} " +
                         "--token ${tokenFile(root)} " +
-                        "--requirements ${requirementsFile(root)} --rules ${emptyRulesFile(root)}",
+                        "--requirements ${requirementsFile(root)} --rules ${defaultRulesFile(root)}",
                 )
 
             assertEquals(1, result.statusCode)
@@ -138,7 +138,7 @@ class ProcessInboxCommandTest {
                     "process-inbox --recruiter-verification-timeout soon " +
                         "--credentials ${credentialsFile(root)} " +
                         "--token ${tokenFile(root)} " +
-                        "--requirements ${requirementsFile(root)} --rules ${emptyRulesFile(root)}",
+                        "--requirements ${requirementsFile(root)} --rules ${defaultRulesFile(root)}",
                 )
 
             assertEquals(1, result.statusCode)
@@ -156,7 +156,7 @@ class ProcessInboxCommandTest {
                         "process-inbox --since PT6H " +
                             "--credentials ${credentialsFile(root)} " +
                             "--token ${tokenFile(root)} " +
-                            "--requirements ${requirementsFile(root)} --rules ${emptyRulesFile(root)}",
+                            "--requirements ${requirementsFile(root)} --rules ${defaultRulesFile(root)}",
                     )
 
             assertEquals(0, result.statusCode)
@@ -179,7 +179,7 @@ class ProcessInboxCommandTest {
                         "process-inbox --since PT6H " +
                             "--credentials ${credentialsFile(root)} " +
                             "--token ${tokenFile(root)} " +
-                            "--requirements ${requirementsFile(root)} --rules ${emptyRulesFile(root)}",
+                            "--requirements ${requirementsFile(root)} --rules ${defaultRulesFile(root)}",
                     )
 
             assertEquals(0, result.statusCode)
@@ -199,7 +199,7 @@ class ProcessInboxCommandTest {
                 cli(sink, Clock.fixed(NOW, ZoneOffset.UTC)) { mockClient(engine) }
                     .test(
                         "process-inbox --credentials ${credentialsFile(root)} " +
-                            "--token $token --requirements ${requirementsFile(root)} --rules ${emptyRulesFile(root)}",
+                            "--token $token --requirements ${requirementsFile(root)} --rules ${defaultRulesFile(root)}",
                     )
 
             assertEquals(0, result.statusCode)
@@ -226,7 +226,7 @@ class ProcessInboxCommandTest {
                     .test(
                         "process-inbox --since PT6H " +
                             "--credentials ${credentialsFile(root)} " +
-                            "--token $token --requirements ${requirementsFile(root)} --rules ${emptyRulesFile(root)}",
+                            "--token $token --requirements ${requirementsFile(root)} --rules ${defaultRulesFile(root)}",
                     )
 
             assertEquals(0, result.statusCode)
@@ -244,7 +244,7 @@ class ProcessInboxCommandTest {
                 cli(sink, Clock.fixed(NOW, ZoneOffset.UTC)) { mockClient(engine) }
                     .test(
                         "process-inbox --credentials ${credentialsFile(root)} " +
-                            "--token $token --requirements ${requirementsFile(root)} --rules ${emptyRulesFile(root)}",
+                            "--token $token --requirements ${requirementsFile(root)} --rules ${defaultRulesFile(root)}",
                     )
 
             assertEquals(0, result.statusCode)
@@ -263,7 +263,7 @@ class ProcessInboxCommandTest {
                 cli(sink, Clock.fixed(NOW, ZoneOffset.UTC)) { mockClient(engine) }
                     .test(
                         "process-inbox --credentials ${credentialsFile(root)} " +
-                            "--token $token --requirements ${requirementsFile(root)} --rules ${emptyRulesFile(root)}",
+                            "--token $token --requirements ${requirementsFile(root)} --rules ${defaultRulesFile(root)}",
                     )
 
             assertEquals(0, result.statusCode)
@@ -281,7 +281,7 @@ class ProcessInboxCommandTest {
                 cli(sink, Clock.fixed(NOW, ZoneOffset.UTC)) { mockClient(engine) }
                     .test(
                         "process-inbox --credentials ${credentialsFile(root)} " +
-                            "--token $token --requirements ${requirementsFile(root)} --rules ${emptyRulesFile(root)}",
+                            "--token $token --requirements ${requirementsFile(root)} --rules ${defaultRulesFile(root)}",
                     )
 
             assertEquals(1, result.statusCode)
@@ -298,7 +298,7 @@ class ProcessInboxCommandTest {
                     "process-inbox --since 3y " +
                         "--credentials ${credentialsFile(root)} " +
                         "--token ${tokenFile(root)} " +
-                        "--requirements ${requirementsFile(root)} --rules ${emptyRulesFile(root)}",
+                        "--requirements ${requirementsFile(root)} --rules ${defaultRulesFile(root)}",
                 )
 
             assertEquals(1, result.statusCode)
@@ -314,7 +314,7 @@ class ProcessInboxCommandTest {
                     "process-inbox --since PT0S " +
                         "--credentials ${credentialsFile(root)} " +
                         "--token ${tokenFile(root)} " +
-                        "--requirements ${requirementsFile(root)} --rules ${emptyRulesFile(root)}",
+                        "--requirements ${requirementsFile(root)} --rules ${defaultRulesFile(root)}",
                 )
 
             assertEquals(1, result.statusCode)
@@ -342,7 +342,7 @@ class ProcessInboxCommandTest {
                         "process-inbox --id message-id " +
                             "--credentials ${credentialsFile(root)} " +
                             "--token ${tokenFile(root)} " +
-                            "--requirements ${requirementsFile(root)} --rules ${emptyRulesFile(root)}",
+                            "--requirements ${requirementsFile(root)} --rules ${defaultRulesFile(root)}",
                     )
 
             assertEquals(0, result.statusCode)
@@ -365,7 +365,7 @@ class ProcessInboxCommandTest {
                     .test(
                         "process-inbox --id message-id " +
                             "--credentials ${credentialsFile(root)} " +
-                            "--token $token --requirements ${requirementsFile(root)} --rules ${emptyRulesFile(root)}",
+                            "--token $token --requirements ${requirementsFile(root)} --rules ${defaultRulesFile(root)}",
                     )
 
             assertEquals(0, result.statusCode)
@@ -384,7 +384,7 @@ class ProcessInboxCommandTest {
                     .test(
                         "process-inbox --id message-id " +
                             "--credentials ${credentialsFile(root)} " +
-                            "--token $token --requirements ${requirementsFile(root)} --rules ${emptyRulesFile(root)}",
+                            "--token $token --requirements ${requirementsFile(root)} --rules ${defaultRulesFile(root)}",
                     )
 
             assertEquals(0, result.statusCode)
@@ -404,7 +404,7 @@ class ProcessInboxCommandTest {
                         "process-inbox --id= " +
                             "--credentials ${credentialsFile(root)} " +
                             "--token ${tokenFile(root)} " +
-                            "--requirements ${requirementsFile(root)} --rules ${emptyRulesFile(root)}",
+                            "--requirements ${requirementsFile(root)} --rules ${defaultRulesFile(root)}",
                     )
 
             assertEquals(1, result.statusCode)

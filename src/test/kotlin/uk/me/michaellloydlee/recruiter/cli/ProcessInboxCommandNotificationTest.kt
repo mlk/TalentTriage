@@ -11,6 +11,7 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import org.junit.jupiter.api.io.TempDir
+import uk.me.michaellloydlee.recruiter.fixtures.jsonHeaders
 import java.io.IOException
 import java.nio.file.Path
 import kotlin.test.Test
@@ -33,7 +34,7 @@ class ProcessInboxCommandNotificationTest {
                         "process-inbox --notification-webhook http://webhook.example/hook " +
                             "--credentials ${credentialsFile(root)} " +
                             "--token ${tokenFile(root)} " +
-                            "--requirements ${requirementsFile(root)} --rules ${emptyRulesFile(root)}",
+                            "--requirements ${requirementsFile(root)} --rules ${defaultRulesFile(root)}",
                     )
 
             assertEquals(0, result.statusCode)
@@ -79,13 +80,51 @@ class ProcessInboxCommandNotificationTest {
                         "process-inbox --notification-webhook http://webhook.example/hook " +
                             "--credentials ${credentialsFile(root)} " +
                             "--token ${tokenFile(root)} " +
-                            "--requirements ${requirementsFile(root)} --rules ${emptyRulesFile(root)}",
+                            "--requirements ${requirementsFile(root)} --rules ${defaultRulesFile(root)}",
                     )
 
             assertEquals(0, result.statusCode)
             val notification = engine.requestHistory.single { it.url.host == "webhook.example" }
             val body = (notification.body as TextContent).text
             assertTrue(body.contains("\"state\":\"NEEDS_MORE_INFORMATION\""))
+        }
+
+    @Test
+    fun doesNotNotifyAboutAJobListing() =
+        runTest {
+            val sink = StringBuilder()
+            val engine = engine(listing = true)
+
+            val result =
+                cli(sink) { mockClient(engine) }
+                    .test(
+                        "process-inbox --notification-webhook http://webhook.example/hook " +
+                            "--credentials ${credentialsFile(root)} " +
+                            "--token ${tokenFile(root)} " +
+                            "--requirements ${requirementsFile(root)} --rules ${defaultRulesFile(root)}",
+                    )
+
+            assertEquals(0, result.statusCode)
+            assertTrue(engine.requestHistory.none { it.url.host == "webhook.example" })
+        }
+
+    @Test
+    fun doesNotNotifyAboutAMailTheScreeningFilteredOut() =
+        runTest {
+            val sink = StringBuilder()
+            val engine = engine(recruiterAnswer = "not from a recruiter")
+
+            val result =
+                cli(sink) { mockClient(engine) }
+                    .test(
+                        "process-inbox --notification-webhook http://webhook.example/hook " +
+                            "--credentials ${credentialsFile(root)} " +
+                            "--token ${tokenFile(root)} " +
+                            "--requirements ${requirementsFile(root)} --rules ${defaultRulesFile(root)}",
+                    )
+
+            assertEquals(0, result.statusCode)
+            assertTrue(engine.requestHistory.none { it.url.host == "webhook.example" })
         }
 
     @Test
@@ -100,7 +139,7 @@ class ProcessInboxCommandNotificationTest {
                         "process-inbox --notification-webhook http://webhook.example/hook " +
                             "--credentials ${credentialsFile(root)} " +
                             "--token ${tokenFile(root)} " +
-                            "--requirements ${requirementsFile(root)} --rules ${emptyRulesFile(root)}",
+                            "--requirements ${requirementsFile(root)} --rules ${defaultRulesFile(root)}",
                     )
 
             assertEquals(0, result.statusCode)
@@ -125,7 +164,7 @@ class ProcessInboxCommandNotificationTest {
                         "process-inbox --notification-webhook http://webhook.example/hook " +
                             "--credentials ${credentialsFile(root)} " +
                             "--token ${tokenFile(root)} " +
-                            "--requirements ${requirementsFile(root)} --rules ${emptyRulesFile(root)}",
+                            "--requirements ${requirementsFile(root)} --rules ${defaultRulesFile(root)}",
                     )
 
             assertEquals(0, result.statusCode)
@@ -145,7 +184,7 @@ class ProcessInboxCommandNotificationTest {
                         "process-inbox --notification-webhook http://webhook.example/hook " +
                             "--credentials ${credentialsFile(root)} " +
                             "--token ${tokenFile(root)} " +
-                            "--requirements ${requirementsFile(root)} --rules ${emptyRulesFile(root)}",
+                            "--requirements ${requirementsFile(root)} --rules ${defaultRulesFile(root)}",
                     )
 
             assertEquals(0, result.statusCode)
@@ -164,7 +203,7 @@ class ProcessInboxCommandNotificationTest {
                     .test(
                         "process-inbox --credentials ${credentialsFile(root)} " +
                             "--token ${tokenFile(root)} " +
-                            "--requirements ${requirementsFile(root)} --rules ${emptyRulesFile(root)}",
+                            "--requirements ${requirementsFile(root)} --rules ${defaultRulesFile(root)}",
                     )
 
             assertEquals(0, result.statusCode)
@@ -182,7 +221,7 @@ class ProcessInboxCommandNotificationTest {
                     "process-inbox --notification-webhook hook.example/notify " +
                         "--credentials ${credentialsFile(root)} " +
                         "--token ${tokenFile(root)} " +
-                        "--requirements ${requirementsFile(root)} --rules ${emptyRulesFile(root)}",
+                        "--requirements ${requirementsFile(root)} --rules ${defaultRulesFile(root)}",
                 )
 
             assertEquals(1, result.statusCode)
