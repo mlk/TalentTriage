@@ -38,6 +38,7 @@ import uk.me.michaellloydlee.recruiter.infrastructure.llm.OllamaChatClient
 import uk.me.michaellloydlee.recruiter.infrastructure.llm.OllamaDecisionClient
 import uk.me.michaellloydlee.recruiter.infrastructure.llm.OllamaException
 import uk.me.michaellloydlee.recruiter.infrastructure.logging.StructuredLogger
+import uk.me.michaellloydlee.recruiter.infrastructure.notification.WebhookHttpClient
 import uk.me.michaellloydlee.recruiter.infrastructure.notification.WebhookNotifier
 import uk.me.michaellloydlee.recruiter.infrastructure.requirements.RequirementsFile
 import uk.me.michaellloydlee.recruiter.infrastructure.run.FileLastRunStore
@@ -89,12 +90,16 @@ import java.time.Instant
  * @param defaultRulesFile the file the run reads the rules of the screening
  *   from when `--rules` is not given, a missing file keeps the rules of the
  *   code.
+ * @param webhookClientFactory creates the client of the webhook, it does not
+ *   follow redirects: a redirect of the webhook has to surface as the answer
+ *   it is, not as a followed `GET` without the body.
  */
 class ProcessInboxCommand(
     private val logger: StructuredLogger,
     private val httpClientFactory: () -> HttpClient = { GmailHttpClientFactory.create() },
     private val clock: Clock = Clock.systemUTC(),
     private val defaultRulesFile: Path = Path.of(DEFAULT_RULES_FILE),
+    private val webhookClientFactory: () -> HttpClient = WebhookHttpClient::create,
 ) : SuspendingCliktCommand(name = COMMAND_NAME) {
     private val credentialsFile: String by
         option(
@@ -247,47 +252,53 @@ class ProcessInboxCommand(
         val credentials = credentials()
         val requirements = requirements()
         val screeningRules = screeningRules()
-        httpClientFactory().use { client ->
-            val gmail =
-                GmailServices.create(
-                    credentials = credentials,
-                    tokenStore = FileOAuth2TokenStore(Path.of(tokenFile)),
-                    httpClient = client,
-                )
-            val notifier = webhook(client)
-            val summary =
-                try {
-                    // One counter for the models of the run.
-                    val usage = ModelUsageCounter()
-                    ProcessInboxService(
-                        messages = gmail.messages,
-                        screening =
-                            ScreeningService(
-                                heuristics = screeningRules.recruiter,
-                                jobListings = screeningRules.jobListings,
-                                verifier = verifier(client, usage),
-                                stateManager = gmail.stateManager,
-                            ),
-                        evaluation =
-                            EvaluationService(
-                                evaluator = evaluator(client, usage),
-                                attachments = AttachmentTextReader(gmail.messages, logger),
-                                stateManager = gmail.stateManager,
-                            ),
-                        drafts = drafts(client, gmail.drafts, usage),
-                        requirements = requirements,
-                        stateManager = gmail.stateManager,
-                        notifier = notifier,
-                        usageCounter = usage,
-                        clock = clock,
-                        logger = logger,
-                    ).run(target)
-                } catch (error: GmailApiException) {
-                    throw CommandFailedException(error.message.orEmpty(), error)
-                } catch (error: OllamaException) {
-                    throw CommandFailedException(error.message.orEmpty(), error)
-                }
-            rememberTheRun(target, startedAt, summary)
+        // The webhook gets its own client: it must not be redirected and it
+        // must not carry what the Gmail client carries. The URL is checked
+        // before any work is done, so a bad webhook fails the run before a
+        // mail is labelled.
+        val notificationUrl = notificationWebhook?.let { webhookUrl(it) }
+        val webhookClient = notificationUrl?.let { webhookClientFactory() }
+        try {
+            httpClientFactory().use { client ->
+                val gmail =
+                    GmailServices.create(credentials, FileOAuth2TokenStore(Path.of(tokenFile)), client)
+                val notifier = webhookClient?.let { WebhookNotifier(httpClient = it, url = notificationUrl) }
+                val summary =
+                    try {
+                        // One counter for the models of the run.
+                        val usage = ModelUsageCounter()
+                        ProcessInboxService(
+                            messages = gmail.messages,
+                            screening =
+                                ScreeningService(
+                                    heuristics = screeningRules.recruiter,
+                                    jobListings = screeningRules.jobListings,
+                                    verifier = verifier(client, usage),
+                                    stateManager = gmail.stateManager,
+                                ),
+                            evaluation =
+                                EvaluationService(
+                                    evaluator = evaluator(client, usage),
+                                    attachments = AttachmentTextReader(gmail.messages, logger),
+                                    stateManager = gmail.stateManager,
+                                ),
+                            drafts = drafts(client, gmail.drafts, usage),
+                            requirements = requirements,
+                            stateManager = gmail.stateManager,
+                            notifier = notifier,
+                            usageCounter = usage,
+                            clock = clock,
+                            logger = logger,
+                        ).run(target)
+                    } catch (error: GmailApiException) {
+                        throw CommandFailedException(error.message.orEmpty(), error)
+                    } catch (error: OllamaException) {
+                        throw CommandFailedException(error.message.orEmpty(), error)
+                    }
+                rememberTheRun(target, startedAt, summary)
+            }
+        } finally {
+            webhookClient?.close()
         }
     }
 
@@ -517,14 +528,6 @@ class ProcessInboxCommand(
                 }
             }
         }
-
-    /**
-     * The webhook the run calls at the end with the mails that need the job
-     * seeker, `null` when no webhook is configured. The URL is passed on
-     * unchanged, only its scheme is checked.
-     */
-    private fun webhook(client: HttpClient): WebhookNotifier? =
-        notificationWebhook?.let { WebhookNotifier(httpClient = client, url = webhookUrl(it)) }
 
     /**
      * The URL of the webhook, it has to parse as an absolute http or https

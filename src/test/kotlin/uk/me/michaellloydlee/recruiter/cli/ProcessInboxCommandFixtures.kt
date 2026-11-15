@@ -14,6 +14,7 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import uk.me.michaellloydlee.recruiter.fixtures.CHAT_ANSWER
 import uk.me.michaellloydlee.recruiter.fixtures.JSON
+import uk.me.michaellloydlee.recruiter.fixtures.decisionQuestions
 import uk.me.michaellloydlee.recruiter.fixtures.idOf
 import uk.me.michaellloydlee.recruiter.fixtures.jsonHeaders
 import uk.me.michaellloydlee.recruiter.fixtures.message
@@ -25,6 +26,7 @@ import java.nio.file.Path
 import java.time.Clock
 import java.time.Instant
 import kotlin.io.path.writeText
+import uk.me.michaellloydlee.recruiter.fixtures.decisionAnswer as decisionResponse
 
 internal val NOW: Instant = Instant.parse("2026-10-30T19:00:00Z")
 
@@ -117,20 +119,15 @@ internal fun decisionAnswer(
     jdMatches: String = "matches",
     recruiterAnswer: String = "from a recruiter",
 ): String {
-    val body = (request.body as TextContent).text
-    val questions = Json.parseToJsonElement(body).jsonObject["questions"]!!.jsonObject
-    val answer =
-        questions.keys.joinToString(",") { name ->
-            val choice =
-                when (name) {
-                    "recruiter" -> recruiterAnswer
-                    "jd_matches" -> jdMatches
-                    "office_days" -> officeDays
-                    else -> "does not match"
-                }
-            """"$name":{"type":"choice","choice":"$choice","confidence":0.9}"""
+    val questions = decisionQuestions((request.body as TextContent).text)
+    return decisionResponse(questions) { name ->
+        when (name) {
+            "recruiter" -> recruiterAnswer to 0.9
+            "jd_matches" -> jdMatches to 0.9
+            "office_days" -> officeDays to 0.9
+            else -> "does not match" to 0.9
         }
-    return """{"model":"clef:cloud","answers":{$answer},"usage":{"input_tokens":10,"output_tokens":1}}"""
+    }
 }
 
 internal fun mockClient(engine: MockEngine): HttpClient =
@@ -143,7 +140,7 @@ internal fun cli(
     sink: StringBuilder,
     clock: Clock = Clock.systemUTC(),
     httpClientFactory: () -> HttpClient = { HttpClient(MockEngine { respond("{}", HttpStatusCode.OK) }) },
-): TriageCli = TriageCli(StructuredLogger(sink), httpClientFactory, clock)
+): TriageCli = TriageCli(StructuredLogger(sink), httpClientFactory, clock, webhookClientFactory = httpClientFactory)
 
 internal fun credentialsFile(root: Path): Path {
     val file = tempDir(root, "credentials").resolve("credentials.json")

@@ -17,6 +17,7 @@ import uk.me.michaellloydlee.recruiter.infrastructure.gmail.GmailMessagesApi
 import uk.me.michaellloydlee.recruiter.infrastructure.llm.ModelUsageCounter
 import uk.me.michaellloydlee.recruiter.infrastructure.logging.StructuredLogger
 import uk.me.michaellloydlee.recruiter.infrastructure.notification.NotificationMail
+import uk.me.michaellloydlee.recruiter.infrastructure.notification.NotificationState
 import uk.me.michaellloydlee.recruiter.infrastructure.notification.WebhookNotifier
 import uk.me.michaellloydlee.recruiter.infrastructure.notification.WebhookOutcome
 import java.time.Clock
@@ -222,7 +223,12 @@ class ProcessInboxService(
             id = message.id,
             sender = message.sender,
             subject = message.subject,
-            state = state.name,
+            state =
+                when (state) {
+                    EvaluationState.WORTH_FOLLOW_UP -> NotificationState.WORTH_FOLLOW_UP
+                    EvaluationState.NEEDS_MORE_INFORMATION -> NotificationState.NEEDS_MORE_INFORMATION
+                    EvaluationState.TRASH -> error("A trashed mail is not notified about")
+                },
         )
 
     /**

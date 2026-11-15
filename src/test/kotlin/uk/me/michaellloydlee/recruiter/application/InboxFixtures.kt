@@ -25,6 +25,7 @@ import uk.me.michaellloydlee.recruiter.domain.requirements.JobRequirements
 import uk.me.michaellloydlee.recruiter.domain.requirements.PayRequirement
 import uk.me.michaellloydlee.recruiter.fixtures.CHAT_ANSWER
 import uk.me.michaellloydlee.recruiter.fixtures.JSON
+import uk.me.michaellloydlee.recruiter.fixtures.decisionQuestions
 import uk.me.michaellloydlee.recruiter.fixtures.idOf
 import uk.me.michaellloydlee.recruiter.fixtures.jsonHeaders
 import uk.me.michaellloydlee.recruiter.fixtures.message
@@ -44,6 +45,7 @@ import uk.me.michaellloydlee.recruiter.infrastructure.llm.OllamaDecisionClient
 import uk.me.michaellloydlee.recruiter.infrastructure.logging.StructuredLogger
 import uk.me.michaellloydlee.recruiter.infrastructure.notification.WebhookNotifier
 import java.time.Instant
+import uk.me.michaellloydlee.recruiter.fixtures.decisionAnswer as decisionResponse
 
 internal val NOW: Instant = Instant.parse("2026-10-24T08:00:00Z")
 
@@ -153,13 +155,12 @@ internal fun modelEngine(
                 headers = headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString()),
             )
         } else {
-            val body = (request.body as TextContent).text
-            val questions = Json.parseToJsonElement(body).jsonObject["questions"]!!.jsonObject
+            val questions = decisionQuestions((request.body as TextContent).text)
             val answer =
                 if (questions.containsKey("recruiter")) {
-                    """"recruiter":{"type":"choice","choice":"from a recruiter","confidence":0.9}"""
+                    decisionResponse(questions) { "from a recruiter" to 0.9 }
                 } else if (answered) {
-                    questions.keys.joinToString(",") { name ->
+                    decisionResponse(questions) { name ->
                         val choice =
                             when (name) {
                                 "jd_matches" -> jdMatches
@@ -167,13 +168,13 @@ internal fun modelEngine(
                                 else -> "does not match"
                             }
                         val confidence = if (name == "jd_matches") confidenceOfTheProfile else 0.9
-                        """"$name":{"type":"choice","choice":"$choice","confidence":$confidence}"""
+                        choice to confidence
                     }
                 } else {
-                    ""
+                    DECISION_ANSWER
                 }
             respond(
-                content = DECISION_ANSWER.replace("{}", "{$answer}"),
+                content = answer,
                 status = HttpStatusCode.OK,
                 headers = headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString()),
             )

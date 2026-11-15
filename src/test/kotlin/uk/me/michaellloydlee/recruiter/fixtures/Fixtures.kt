@@ -5,6 +5,8 @@ import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
 import io.ktor.http.headersOf
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.jsonObject
 import java.util.Base64
 
 /**
@@ -22,6 +24,28 @@ internal const val CHAT_ANSWER: String =
     """{"message":{"role":"assistant","content":"the reply of the model"},"done":true}"""
 
 internal fun jsonHeaders() = headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString())
+
+/**
+ * The answer of the decision API of Ollama: the request carries the questions
+ * as an object keyed by name, the answer carries one `choice` per question.
+ *
+ * @param questions the questions of the request, keyed by name.
+ * @param answerFor the answer of each question as a choice and a confidence.
+ */
+internal fun decisionAnswer(
+    questions: JsonObject,
+    answerFor: (String) -> Pair<String, Double>,
+): String {
+    val answer =
+        questions.keys.joinToString(",") { name ->
+            val (choice, confidence) = answerFor(name)
+            """"$name":{"type":"choice","choice":"$choice","confidence":$confidence}"""
+        }
+    return """{"model":"clef:cloud","answers":{$answer},"usage":{"input_tokens":10,"output_tokens":1}}"""
+}
+
+internal fun decisionQuestions(body: String): JsonObject =
+    Json.parseToJsonElement(body).jsonObject["questions"]!!.jsonObject
 
 internal fun messageList(vararg ids: String): String =
     ids.joinToString(prefix = """{"messages":[""", postfix = "]}", separator = ",") { id ->

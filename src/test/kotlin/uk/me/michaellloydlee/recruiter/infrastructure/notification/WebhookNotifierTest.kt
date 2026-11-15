@@ -40,7 +40,7 @@ class WebhookNotifierTest {
                                 id = "message-id",
                                 sender = "recruiter@example.com",
                                 subject = "Your CV",
-                                state = "WORTH_FOLLOW_UP",
+                                state = NotificationState.WORTH_FOLLOW_UP,
                             ),
                         ),
                     )
@@ -156,7 +156,7 @@ class WebhookNotifierTest {
             id = "message-id",
             sender = "recruiter@example.com",
             subject = "Your CV",
-            state = "WORTH_FOLLOW_UP",
+            state = NotificationState.WORTH_FOLLOW_UP,
         )
 
     private suspend fun <T> withNotifier(

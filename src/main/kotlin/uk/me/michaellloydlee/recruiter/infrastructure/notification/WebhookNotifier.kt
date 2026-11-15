@@ -64,8 +64,7 @@ class WebhookNotifier(
                     setBody(WebhookNotification(mails))
                 }
             if (!response.status.isSuccess()) {
-                val body = errorBody(response)
-                WebhookOutcome.Failed("The webhook answered with ${response.status.value}: $body")
+                WebhookOutcome.Failed("The webhook answered with ${response.status.value}: ${errorBody(response)}")
             } else {
                 WebhookOutcome.Sent
             }
@@ -85,20 +84,26 @@ class WebhookNotifier(
 
     /**
      * Reads at most [MAX_ERROR_BODY_LENGTH] bytes of the error body, a larger
-     * body is truncated and is never buffered whole.
+     * body is truncated and is never buffered whole. A body that cannot be
+     * read does not take the status code down with it: the code is the reason
+     * the job seeker needs, the body is a detail.
      */
-    private suspend fun errorBody(response: HttpResponse): String {
-        val bytes = ByteArray(MAX_ERROR_BODY_LENGTH)
-        val buffer = ByteBuffer.wrap(bytes)
-        val channel = response.bodyAsChannel()
-        while (buffer.hasRemaining()) {
-            val read = channel.readAvailable(buffer)
-            if (read <= 0) {
-                break
+    @Suppress("TooGenericExceptionCaught") // A body that fails to read must not mask the status code.
+    private suspend fun errorBody(response: HttpResponse): String =
+        try {
+            val bytes = ByteArray(MAX_ERROR_BODY_LENGTH)
+            val buffer = ByteBuffer.wrap(bytes)
+            val channel = response.bodyAsChannel()
+            while (buffer.hasRemaining()) {
+                val read = channel.readAvailable(buffer)
+                if (read <= 0) {
+                    break
+                }
             }
+            String(bytes, 0, bytes.size - buffer.remaining(), Charsets.UTF_8)
+        } catch (error: Exception) {
+            "the body could not be read (${error.message ?: "no details"})"
         }
-        return String(bytes, 0, bytes.size - buffer.remaining(), Charsets.UTF_8)
-    }
 
     private fun reasonOf(error: Throwable): String = "${error::class.simpleName}: ${error.message ?: "no details"}"
 
