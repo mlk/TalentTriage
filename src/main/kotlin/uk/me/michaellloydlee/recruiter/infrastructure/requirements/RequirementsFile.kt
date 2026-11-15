@@ -2,6 +2,7 @@ package uk.me.michaellloydlee.recruiter.infrastructure.requirements
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.SerializationException
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import uk.me.michaellloydlee.recruiter.domain.requirements.JobRequirements
@@ -44,8 +45,11 @@ object RequirementsFile {
         val file =
             try {
                 json.decodeFromString(RequirementsFile.serializer(), text)
-            } catch (error: IllegalArgumentException) {
-                throw IllegalArgumentException("Requirements file $path is not valid JSON: ${error.message}", error)
+            } catch (error: SerializationException) {
+                throw IllegalArgumentException(
+                    "Requirements file $path is not a valid requirements file: ${error.message}",
+                    error,
+                )
             }
         return JobRequirements(
             minimumPay = file.minimumPay?.let { PayRequirement(it.amount, it.currency, it.period) },

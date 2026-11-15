@@ -101,7 +101,8 @@ and is validated like input. The common rules apply to both:
 * **Unknown keys fail.** A typo in a key is an error, never a silent keep-the-code-default. The
   job seeker believes their rules are applied; a silent ignore is a lie.
 * **An empty file** — zero bytes or whitespace only — is an error; it names the file. Any other
-  content that fails to parse is invalid JSON, not an empty file.
+  content that does not decode — invalid JSON or a schema violation — is an error too, and it
+  names the file as well; it is not an empty file and not a silent default.
 * **The file must be a JSON object.** Content that parses but is not an object — `[]`, `null`,
   `42`, `"text"` — is an error naming the file; it does not count as "provides no keys".
 * **A file named on the command line that does not exist is an error**, never a silent fallback.

@@ -104,7 +104,7 @@ class RequirementsFileTest {
 
         val error = assertFailsWith<IllegalArgumentException> { RequirementsFile.load(file) }
 
-        assertTrue(error.message!!.contains("is not valid JSON"))
+        assertTrue(error.message!!.contains("is not a valid requirements file"))
     }
 
     @Test
@@ -117,11 +117,26 @@ class RequirementsFileTest {
     }
 
     @Test
-    fun failsWhenTheFileIsNotReadable() {
-        val error =
-            assertFailsWith<IllegalArgumentException> { RequirementsFile.load(createTempDirectory("requirements")) }
+    fun failsWhenTheFileHoldsJsonThatIsNotAnObject() {
+        listOf("[]", "null", "42", "\"text\"").forEach { content ->
+            val file = requirementsFile(content)
 
-        assertTrue(error.message!!.contains("could not be read"))
+            val error = assertFailsWith<IllegalArgumentException> { RequirementsFile.load(file) }
+
+            assertTrue(error.message!!.contains(file.toString()), "expected the message to name $file for $content")
+        }
+    }
+
+    @Test
+    fun failsWhenTheFileIsNotReadable() {
+        val directory = createTempDirectory("requirements")
+        try {
+            val error = assertFailsWith<IllegalArgumentException> { RequirementsFile.load(directory) }
+
+            assertTrue(error.message!!.contains("could not be read"))
+        } finally {
+            directory.toFile().deleteRecursively()
+        }
     }
 
     @Test
@@ -140,7 +155,7 @@ class RequirementsFileTest {
         val error = assertFailsWith<IllegalArgumentException> { RequirementsFile.load(file) }
 
         assertTrue(error.message!!.contains(file.toString()))
-        assertTrue(error.message!!.contains("is not valid JSON"))
+        assertTrue(error.message!!.contains("is not a valid requirements file"))
         assertTrue(error.message!!.contains("max_office_days"))
     }
 
