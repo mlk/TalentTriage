@@ -21,6 +21,7 @@ import java.nio.file.Files
 import java.nio.file.Path
 import java.time.Clock
 import java.time.Instant
+import java.util.Base64
 import kotlin.io.path.writeText
 
 internal val NOW: Instant = Instant.parse("2026-10-30T19:00:00Z")
@@ -36,6 +37,7 @@ internal fun engine(
     webhookStatus: HttpStatusCode = HttpStatusCode.OK,
     officeDays: String = "matches",
     jdMatches: String = "matches",
+    messageList: String = MESSAGE_LIST,
 ): MockEngine =
     MockEngine { request ->
         if (request.url.encodedPath == "/hook") {
@@ -46,7 +48,7 @@ internal fun engine(
             )
         } else {
             respond(
-                content = contentFor(request, officeDays, jdMatches),
+                content = contentFor(request, officeDays, jdMatches, messageList),
                 status = HttpStatusCode.OK,
                 headers = jsonHeaders(),
             )
@@ -57,6 +59,7 @@ internal fun contentFor(
     request: HttpRequestData,
     officeDays: String = "matches",
     jdMatches: String = "matches",
+    messageList: String = MESSAGE_LIST,
 ): String =
     when {
         request.url.encodedPath.endsWith("/v1/systemone") -> {
@@ -68,7 +71,7 @@ internal fun contentFor(
         }
 
         request.url.encodedPath.endsWith("/users/me/messages") -> {
-            MESSAGE_LIST
+            messageList
         }
 
         request.url.encodedPath.endsWith("/users/me/labels") -> {
@@ -86,7 +89,7 @@ internal fun contentFor(
         }
 
         else -> {
-            MESSAGE
+            message(idOf(request))
         }
     }
 
@@ -158,11 +161,16 @@ internal fun requirementsFile(root: Path): Path {
     return file
 }
 
-internal fun tokenFile(root: Path): Path {
+// The token is checked against the system clock of the machine the test runs
+// on, not the injected test clock, so the default expiry has to be relative
+// to the real now.
+internal fun tokenFile(
+    root: Path,
+    expiresAt: Instant = Instant.now().plusSeconds(3600),
+): Path {
     val file = tempDir(root, "token").resolve("token.json")
-    val expiry = Instant.now().plusSeconds(3600)
     file.writeText(
-        """{"access_token":"access-token","refresh_token":"refresh-token","expires_at":"$expiry"}""",
+        """{"access_token":"access-token","refresh_token":"refresh-token","expires_at":"$expiresAt"}""",
     )
     return file
 }
@@ -172,6 +180,7 @@ internal fun records(sink: StringBuilder): List<LogRecord> =
         .toString()
         .trim()
         .lines()
+        .filter { it.isNotBlank() }
         .map { Json.decodeFromString<LogRecord>(it) }
 
 internal fun jsonHeaders() = headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString())
@@ -191,18 +200,30 @@ internal const val MESSAGE_LIST: String =
 internal const val LABEL_LIST: String =
     """{"labels":[{"id":"Label_joblisting","name":"Recruiters/JobListing"}]}"""
 
-internal val MESSAGE: String =
+internal fun message(id: String): String =
     """
     {
-      "id": "message-id",
-      "threadId": "thread-id",
+      "id": "$id",
+      "threadId": "thread-$id",
+      "labelIds": ["INBOX"],
       "payload": {
         "mimeType": "text/plain",
         "headers": [
           {"name": "From", "value": "recruiter@example.com"},
           {"name": "Subject", "value": "Your CV"}
         ],
-        "body": {"data": "WWUgbG9va2luZyBmb3IgYSBkZXZlbG9wZXI="}
+        "body": {"data": "${bodyOf(id)}"}
       }
     }
     """.trimIndent()
+
+internal const val MESSAGE_LIST_TWO: String =
+    """{"messages":[{"id":"first","threadId":"thread-first"},{"id":"second","threadId":"thread-second"}]}"""
+
+private fun idOf(request: HttpRequestData): String =
+    request.url.encodedPath
+        .substringAfterLast("/users/me/messages/")
+        .substringBefore("/")
+
+private fun bodyOf(id: String): String =
+    Base64.getUrlEncoder().encodeToString("Looking for a developer $id".toByteArray())

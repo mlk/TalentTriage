@@ -13,6 +13,8 @@ import io.ktor.http.ContentType
 import io.ktor.http.contentType
 import io.ktor.http.isSuccess
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.ensureActive
+import kotlin.coroutines.coroutineContext
 
 /**
  * The client of the webhook the run calls when a mail needs the job seeker.
@@ -65,14 +67,20 @@ class WebhookNotifier(
                 WebhookOutcome.Sent
             }
         } catch (error: CancellationException) {
-            throw error
+            // A cancellation of the caller belongs to the caller: it goes on.
+            // A cancellation that is only the timeout of the request is not a
+            // cancellation of the run, the webhook is reported as it could
+            // not be reached.
+            coroutineContext.ensureActive()
+            WebhookOutcome.Failed("The webhook could not be reached: ${reasonOf(error)}")
         } catch (error: Exception) {
             // Broad on purpose: whatever the client throws, the webhook is
             // not allowed to take the run down with it. A timeout surfaces
             // here as an IOException.
-            val reason = "${error::class.simpleName}: ${error.message ?: "no details"}"
-            WebhookOutcome.Failed("The webhook could not be reached: $reason")
+            WebhookOutcome.Failed("The webhook could not be reached: ${reasonOf(error)}")
         }
+
+    private fun reasonOf(error: Throwable): String = "${error::class.simpleName}: ${error.message ?: "no details"}"
 
     companion object {
         /** How long a call may take, in milliseconds. */

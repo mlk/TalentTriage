@@ -414,6 +414,9 @@ mail the webhook sees is a mail the run labels: the next run does not look at it
 notified once. A run of a single message (`--id`) looks at the mail again on purpose and notifies it
 again.
 
+A run that fails partway still calls the webhook with the mails it labeled before the failure —
+they are labelled already and no later run looks at them again.
+
 A webhook that cannot be called, or that answers with an error, is a warning in the log
 (`process-inbox.notification_failed`); the run goes on and the exit code is not affected. Without
 the option no notification is sent and the run behaves as it does without it.
