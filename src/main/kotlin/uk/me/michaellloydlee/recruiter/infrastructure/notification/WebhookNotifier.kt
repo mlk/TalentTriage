@@ -70,7 +70,8 @@ class WebhookNotifier(
             // Broad on purpose: whatever the client throws, the webhook is
             // not allowed to take the run down with it. A timeout surfaces
             // here as an IOException.
-            WebhookOutcome.Failed("The webhook could not be reached: ${error.message}")
+            val reason = "${error::class.simpleName}: ${error.message ?: "no details"}"
+            WebhookOutcome.Failed("The webhook could not be reached: $reason")
         }
 
     companion object {

@@ -1,5 +1,7 @@
 package uk.me.michaellloydlee.recruiter.application
 
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.withContext
 import uk.me.michaellloydlee.recruiter.application.draft.DraftOutcome
 import uk.me.michaellloydlee.recruiter.application.draft.DraftWriter
 import uk.me.michaellloydlee.recruiter.application.evaluation.EvaluationService
@@ -76,7 +78,12 @@ class ProcessInboxService(
                 screen(message, counters, needsAttention)
             }
         } finally {
-            notify(needsAttention)
+            // The call runs even when the run is cancelled: the mails are
+            // labelled already and no later run looks at them again. The
+            // timeout of the webhook keeps a shutdown from waiting forever.
+            withContext(NonCancellable) {
+                notify(needsAttention)
+            }
         }
         return ProcessInboxSummary(
             target = target,

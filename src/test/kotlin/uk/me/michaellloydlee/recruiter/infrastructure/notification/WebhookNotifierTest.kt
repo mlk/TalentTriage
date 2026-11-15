@@ -91,7 +91,7 @@ class WebhookNotifierTest {
                 WebhookNotifier(
                     httpClient =
                         HttpClient(engine) {
-                            install(HttpTimeout) { this.requestTimeoutMillis = TIMEOUT }
+                            install(HttpTimeout) { this.requestTimeoutMillis = LONG_TIMEOUT }
                             install(ContentNegotiation) { json(JSON) }
                         },
                     url = "http://webhook.example/hook",
@@ -99,7 +99,7 @@ class WebhookNotifierTest {
                 ).notify(listOf(mail()))
 
             val failed = assertIs<WebhookOutcome.Failed>(outcome)
-            assertTrue(failed.reason.isNotBlank())
+            assertTrue(failed.reason.contains("timeout", ignoreCase = true), failed.reason)
         }
 
     @Test
@@ -150,6 +150,8 @@ class WebhookNotifierTest {
         private val JSON: Json = Json { ignoreUnknownKeys = true }
 
         private const val TIMEOUT: Long = 1_000
+
+        private const val LONG_TIMEOUT: Long = 120_000
 
         private const val TOO_LONG: Long = 60_000
     }
