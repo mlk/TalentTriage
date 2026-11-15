@@ -19,9 +19,9 @@ import uk.me.michaellloydlee.recruiter.domain.gmail.EmailMessage
  * @param phrases the words a job listing talks about, they are looked for in
  *   the subject and in the body of the message.
  */
-class JobListingHeuristics(
-    private val senderHints: Collection<String> = DEFAULT_SENDER_HINTS,
-    private val phrases: Collection<String> = DEFAULT_PHRASES,
+data class JobListingHeuristics(
+    val senderHints: Collection<String> = DEFAULT_SENDER_HINTS,
+    val phrases: Collection<String> = DEFAULT_PHRASES,
 ) {
     /**
      * Tells whether the message is a job listing.

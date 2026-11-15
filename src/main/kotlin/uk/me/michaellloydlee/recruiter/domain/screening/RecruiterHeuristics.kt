@@ -24,9 +24,9 @@ import uk.me.michaellloydlee.recruiter.domain.gmail.EmailMessage
  *   in the subject and in the body of the message.
  * @param senderHints the parts of the sender address of a recruiter mail.
  */
-class RecruiterHeuristics(
-    private val keywords: Collection<String> = DEFAULT_KEYWORDS,
-    private val senderHints: Collection<String> = DEFAULT_SENDER_HINTS,
+data class RecruiterHeuristics(
+    val keywords: Collection<String> = DEFAULT_KEYWORDS,
+    val senderHints: Collection<String> = DEFAULT_SENDER_HINTS,
 ) {
     /**
      * Tells whether the message can be a recruiter mail.

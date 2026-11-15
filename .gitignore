@@ -20,5 +20,6 @@ token.json
 token.json.last-run
 client_secret.json
 requirements.json
+rules.json
 *.keystore
 *.jks
