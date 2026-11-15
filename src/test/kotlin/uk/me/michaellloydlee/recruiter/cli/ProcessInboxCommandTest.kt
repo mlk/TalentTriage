@@ -1,45 +1,25 @@
 package uk.me.michaellloydlee.recruiter.cli
 
 import com.github.ajalt.clikt.command.test
-import io.ktor.client.HttpClient
 import io.ktor.client.engine.mock.MockEngine
 import io.ktor.client.engine.mock.respond
-import io.ktor.client.plugins.HttpTimeout
-import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
-import io.ktor.client.request.HttpRequestData
-import io.ktor.http.ContentType
-import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.content.TextContent
-import io.ktor.http.headersOf
-import io.ktor.serialization.kotlinx.json.json
 import kotlinx.coroutines.test.runTest
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.jsonObject
 import org.junit.jupiter.api.AfterEach
-import uk.me.michaellloydlee.recruiter.infrastructure.logging.LogRecord
 import uk.me.michaellloydlee.recruiter.infrastructure.logging.StructuredLogger
 import uk.me.michaellloydlee.recruiter.infrastructure.run.FileLastRunStore
-import java.nio.file.Path
 import java.time.Clock
-import java.time.Instant
 import java.time.ZoneOffset
-import kotlin.io.path.createTempDirectory
-import kotlin.io.path.writeText
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class ProcessInboxCommandTest {
-    private val tempDirs = mutableListOf<Path>()
-
-    private fun tempDir(prefix: String): Path = createTempDirectory(prefix).also { tempDirs.add(it) }
-
     @AfterEach
-    fun cleanupTempDirs() {
-        tempDirs.forEach { it.toFile().deleteRecursively() }
-        tempDirs.clear()
+    fun cleanup() {
+        cleanupTempDirs()
     }
 
     @Test
@@ -158,6 +138,85 @@ class ProcessInboxCommandTest {
             val result =
                 cli(sink).test(
                     "process-inbox --recruiter-verification-timeout soon " +
+                        "--credentials ${credentialsFile()} " +
+                        "--token ${tokenFile()} " +
+                        "--requirements ${requirementsFile()} --rules ${emptyRulesFile()}",
+                )
+
+            assertEquals(1, result.statusCode)
+        }
+
+    @Test
+    fun callsTheWebhookWithTheMailsThatNeedTheJobSeeker() =
+        runTest {
+            val sink = StringBuilder()
+            val engine = engine()
+
+            val result =
+                cli(sink) { mockClient(engine) }
+                    .test(
+                        "process-inbox --notification-webhook http://webhook.example/hook " +
+                            "--credentials ${credentialsFile()} " +
+                            "--token ${tokenFile()} " +
+                            "--requirements ${requirementsFile()} --rules ${emptyRulesFile()}",
+                    )
+
+            assertEquals(0, result.statusCode)
+            val notification = engine.requestHistory.single { it.url.host == "webhook.example" }
+            assertEquals("POST", notification.method.value)
+            val body = (notification.body as TextContent).text
+            assertTrue(body.contains("\"id\":\"message-id\""))
+            assertTrue(body.contains("\"state\":\"WORTH_FOLLOW_UP\""))
+            assertTrue(records(sink).any { it.event == "process-inbox.notification_sent" })
+        }
+
+    @Test
+    fun keepsTheRunGoingWhenTheWebhookAnswersWithAnError() =
+        runTest {
+            val sink = StringBuilder()
+            val engine = engine(webhookStatus = HttpStatusCode.InternalServerError)
+
+            val result =
+                cli(sink) { mockClient(engine) }
+                    .test(
+                        "process-inbox --notification-webhook http://webhook.example/hook " +
+                            "--credentials ${credentialsFile()} " +
+                            "--token ${tokenFile()} " +
+                            "--requirements ${requirementsFile()} --rules ${emptyRulesFile()}",
+                    )
+
+            assertEquals(0, result.statusCode)
+            assertEquals("process-inbox.completed", records(sink).last().event)
+            assertTrue(records(sink).any { it.event == "process-inbox.notification_failed" })
+        }
+
+    @Test
+    fun sendsNoNotificationWithoutTheWebhookOption() =
+        runTest {
+            val sink = StringBuilder()
+            val engine = engine()
+
+            val result =
+                cli(sink) { mockClient(engine) }
+                    .test(
+                        "process-inbox --credentials ${credentialsFile()} " +
+                            "--token ${tokenFile()} " +
+                            "--requirements ${requirementsFile()} --rules ${emptyRulesFile()}",
+                    )
+
+            assertEquals(0, result.statusCode)
+            assertTrue(engine.requestHistory.none { it.url.host == "webhook.example" })
+            assertTrue(records(sink).none { it.event == "process-inbox.notification_sent" })
+        }
+
+    @Test
+    fun failsOnAWebhookWithoutAScheme() =
+        runTest {
+            val sink = StringBuilder()
+
+            val result =
+                cli(sink).test(
+                    "process-inbox --notification-webhook hook.example/notify " +
                         "--credentials ${credentialsFile()} " +
                         "--token ${tokenFile()} " +
                         "--requirements ${requirementsFile()} --rules ${emptyRulesFile()}",
@@ -555,151 +614,4 @@ class ProcessInboxCommandTest {
             assertEquals(1, result.statusCode)
             assertTrue(result.output.contains("Rules file not found"))
         }
-
-    private fun engine(): MockEngine =
-        MockEngine { request ->
-            respond(
-                content = contentFor(request),
-                status = HttpStatusCode.OK,
-                headers = jsonHeaders(),
-            )
-        }
-
-    private fun contentFor(request: HttpRequestData): String =
-        when {
-            request.url.encodedPath.endsWith("/v1/systemone") -> {
-                decisionAnswer(request)
-            }
-
-            request.url.encodedPath.endsWith("/api/chat") -> {
-                CHAT_ANSWER
-            }
-
-            request.url.encodedPath.endsWith("/users/me/messages") -> {
-                MESSAGE_LIST
-            }
-
-            request.url.encodedPath.endsWith("/users/me/labels") -> {
-                if (request.method.value == "GET") LABEL_LIST else LABEL
-            }
-
-            else -> {
-                MESSAGE
-            }
-        }
-
-    /**
-     * The answer of the decision model: the recruiter question of the screening
-     * and the criteria of the evaluation are answered differently.
-     */
-    private fun decisionAnswer(request: HttpRequestData): String {
-        val body = (request.body as TextContent).text
-        val questions = Json.parseToJsonElement(body).jsonObject["questions"]!!.jsonObject
-        val answer =
-            questions.keys.joinToString(",") { name ->
-                val choice =
-                    when (name) {
-                        "recruiter" -> "from a recruiter"
-                        "jd_matches", "office_days" -> "matches"
-                        else -> "does not match"
-                    }
-                """"$name":{"type":"choice","choice":"$choice","confidence":0.9}"""
-            }
-        return """{"model":"clef:cloud","answers":{$answer},"usage":{"input_tokens":10,"output_tokens":1}}"""
-    }
-
-    private fun mockClient(engine: MockEngine): HttpClient =
-        HttpClient(engine) {
-            install(HttpTimeout)
-            install(ContentNegotiation) { json(JSON) }
-        }
-
-    private fun cli(
-        sink: StringBuilder,
-        clock: Clock = Clock.systemUTC(),
-        httpClientFactory: () -> HttpClient = { HttpClient(MockEngine { respond("{}", HttpStatusCode.OK) }) },
-    ): TriageCli = TriageCli(StructuredLogger(sink), httpClientFactory, clock)
-
-    private fun credentialsFile(): Path {
-        val file = tempDir("credentials").resolve("credentials.json")
-        file.writeText("""{"client_id":"client-id","client_secret":"client-secret"}""")
-        return file
-    }
-
-    private fun rulesFile(content: String): Path {
-        val file = tempDir("rules").resolve("rules.json")
-        file.writeText(content)
-        return file
-    }
-
-    private fun missingRulesFile(): Path = tempDir("rules").resolve("rules.json")
-
-    private fun emptyRulesFile(): Path {
-        val file = tempDir("rules").resolve("rules.json")
-        file.writeText("{}")
-        return file
-    }
-
-    private fun requirementsFile(): Path {
-        val file = tempDir("requirements").resolve("requirements.json")
-        file.writeText(
-            """{"maximum_office_days": 2, "profile": "Senior Kotlin engineer"}""",
-        )
-        return file
-    }
-
-    private fun tokenFile(): Path {
-        val file = tempDir("token").resolve("token.json")
-        val expiry = Instant.now().plusSeconds(3600)
-        file.writeText(
-            """{"access_token":"access-token","refresh_token":"refresh-token","expires_at":"$expiry"}""",
-        )
-        return file
-    }
-
-    private fun records(sink: StringBuilder): List<LogRecord> =
-        sink
-            .toString()
-            .trim()
-            .lines()
-            .map { Json.decodeFromString<LogRecord>(it) }
-
-    private fun jsonHeaders() = headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString())
-
-    companion object {
-        private val NOW: Instant = Instant.parse("2026-10-30T19:00:00Z")
-
-        private val LAST_RUN: Instant = Instant.parse("2026-10-30T18:00:00Z")
-
-        private val JSON: Json =
-            Json {
-                ignoreUnknownKeys = true
-                encodeDefaults = true
-            }
-
-        private const val CHAT_ANSWER =
-            """{"message":{"role":"assistant","content":"no"},"done":true}"""
-
-        private const val MESSAGE_LIST =
-            """{"messages":[{"id":"message-id","threadId":"thread-id"}]}"""
-
-        private const val LABEL_LIST =
-            """{"labels":[{"id":"Label_joblisting","name":"Recruiters/JobListing"}]}"""
-
-        private const val LABEL =
-            """{"id":"Label_joblisting","name":"Recruiters/JobListing"}"""
-
-        private val MESSAGE =
-            """
-            {
-              "id": "message-id",
-              "threadId": "thread-id",
-              "payload": {
-                "mimeType": "text/plain",
-                "headers": [{"name": "Subject", "value": "Your CV"}],
-                "body": {"data": "WWUgbG9va2luZyBmb3IgYSBkZXZlbG9wZXI="}
-              }
-            }
-            """.trimIndent()
-    }
 }

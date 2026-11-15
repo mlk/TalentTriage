@@ -38,6 +38,7 @@ import uk.me.michaellloydlee.recruiter.infrastructure.llm.OllamaChatClient
 import uk.me.michaellloydlee.recruiter.infrastructure.llm.OllamaDecisionClient
 import uk.me.michaellloydlee.recruiter.infrastructure.llm.OllamaException
 import uk.me.michaellloydlee.recruiter.infrastructure.logging.StructuredLogger
+import uk.me.michaellloydlee.recruiter.infrastructure.notification.WebhookNotifier
 import uk.me.michaellloydlee.recruiter.infrastructure.requirements.RequirementsFile
 import uk.me.michaellloydlee.recruiter.infrastructure.run.FileLastRunStore
 import uk.me.michaellloydlee.recruiter.infrastructure.screening.RulesFile
@@ -61,6 +62,13 @@ import java.time.Instant
  * The `--id` option looks at one message instead of the inbox: the run
  * screens that message as if it were pending and it does not move the moment
  * of the last successful run.
+ *
+ * The `--notification-webhook` option names the webhook the run calls at the
+ * end with the mails that need the job seeker: one call with a JSON body with
+ * the mails that are worth a follow up or that need more information. A
+ * webhook that cannot be called is a warning in the log, it does not fail the
+ * run. Without the option no notification is sent and the run behaves as it
+ * does without it.
  *
  * The `--rules` option points at the file with the rules of the screening.
  * The file holds the words a recruiter mail talks about, the senders of a
@@ -217,6 +225,15 @@ class ProcessInboxCommand(
             help = "How long the writing of a draft may take, in milliseconds",
         ).long().default(OllamaChatClient.DEFAULT_TIMEOUT_MILLIS)
 
+    private val notificationWebhook: String? by
+        option(
+            "--notification-webhook",
+            help =
+                "The URL of the webhook the run calls at the end with the mails that need the job seeker, " +
+                    "a JSON body with the mails that are worth a follow up or that need more information. " +
+                    "Without it no notification is sent",
+        )
+
     override suspend fun run() {
         logger.info(
             event = "$COMMAND_NAME.started",
@@ -235,10 +252,10 @@ class ProcessInboxCommand(
                     tokenStore = FileOAuth2TokenStore(Path.of(tokenFile)),
                     httpClient = client,
                 )
+            val notifier = webhook(client)
             val summary =
                 try {
-                    // One counter for the models of the run: the run says what
-                    // the calls to the models took.
+                    // One counter for the models of the run.
                     val usage = ModelUsageCounter()
                     ProcessInboxService(
                         messages = gmail.messages,
@@ -258,6 +275,7 @@ class ProcessInboxCommand(
                         drafts = drafts(client, gmail.drafts, usage),
                         requirements = requirements,
                         stateManager = gmail.stateManager,
+                        notifier = notifier,
                         usageCounter = usage,
                         clock = clock,
                         logger = logger,
@@ -267,19 +285,36 @@ class ProcessInboxCommand(
                 } catch (error: OllamaException) {
                     throw CommandFailedException(error.message.orEmpty(), error)
                 }
-            // The run succeeded: the next run looks back to this moment, the
-            // mail that was screened out is not looked at again. A run of a
-            // single message does not move that moment: it looked at one mail
-            // only, the mail of the window is still waiting.
-            if (target is RunTarget.Window) {
-                lastRunStore().save(startedAt)
-            }
-            logger.info(
-                event = "$COMMAND_NAME.completed",
-                message = "Inbox triage run completed",
-                attributes = summary.attributes(startedAt),
-            )
+            rememberTheRun(target, startedAt, summary)
         }
+    }
+
+    /**
+     * The end of a run: the moment of the run is remembered and the log says
+     * what the run did.
+     *
+     * The next run looks back to the moment of this run: the mail that was
+     * screened out is not looked at again. A run of a single message does not
+     * move that moment: it looked at one mail only, the mail of the window is
+     * still waiting.
+     *
+     * @param target what the run looked at.
+     * @param startedAt the moment the run started.
+     * @param summary what the run did.
+     */
+    private suspend fun rememberTheRun(
+        target: RunTarget,
+        startedAt: Instant,
+        summary: ProcessInboxSummary,
+    ) {
+        if (target is RunTarget.Window) {
+            lastRunStore().save(startedAt)
+        }
+        logger.info(
+            event = "$COMMAND_NAME.completed",
+            message = "Inbox triage run completed",
+            attributes = summary.attributes(startedAt),
+        )
     }
 
     /**
@@ -480,6 +515,13 @@ class ProcessInboxCommand(
                 }
             }
         }
+
+    /**
+     * The webhook the run calls at the end with the mails that need the job
+     * seeker, `null` when no webhook is configured.
+     */
+    private fun webhook(client: HttpClient): WebhookNotifier? =
+        notificationWebhook?.let { WebhookNotifier(httpClient = client, url = endpoint(it)) }
 
     /**
      * The evaluator of the job descriptions, the decision model of Ollama or a

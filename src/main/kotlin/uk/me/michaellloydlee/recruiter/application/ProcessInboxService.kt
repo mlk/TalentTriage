@@ -14,6 +14,9 @@ import uk.me.michaellloydlee.recruiter.infrastructure.gmail.GmailLabelStateManag
 import uk.me.michaellloydlee.recruiter.infrastructure.gmail.GmailMessagesApi
 import uk.me.michaellloydlee.recruiter.infrastructure.llm.ModelUsageCounter
 import uk.me.michaellloydlee.recruiter.infrastructure.logging.StructuredLogger
+import uk.me.michaellloydlee.recruiter.infrastructure.notification.NotificationMail
+import uk.me.michaellloydlee.recruiter.infrastructure.notification.WebhookNotifier
+import uk.me.michaellloydlee.recruiter.infrastructure.notification.WebhookOutcome
 import java.time.Clock
 import java.time.Duration
 
@@ -36,6 +39,8 @@ import java.time.Duration
  *   information.
  * @param requirements the requirements of the job seeker.
  * @param stateManager keeps the state of the messages.
+ * @param notifier the webhook the run calls at the end with the mails that
+ *   need the job seeker, `null` when no webhook is configured.
  * @param usageCounter counts what the calls to the models took.
  * @param clock the clock of the run, it says how long the run took.
  * @param logger sink for the log of the run.
@@ -47,6 +52,7 @@ class ProcessInboxService(
     private val drafts: DraftWriter,
     private val requirements: JobRequirements,
     private val stateManager: GmailLabelStateManager,
+    private val notifier: WebhookNotifier? = null,
     private val usageCounter: ModelUsageCounter = ModelUsageCounter(),
     private val clock: Clock = Clock.systemUTC(),
     private val logger: StructuredLogger,
@@ -61,9 +67,11 @@ class ProcessInboxService(
         val startedAt = clock.instant()
         val pending = messagesForTarget(target)
         val counters = Counters()
+        val needsAttention = mutableListOf<NotificationMail>()
         pending.forEach { message ->
-            screen(message, counters)
+            screen(message, counters, needsAttention)
         }
+        notify(needsAttention)
         return ProcessInboxSummary(
             target = target,
             screened = pending.size,
@@ -107,6 +115,7 @@ class ProcessInboxService(
     private suspend fun screen(
         message: EmailMessage,
         counters: Counters,
+        needsAttention: MutableList<NotificationMail>,
     ) {
         val outcome = screening.screen(message)
         logger.info(
@@ -129,7 +138,7 @@ class ProcessInboxService(
         when (outcome.decision) {
             ScreeningDecision.RECRUITER -> {
                 counters.recruiters++
-                evaluate(message, counters)
+                evaluate(message, counters, needsAttention)
             }
 
             ScreeningDecision.JOB_LISTING -> {
@@ -149,6 +158,7 @@ class ProcessInboxService(
     private suspend fun evaluate(
         message: EmailMessage,
         counters: Counters,
+        needsAttention: MutableList<NotificationMail>,
     ) {
         val evaluation =
             evaluation.evaluate(
@@ -170,15 +180,71 @@ class ProcessInboxService(
         when (evaluation.state) {
             EvaluationState.WORTH_FOLLOW_UP -> {
                 counters.worthFollowUp++
+                needsAttention += attentionMail(message, evaluation.state)
             }
 
             EvaluationState.NEEDS_MORE_INFORMATION -> {
                 counters.needsMoreInformation++
+                needsAttention += attentionMail(message, evaluation.state)
                 askForInformation(message, evaluation, counters)
             }
 
             EvaluationState.TRASH -> {
                 counters.trashed++
+            }
+        }
+    }
+
+    /**
+     * The mail as the webhook receives it.
+     *
+     * @param message the mail of the recruiter.
+     * @param state the state the evaluation led to.
+     */
+    private fun attentionMail(
+        message: EmailMessage,
+        state: EvaluationState,
+    ): NotificationMail =
+        NotificationMail(
+            id = message.id,
+            sender = message.sender,
+            subject = message.subject,
+            state = state.name,
+        )
+
+    /**
+     * Calls the webhook with the mails that need the job seeker.
+     *
+     * The webhook is called once per run, with every mail that needs the job
+     * seeker in it, and only when at least one mail needs him. A webhook that
+     * could not be called is a warning in the log, it does not fail the run.
+     *
+     * @param mails the mails that need the job seeker.
+     */
+    private suspend fun notify(mails: List<NotificationMail>) {
+        val notifier = notifier ?: return
+        if (mails.isEmpty()) {
+            return
+        }
+        when (val outcome = notifier.notify(mails)) {
+            is WebhookOutcome.Sent -> {
+                logger.info(
+                    event = EVENT_NOTIFICATION_SENT,
+                    message = "The webhook was told about the mails that need the job seeker",
+                    attributes = mapOf("mails" to mails.size.toString()),
+                )
+            }
+
+            is WebhookOutcome.Failed -> {
+                logger.warn(
+                    event = EVENT_NOTIFICATION_FAILED,
+                    message = "The webhook that tells the job seeker about the mails that need him was not called",
+                    attributes =
+                        mapOf(
+                            "reason" to outcome.reason,
+                            "mails" to mails.size.toString(),
+                        ),
+                )
             }
         }
     }
@@ -282,5 +348,11 @@ class ProcessInboxService(
 
         /** The event of the log of a draft that could not be written. */
         const val EVENT_DRAFT_FAILED: String = "process-inbox.draft_failed"
+
+        /** The event of the log of the webhook that was called. */
+        const val EVENT_NOTIFICATION_SENT: String = "process-inbox.notification_sent"
+
+        /** The event of the log of the webhook that could not be called. */
+        const val EVENT_NOTIFICATION_FAILED: String = "process-inbox.notification_failed"
     }
 }
