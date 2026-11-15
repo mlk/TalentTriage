@@ -95,7 +95,8 @@ class WebhookNotifierTest {
 
             val failed = assertIs<WebhookOutcome.Failed>(outcome)
             assertTrue(failed.reason.contains("500"))
-            assertTrue(failed.reason.length <= WebhookNotifier.MAX_ERROR_BODY_LENGTH + REASON_PREFIX_LENGTH)
+            assertTrue(failed.reason.contains("x".repeat(WebhookNotifier.MAX_ERROR_BODY_LENGTH)))
+            assertTrue(!failed.reason.contains("x".repeat(WebhookNotifier.MAX_ERROR_BODY_LENGTH + 1)))
         }
 
     @Test
@@ -178,8 +179,5 @@ class WebhookNotifierTest {
         private const val LONG_TIMEOUT: Long = 120_000
 
         private const val TOO_LONG: Long = 60_000
-
-        // The reason is the fixed prefix plus at most MAX_ERROR_BODY_LENGTH bytes.
-        private const val REASON_PREFIX_LENGTH: Int = 64
     }
 }

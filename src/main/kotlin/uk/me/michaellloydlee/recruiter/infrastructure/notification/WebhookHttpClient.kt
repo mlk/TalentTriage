@@ -21,14 +21,11 @@ object WebhookHttpClient {
         HttpClient(CIO) {
             followRedirects = false
             install(HttpTimeout) {
-                requestTimeoutMillis = DEFAULT_TIMEOUT_MILLIS
-                connectTimeoutMillis = DEFAULT_TIMEOUT_MILLIS
+                requestTimeoutMillis = WebhookNotifier.DEFAULT_TIMEOUT_MILLIS
+                connectTimeoutMillis = WebhookNotifier.DEFAULT_TIMEOUT_MILLIS
             }
             install(ContentNegotiation) {
                 json(Json { ignoreUnknownKeys = true })
             }
         }
-
-    /** Timeout of a call of the webhook, in milliseconds. */
-    const val DEFAULT_TIMEOUT_MILLIS: Long = 10_000
 }

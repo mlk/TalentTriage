@@ -72,7 +72,9 @@ class ProcessInboxServiceNotificationTest {
 
             assertEquals(2, summary.needsMoreInformation)
             val body = Json.parseToJsonElement((webhook.requestHistory.single().body as TextContent).text).jsonObject
-            body["mails"]!!.jsonArray.forEach { mail ->
+            val mails = body["mails"]!!.jsonArray
+            assertEquals(2, mails.size)
+            mails.forEach { mail ->
                 assertEquals(
                     "NEEDS_MORE_INFORMATION",
                     mail.jsonObject

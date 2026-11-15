@@ -14,6 +14,7 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import uk.me.michaellloydlee.recruiter.fixtures.CHAT_ANSWER
 import uk.me.michaellloydlee.recruiter.fixtures.JSON
+import uk.me.michaellloydlee.recruiter.fixtures.decisionAnswer
 import uk.me.michaellloydlee.recruiter.fixtures.decisionQuestions
 import uk.me.michaellloydlee.recruiter.fixtures.idOf
 import uk.me.michaellloydlee.recruiter.fixtures.jsonHeaders
@@ -26,7 +27,6 @@ import java.nio.file.Path
 import java.time.Clock
 import java.time.Instant
 import kotlin.io.path.writeText
-import uk.me.michaellloydlee.recruiter.fixtures.decisionAnswer as decisionResponse
 
 internal val NOW: Instant = Instant.parse("2026-10-30T19:00:00Z")
 
@@ -75,7 +75,7 @@ internal fun contentFor(
 ): String =
     when {
         request.url.encodedPath.endsWith("/v1/systemone") -> {
-            decisionAnswer(request, officeDays, jdMatches, recruiterAnswer)
+            decisionAnswerFor(request, officeDays, jdMatches, recruiterAnswer)
         }
 
         request.url.encodedPath.endsWith("/api/chat") -> {
@@ -113,14 +113,14 @@ internal fun contentFor(
  * The answer of the decision model: the recruiter question of the screening
  * and the criteria of the evaluation are answered differently.
  */
-internal fun decisionAnswer(
+internal fun decisionAnswerFor(
     request: HttpRequestData,
     officeDays: String = "matches",
     jdMatches: String = "matches",
     recruiterAnswer: String = "from a recruiter",
 ): String {
     val questions = decisionQuestions((request.body as TextContent).text)
-    return decisionResponse(questions) { name ->
+    return decisionAnswer(questions) { name ->
         when (name) {
             "recruiter" -> recruiterAnswer to 0.9
             "jd_matches" -> jdMatches to 0.9

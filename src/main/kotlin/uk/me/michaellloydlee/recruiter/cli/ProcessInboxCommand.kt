@@ -252,17 +252,10 @@ class ProcessInboxCommand(
         val credentials = credentials()
         val requirements = requirements()
         val screeningRules = screeningRules()
-        // The webhook gets its own client: it must not be redirected and it
-        // must not carry what the Gmail client carries. The URL is checked
-        // before any work is done, so a bad webhook fails the run before a
-        // mail is labelled.
-        val notificationUrl = notificationWebhook?.let { webhookUrl(it) }
-        val webhookClient = notificationUrl?.let { webhookClientFactory() }
-        try {
+        withWebhook { notifier ->
             httpClientFactory().use { client ->
                 val gmail =
                     GmailServices.create(credentials, FileOAuth2TokenStore(Path.of(tokenFile)), client)
-                val notifier = webhookClient?.let { WebhookNotifier(httpClient = it, url = notificationUrl) }
                 val summary =
                     try {
                         // One counter for the models of the run.
@@ -297,8 +290,28 @@ class ProcessInboxCommand(
                     }
                 rememberTheRun(target, startedAt, summary)
             }
+        }
+    }
+
+    /**
+     * Runs the block of the run with the notifier of the run.
+     *
+     * The webhook gets a client of its own: it must not be redirected and it
+     * carries nothing the Gmail client carries. The URL is checked before any
+     * work is done, so a bad webhook fails the run before a mail is labelled.
+     * The client is closed when the block is done.
+     *
+     * @param block the run itself, it receives the notifier, or `null` when
+     *   no webhook is configured.
+     */
+    private suspend fun withWebhook(block: suspend (WebhookNotifier?) -> Unit) {
+        val url = notificationWebhook?.let { webhookUrl(it) }
+        val client = url?.let { webhookClientFactory() }
+        try {
+            val notifier = if (url != null && client != null) WebhookNotifier(httpClient = client, url = url) else null
+            block(notifier)
         } finally {
-            webhookClient?.close()
+            client?.close()
         }
     }
 

@@ -31,10 +31,7 @@ class ProcessInboxCommandNotificationTest {
             val result =
                 cli(sink) { mockClient(engine) }
                     .test(
-                        "process-inbox --notification-webhook http://webhook.example/hook " +
-                            "--credentials ${credentialsFile(root)} " +
-                            "--token ${tokenFile(root)} " +
-                            "--requirements ${requirementsFile(root)} --rules ${defaultRulesFile(root)}",
+                        command(),
                     )
 
             assertEquals(0, result.statusCode)
@@ -84,10 +81,7 @@ class ProcessInboxCommandNotificationTest {
             val result =
                 cli(sink) { mockClient(engine) }
                     .test(
-                        "process-inbox --notification-webhook http://webhook.example/hook " +
-                            "--credentials ${credentialsFile(root)} " +
-                            "--token ${tokenFile(root)} " +
-                            "--requirements ${requirementsFile(root)} --rules ${defaultRulesFile(root)}",
+                        command(),
                     )
 
             assertEquals(0, result.statusCode)
@@ -105,10 +99,7 @@ class ProcessInboxCommandNotificationTest {
             val result =
                 cli(sink) { mockClient(engine) }
                     .test(
-                        "process-inbox --notification-webhook http://webhook.example/hook " +
-                            "--credentials ${credentialsFile(root)} " +
-                            "--token ${tokenFile(root)} " +
-                            "--requirements ${requirementsFile(root)} --rules ${defaultRulesFile(root)}",
+                        command(),
                     )
 
             assertEquals(0, result.statusCode)
@@ -124,10 +115,7 @@ class ProcessInboxCommandNotificationTest {
             val result =
                 cli(sink) { mockClient(engine) }
                     .test(
-                        "process-inbox --notification-webhook http://webhook.example/hook " +
-                            "--credentials ${credentialsFile(root)} " +
-                            "--token ${tokenFile(root)} " +
-                            "--requirements ${requirementsFile(root)} --rules ${defaultRulesFile(root)}",
+                        command(),
                     )
 
             assertEquals(0, result.statusCode)
@@ -143,10 +131,7 @@ class ProcessInboxCommandNotificationTest {
             val result =
                 cli(sink) { mockClient(engine) }
                     .test(
-                        "process-inbox --notification-webhook http://webhook.example/hook " +
-                            "--credentials ${credentialsFile(root)} " +
-                            "--token ${tokenFile(root)} " +
-                            "--requirements ${requirementsFile(root)} --rules ${defaultRulesFile(root)}",
+                        command(),
                     )
 
             assertEquals(0, result.statusCode)
@@ -168,10 +153,7 @@ class ProcessInboxCommandNotificationTest {
             val result =
                 cli(sink) { mockClient(engine) }
                     .test(
-                        "process-inbox --notification-webhook http://webhook.example/hook " +
-                            "--credentials ${credentialsFile(root)} " +
-                            "--token ${tokenFile(root)} " +
-                            "--requirements ${requirementsFile(root)} --rules ${defaultRulesFile(root)}",
+                        command(),
                     )
 
             assertEquals(0, result.statusCode)
@@ -188,10 +170,7 @@ class ProcessInboxCommandNotificationTest {
             val result =
                 cli(sink) { mockClient(engine) }
                     .test(
-                        "process-inbox --notification-webhook http://webhook.example/hook " +
-                            "--credentials ${credentialsFile(root)} " +
-                            "--token ${tokenFile(root)} " +
-                            "--requirements ${requirementsFile(root)} --rules ${defaultRulesFile(root)}",
+                        command(),
                     )
 
             assertEquals(0, result.statusCode)
@@ -224,14 +203,15 @@ class ProcessInboxCommandNotificationTest {
             val sink = StringBuilder()
 
             val result =
-                cli(sink).test(
-                    "process-inbox --notification-webhook hook.example/notify " +
-                        "--credentials ${credentialsFile(root)} " +
-                        "--token ${tokenFile(root)} " +
-                        "--requirements ${requirementsFile(root)} --rules ${defaultRulesFile(root)}",
-                )
+                cli(sink).test(command("hook.example/notify"))
 
             assertEquals(1, result.statusCode)
             assertTrue(result.output.contains("hook.example/notify"))
         }
+
+    private fun command(webhook: String = "http://webhook.example/hook"): String =
+        "process-inbox --notification-webhook $webhook " +
+            "--credentials ${credentialsFile(root)} " +
+            "--token ${tokenFile(root)} " +
+            "--requirements ${requirementsFile(root)} --rules ${defaultRulesFile(root)}"
 }
