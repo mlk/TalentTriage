@@ -526,15 +526,19 @@ class ProcessInboxCommand(
 
     /**
      * The URL of the webhook, it has to look like a URL the client can talk
-     * to. The path and the query are the webhook's own, they are passed on
-     * unchanged.
+     * to. The scheme is matched without a case, as URLs are case insensitive
+     * in the scheme, and the host has to be there. The path and the query
+     * are the webhook's own, they are passed on unchanged.
      */
-    private fun webhookUrl(value: String): String =
-        if (value.startsWith("http://") || value.startsWith("https://")) {
-            value
-        } else {
+    private fun webhookUrl(value: String): String {
+        val schemeEnd = value.indexOf(SCHEME_SEPARATOR)
+        val scheme = if (schemeEnd > 0) value.substring(0, schemeEnd).lowercase() else ""
+        val host = if (schemeEnd > 0) value.substring(schemeEnd + SCHEME_SEPARATOR.length).substringBefore('/') else ""
+        if ((scheme != "http" && scheme != "https") || host.isEmpty()) {
             throw CommandFailedException("The webhook '$value' needs a scheme like http:// or https://")
         }
+        return value
+    }
 
     /**
      * The evaluator of the job descriptions, the decision model of Ollama or a
@@ -619,5 +623,8 @@ class ProcessInboxCommand(
 
         /** How long the evaluation of a job description may take, in milliseconds. */
         const val DEFAULT_EVALUATION_TIMEOUT_MILLIS: Long = 600_000
+
+        /** The separator between the scheme of an URL and the rest of it. */
+        private const val SCHEME_SEPARATOR: String = "://"
     }
 }
