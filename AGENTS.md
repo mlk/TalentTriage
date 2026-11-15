@@ -124,8 +124,8 @@ per-key defaults:
 
 * `profile` and `maximum_office_days` are required; a missing or blank value is an error.
 * `minimum_pay` and `share_minimum_pay` are optional; `share_minimum_pay` defaults to `false`.
-* There is no `{}`-to-defaults pin: a file without its required keys is an error, not a default.
-  A missing file is always an error — this file has no code defaults to fall back to.
+* A missing file is always an error — its required keys have no defaults to fall back on. A file
+  without its required keys is an error too; there is no `{}`-to-defaults pin.
 
 ### The states of a message
 

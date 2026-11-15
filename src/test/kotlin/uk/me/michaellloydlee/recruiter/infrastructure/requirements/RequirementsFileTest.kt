@@ -104,6 +104,23 @@ class RequirementsFileTest {
 
         val error = assertFailsWith<IllegalArgumentException> { RequirementsFile.load(file) }
 
+        assertTrue(error.message!!.contains("is not valid JSON"))
+    }
+
+    @Test
+    fun failsWhenTheFileIsEmpty() {
+        val file = requirementsFile("   ")
+
+        val error = assertFailsWith<IllegalArgumentException> { RequirementsFile.load(file) }
+
+        assertTrue(error.message!!.contains("is empty"))
+    }
+
+    @Test
+    fun failsWhenTheFileIsNotReadable() {
+        val error =
+            assertFailsWith<IllegalArgumentException> { RequirementsFile.load(createTempDirectory("requirements")) }
+
         assertTrue(error.message!!.contains("could not be read"))
     }
 
@@ -122,6 +139,8 @@ class RequirementsFileTest {
 
         val error = assertFailsWith<IllegalArgumentException> { RequirementsFile.load(file) }
 
+        assertTrue(error.message!!.contains(file.toString()))
+        assertTrue(error.message!!.contains("is not valid JSON"))
         assertTrue(error.message!!.contains("max_office_days"))
     }
 

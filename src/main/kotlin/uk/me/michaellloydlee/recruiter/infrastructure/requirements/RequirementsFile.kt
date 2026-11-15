@@ -32,11 +32,20 @@ object RequirementsFile {
         require(Files.exists(path)) {
             "Requirements file not found: $path"
         }
+        val text =
+            try {
+                Files.readString(path)
+            } catch (error: IOException) {
+                throw IllegalArgumentException("Requirements file $path could not be read: ${error.message}", error)
+            }
+        require(text.isNotBlank()) {
+            "Requirements file $path is empty"
+        }
         val file =
             try {
-                json.decodeFromString(RequirementsFile.serializer(), Files.readString(path))
+                json.decodeFromString(RequirementsFile.serializer(), text)
             } catch (error: IllegalArgumentException) {
-                throw IllegalArgumentException("Requirements file $path could not be read: ${error.message}", error)
+                throw IllegalArgumentException("Requirements file $path is not valid JSON: ${error.message}", error)
             }
         return JobRequirements(
             minimumPay = file.minimumPay?.let { PayRequirement(it.amount, it.currency, it.period) },
