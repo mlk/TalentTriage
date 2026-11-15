@@ -95,26 +95,37 @@ That is what makes the code testable without a network and without a file system
 
 ### Files the job seeker writes
 
-A file the job seeker edits by hand (`rules.json`, `requirements.json`) is input to the pipeline and
-is validated like input:
+A file the job seeker edits by hand (`rules.json`, `requirements.json`) is input to the pipeline
+and is validated like input. The common rules apply to both:
 
 * **Unknown keys fail.** A typo in a key is an error, never a silent keep-the-code-default. The
   job seeker believes their rules are applied; a silent ignore is a lie.
-* **Words are trimmed on the way in.** A whitespace-padded word is a rule that matches nothing.
-* **A blank word is an error**, and an empty file — zero bytes or whitespace only — is an error;
-  both name the file. A file holding `{}` is not empty: it provides no keys and gets the defaults.
-  Any other content — not empty, but failing to parse — is invalid JSON, not an empty file.
+* **An empty file** — zero bytes or whitespace only — is an error; it names the file. Any other
+  content that fails to parse is invalid JSON, not an empty file.
 * **The file must be a JSON object.** Content that parses but is not an object — `[]`, `null`,
   `42`, `"text"` — is an error naming the file; it does not count as "provides no keys".
-* **Defaults fill the keys the file does not provide.** No file → the documented defaults; a file
-  that provides no keys (`{}`) → exactly the defaults; a file that provides some keys → those
-  keys win, the rest are the defaults. A file named on the command line that does not exist → an
-  error, never a silent fallback.
-* **User-authored strings are data.** They are matched literally (`contains`), never compiled into
-  a regular expression.
+* **A file named on the command line that does not exist is an error**, never a silent fallback.
+* **User-authored strings are data.** They are matched literally (`contains`), never compiled
+  into a regular expression.
+
+`rules.json` holds word lists and per-key defaults:
+
+* **Words are trimmed on the way in.** A whitespace-padded word is a rule that matches nothing.
+* **A blank word is an error**; it names the file.
+* **A file holding `{}` is not empty**: it provides no keys and gets the defaults.
+* **Defaults fill the keys the file does not provide.** A file that provides some keys → those
+  keys win, the rest are the defaults. No file at the default location → the documented defaults.
 * **A default has one source of truth.** The constructor and the loader reference the same
   constants, and a test pins it (`load("{}")` equals `defaults()`). If two paths can produce the
   "same" default, they will drift.
+
+`requirements.json` holds the requirements of the job seeker, and has required keys instead of
+per-key defaults:
+
+* `profile` and `maximum_office_days` are required; a missing or blank value is an error.
+* `minimum_pay` and `share_minimum_pay` are optional; `share_minimum_pay` defaults to `false`.
+* There is no `{}`-to-defaults pin: a file without its required keys is an error, not a default.
+  A missing file is always an error — this file has no code defaults to fall back to.
 
 ### The states of a message
 
