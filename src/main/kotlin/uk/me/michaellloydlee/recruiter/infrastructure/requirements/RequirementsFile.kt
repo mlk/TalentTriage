@@ -2,6 +2,7 @@ package uk.me.michaellloydlee.recruiter.infrastructure.requirements
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.SerializationException
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import uk.me.michaellloydlee.recruiter.domain.requirements.JobRequirements
@@ -27,16 +28,28 @@ object RequirementsFile {
      */
     fun load(
         path: Path,
-        json: Json = Json { ignoreUnknownKeys = true },
+        json: Json = Json { ignoreUnknownKeys = false },
     ): JobRequirements {
         require(Files.exists(path)) {
             "Requirements file not found: $path"
         }
+        val text =
+            try {
+                Files.readString(path)
+            } catch (error: IOException) {
+                throw IllegalArgumentException("Requirements file $path could not be read: ${error.message}", error)
+            }
+        require(text.isNotBlank()) {
+            "Requirements file $path is empty"
+        }
         val file =
             try {
-                json.decodeFromString(RequirementsFile.serializer(), Files.readString(path))
-            } catch (error: IllegalArgumentException) {
-                throw IllegalArgumentException("Requirements file $path could not be read: ${error.message}", error)
+                json.decodeFromString(RequirementsFile.serializer(), text)
+            } catch (error: SerializationException) {
+                throw IllegalArgumentException(
+                    "Requirements file $path is not a valid requirements file: ${error.message}",
+                    error,
+                )
             }
         return JobRequirements(
             minimumPay = file.minimumPay?.let { PayRequirement(it.amount, it.currency, it.period) },
