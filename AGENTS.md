@@ -80,10 +80,53 @@ A failure nobody expected is a record of the log at the entry point: the `recrui
 record holds the stack trace in its message, the log of a run stays one JSON object per line. The
 entry point catches what the pipeline throws at it and logs it — the exception is not hidden.
 
+Translate exceptions at the boundary. When the layer below throws, catch what it actually throws —
+`IOException` from the file system, `kotlinx.serialization.SerializationException` from the parser —
+and re-throw the error type the caller handles, with the original exception as the cause and a message
+that says what actually failed. A message that blames the wrong cause ("could not be read" for a file
+that is not valid JSON, or for an empty file) sends the job seeker down the wrong path — name the
+file and the problem. The same for a file the user named that vanished between the check and the
+read: it is not "missing, use the defaults".
+
 ### Everything is injected
 
 The clock, the HTTP client, the sinks and the parsers are constructor parameters with a default.
 That is what makes the code testable without a network and without a file system.
+
+### Files the job seeker writes
+
+A file the job seeker edits by hand (`rules.json`, `requirements.json`) is input to the pipeline
+and is validated like input. The common rules apply to both:
+
+* **Unknown keys fail.** A typo in a key is an error, never a silent keep-the-code-default. The
+  job seeker believes their rules are applied; a silent ignore is a lie.
+* **An empty file** — zero bytes or whitespace only — is an error; it names the file. Any other
+  content that does not decode — invalid JSON or a schema violation — is an error too, and it
+  names the file as well; it is not an empty file and not a silent default.
+* **The file must be a JSON object.** Content that parses but is not an object — `[]`, `null`,
+  `42`, `"text"` — is an error naming the file; it does not count as "provides no keys".
+* **A file named on the command line that does not exist is an error**, never a silent fallback.
+* **User-authored strings are data.** They are matched literally (`contains`), never compiled
+  into a regular expression.
+
+`rules.json` holds word lists and per-key defaults:
+
+* **Words are trimmed on the way in.** A whitespace-padded word is a rule that matches nothing.
+* **A blank word is an error**; it names the file.
+* **A file holding `{}` is not empty**: it provides no keys and gets the defaults.
+* **Defaults fill the keys the file does not provide.** A file that provides some keys → those
+  keys win, the rest are the defaults. No file at the default location → the documented defaults.
+* **A default has one source of truth.** The constructor and the loader reference the same
+  constants, and a test pins it (`load("{}")` equals `defaults()`). If two paths can produce the
+  "same" default, they will drift.
+
+`requirements.json` holds the requirements of the job seeker, and has required keys instead of
+per-key defaults:
+
+* `profile` and `maximum_office_days` are required; a missing or blank value is an error.
+* `minimum_pay` and `share_minimum_pay` are optional; `share_minimum_pay` defaults to `false`.
+* A missing file is always an error — its required keys have no defaults to fall back on. A file
+  without its required keys is an error too; there is no `{}`-to-defaults pin.
 
 ### The states of a message
 
@@ -218,9 +261,14 @@ All of them run in CI, and they fail the build:
 * `kotlin.test` on top of the JUnit 5 platform: `kotlin.test.Test`, `assertEquals`, `assertTrue`.
 * Test names are camelCase function names (`fun handlesEmptyInbox()`), not backticked strings.
 * Prefer real collaborators over mocks: a PDF is built with PDFBox, an HTTP call goes through the
-  Ktor `MockEngine`, a file goes into a temporary directory.
+  Ktor `MockEngine`, a file goes into a temporary directory that is deleted when the test is done.
 * A test must not depend on the machine it runs on — no file of the working directory, no
-  network, no clock of the host.
+  network, no clock of the host. Inject the path (a temporary directory) instead of relying on the
+  current directory: a developer with a `rules.json` in the project root must not get a red build.
+* Assert the contract, not just the exit code. A failing command is asserted by its message, the
+  log record it writes or the label it applies — a bare `assertEquals(1, result.statusCode)` also
+  passes when the failure comes from somewhere else entirely, so keep the exit-code assertion next
+  to the contract assertion.
 
 ### Do not test the libraries
 

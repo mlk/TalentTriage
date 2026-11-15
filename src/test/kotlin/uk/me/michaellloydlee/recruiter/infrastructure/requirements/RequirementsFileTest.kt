@@ -104,7 +104,59 @@ class RequirementsFileTest {
 
         val error = assertFailsWith<IllegalArgumentException> { RequirementsFile.load(file) }
 
-        assertTrue(error.message!!.contains("could not be read"))
+        assertTrue(error.message!!.contains("is not a valid requirements file"))
+    }
+
+    @Test
+    fun failsWhenTheFileIsEmpty() {
+        val file = requirementsFile("   ")
+
+        val error = assertFailsWith<IllegalArgumentException> { RequirementsFile.load(file) }
+
+        assertTrue(error.message!!.contains("is empty"))
+    }
+
+    @Test
+    fun failsWhenTheFileHoldsJsonThatIsNotAnObject() {
+        listOf("[]", "null", "42", "\"text\"").forEach { content ->
+            val file = requirementsFile(content)
+
+            val error = assertFailsWith<IllegalArgumentException> { RequirementsFile.load(file) }
+
+            assertTrue(error.message!!.contains(file.toString()), "expected the message to name $file for $content")
+        }
+    }
+
+    @Test
+    fun failsWhenTheFileIsNotReadable() {
+        val directory = createTempDirectory("requirements")
+        try {
+            val error = assertFailsWith<IllegalArgumentException> { RequirementsFile.load(directory) }
+
+            assertTrue(error.message!!.contains("could not be read"))
+        } finally {
+            directory.toFile().deleteRecursively()
+        }
+    }
+
+    @Test
+    fun failsWhenTheFileHoldsAnUnknownKey() {
+        val file =
+            requirementsFile(
+                """
+                {
+                  "maximum_office_days": 2,
+                  "profile": "Senior Kotlin engineer",
+                  "max_office_days": 3
+                }
+                """.trimIndent(),
+            )
+
+        val error = assertFailsWith<IllegalArgumentException> { RequirementsFile.load(file) }
+
+        assertTrue(error.message!!.contains(file.toString()))
+        assertTrue(error.message!!.contains("is not a valid requirements file"))
+        assertTrue(error.message!!.contains("max_office_days"))
     }
 
     @Test
