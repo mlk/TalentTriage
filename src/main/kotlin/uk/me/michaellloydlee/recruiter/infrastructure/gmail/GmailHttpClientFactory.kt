@@ -14,6 +14,9 @@ import kotlinx.serialization.json.Json
  * The client is configured for the two APIs the application uses: the OAuth2
  * token endpoint and the Gmail REST API. Failures are not turned into
  * exceptions by the client itself, the callers inspect the status code.
+ * Redirects are not followed: the endpoints the client talks to do not
+ * redirect, and a redirect of the webhook the run calls at the end has to
+ * surface as the answer it is, not as a followed `GET` without the body.
  */
 object GmailHttpClientFactory {
     /** Timeout of the requests to Google, in milliseconds. */
@@ -31,6 +34,7 @@ object GmailHttpClientFactory {
     ): HttpClient =
         HttpClient(engine) {
             expectSuccess = false
+            followRedirects = false
             install(ContentNegotiation) {
                 json(jsonFormat)
             }

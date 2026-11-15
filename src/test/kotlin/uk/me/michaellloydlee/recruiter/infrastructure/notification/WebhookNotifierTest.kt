@@ -86,7 +86,7 @@ class WebhookNotifierTest {
             val engine =
                 MockEngine {
                     respond(
-                        content = "x".repeat(MAX_BODY),
+                        content = "x".repeat(WebhookNotifier.MAX_ERROR_BODY_LENGTH * 4),
                         status = HttpStatusCode.InternalServerError,
                     )
                 }
@@ -95,7 +95,7 @@ class WebhookNotifierTest {
 
             val failed = assertIs<WebhookOutcome.Failed>(outcome)
             assertTrue(failed.reason.contains("500"))
-            assertTrue(failed.reason.length < MAX_BODY)
+            assertTrue(failed.reason.length <= WebhookNotifier.MAX_ERROR_BODY_LENGTH + REASON_PREFIX_LENGTH)
         }
 
     @Test
@@ -179,6 +179,7 @@ class WebhookNotifierTest {
 
         private const val TOO_LONG: Long = 60_000
 
-        private const val MAX_BODY: Int = 8_192
+        // The reason is the fixed prefix plus at most MAX_ERROR_BODY_LENGTH bytes.
+        private const val REASON_PREFIX_LENGTH: Int = 64
     }
 }

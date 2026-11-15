@@ -238,11 +238,11 @@ class ProcessInboxService(
      * @param mails the mails that need the job seeker.
      */
     private suspend fun notify(mails: List<NotificationMail>) {
-        val notifier = notifier ?: return
+        val webhook = notifier ?: return
         if (mails.isEmpty()) {
             return
         }
-        when (val outcome = notifier.notify(mails)) {
+        when (val outcome = webhook.notify(mails)) {
             is WebhookOutcome.Sent -> {
                 logger.info(
                     event = EVENT_NOTIFICATION_SENT,

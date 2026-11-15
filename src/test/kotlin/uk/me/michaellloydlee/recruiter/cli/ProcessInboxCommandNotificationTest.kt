@@ -39,6 +39,7 @@ class ProcessInboxCommandNotificationTest {
 
             assertEquals(0, result.statusCode)
             val notification = engine.requestHistory.single { it.url.host == "webhook.example" }
+            assertEquals(engine.requestHistory.lastIndex, engine.requestHistory.indexOf(notification))
             assertEquals("POST", notification.method.value)
             val body =
                 Json.parseToJsonElement((notification.body as TextContent).text).jsonObject
