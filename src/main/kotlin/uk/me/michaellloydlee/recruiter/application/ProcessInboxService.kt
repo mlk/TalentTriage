@@ -68,10 +68,16 @@ class ProcessInboxService(
         val pending = messagesForTarget(target)
         val counters = Counters()
         val needsAttention = mutableListOf<NotificationMail>()
-        pending.forEach { message ->
-            screen(message, counters, needsAttention)
+        // A mail that was screened before the run aborted is labelled already,
+        // the next run does not look at it again: the webhook is called with
+        // the mails that need the job seeker even when the run fails.
+        try {
+            pending.forEach { message ->
+                screen(message, counters, needsAttention)
+            }
+        } finally {
+            notify(needsAttention)
         }
-        notify(needsAttention)
         return ProcessInboxSummary(
             target = target,
             screened = pending.size,
@@ -218,6 +224,9 @@ class ProcessInboxService(
      * The webhook is called once per run, with every mail that needs the job
      * seeker in it, and only when at least one mail needs him. A webhook that
      * could not be called is a warning in the log, it does not fail the run.
+     * The mails that were screened before a failure are notified even when
+     * the run does not complete: they are labelled already and no later run
+     * looks at them again.
      *
      * @param mails the mails that need the job seeker.
      */
@@ -243,6 +252,7 @@ class ProcessInboxService(
                         mapOf(
                             "reason" to outcome.reason,
                             "mails" to mails.size.toString(),
+                            "ids" to mails.joinToString(",") { it.id },
                         ),
                 )
             }

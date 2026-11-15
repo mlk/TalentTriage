@@ -26,13 +26,21 @@ internal val NOW: Instant = Instant.parse("2026-10-30T19:00:00Z")
 
 internal val LAST_RUN: Instant = Instant.parse("2026-10-30T18:00:00Z")
 
+// The test suite runs sequentially: no JUnit parallel execution is configured
+// and Gradle uses a single fork. The registry is used from one thread at a
+// time; the lock is cheap insurance, not a correctness requirement.
 private val tempDirs = mutableListOf<Path>()
 
-internal fun tempDir(prefix: String): Path = createTempDirectory(prefix).also { tempDirs.add(it) }
+internal fun tempDir(prefix: String): Path =
+    createTempDirectory(prefix).also { dir ->
+        synchronized(tempDirs) { tempDirs.add(dir) }
+    }
 
 internal fun cleanupTempDirs() {
-    tempDirs.forEach { it.toFile().deleteRecursively() }
-    tempDirs.clear()
+    synchronized(tempDirs) {
+        tempDirs.forEach { it.toFile().deleteRecursively() }
+        tempDirs.clear()
+    }
 }
 
 internal fun engine(webhookStatus: HttpStatusCode = HttpStatusCode.OK): MockEngine =

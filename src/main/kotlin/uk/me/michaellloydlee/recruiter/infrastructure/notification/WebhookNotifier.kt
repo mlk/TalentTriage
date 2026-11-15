@@ -58,9 +58,8 @@ class WebhookNotifier(
                     setBody(WebhookNotification(mails))
                 }
             if (!response.status.isSuccess()) {
-                WebhookOutcome.Failed(
-                    "The webhook answered with ${response.status.value}: ${response.bodyAsText()}",
-                )
+                val body = response.bodyAsText().take(MAX_ERROR_BODY_LENGTH)
+                WebhookOutcome.Failed("The webhook answered with ${response.status.value}: $body")
             } else {
                 WebhookOutcome.Sent
             }
@@ -71,5 +70,8 @@ class WebhookNotifier(
     companion object {
         /** How long a call may take, in milliseconds. */
         const val DEFAULT_TIMEOUT_MILLIS: Long = 10_000
+
+        /** How many characters of the error body of the webhook go into the failure reason. */
+        const val MAX_ERROR_BODY_LENGTH: Int = 512
     }
 }

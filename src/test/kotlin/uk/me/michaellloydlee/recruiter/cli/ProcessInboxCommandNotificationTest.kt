@@ -92,5 +92,6 @@ class ProcessInboxCommandNotificationTest {
                 )
 
             assertEquals(1, result.statusCode)
+            assertTrue(result.output.contains("hook.example/notify"))
         }
 }

@@ -73,6 +73,7 @@ internal const val MESSAGE_LIST: String =
 internal fun gmailEngine(
     listing: Boolean = false,
     labels: List<String> = listOf("INBOX"),
+    failModifyFor: String? = null,
 ): MockEngine =
     MockEngine { request ->
         when {
@@ -115,11 +116,22 @@ internal fun gmailEngine(
             }
 
             else -> {
-                respond(
-                    content = message(idOf(request), listing, labels),
-                    status = HttpStatusCode.OK,
-                    headers = jsonHeaders(),
-                )
+                if (
+                    failModifyFor != null &&
+                    request.url.encodedPath.endsWith("/users/me/messages/$failModifyFor/modify")
+                ) {
+                    respond(
+                        content = "boom",
+                        status = HttpStatusCode.InternalServerError,
+                        headers = jsonHeaders(),
+                    )
+                } else {
+                    respond(
+                        content = message(idOf(request), listing, labels),
+                        status = HttpStatusCode.OK,
+                        headers = jsonHeaders(),
+                    )
+                }
             }
         }
     }
