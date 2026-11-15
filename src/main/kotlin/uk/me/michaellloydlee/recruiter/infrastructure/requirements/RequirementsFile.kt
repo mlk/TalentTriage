@@ -27,7 +27,7 @@ object RequirementsFile {
      */
     fun load(
         path: Path,
-        json: Json = Json { ignoreUnknownKeys = true },
+        json: Json = Json { ignoreUnknownKeys = false },
     ): JobRequirements {
         require(Files.exists(path)) {
             "Requirements file not found: $path"

@@ -108,6 +108,24 @@ class RequirementsFileTest {
     }
 
     @Test
+    fun failsWhenTheFileHoldsAnUnknownKey() {
+        val file =
+            requirementsFile(
+                """
+                {
+                  "maximum_office_days": 2,
+                  "profile": "Senior Kotlin engineer",
+                  "max_office_days": 3
+                }
+                """.trimIndent(),
+            )
+
+        val error = assertFailsWith<IllegalArgumentException> { RequirementsFile.load(file) }
+
+        assertTrue(error.message!!.contains("max_office_days"))
+    }
+
+    @Test
     fun failsWhenTheOfficeDaysAreNegative() {
         val file =
             requirementsFile(
