@@ -38,10 +38,14 @@ import uk.me.michaellloydlee.recruiter.infrastructure.llm.OllamaChatClient
 import uk.me.michaellloydlee.recruiter.infrastructure.llm.OllamaDecisionClient
 import uk.me.michaellloydlee.recruiter.infrastructure.llm.OllamaException
 import uk.me.michaellloydlee.recruiter.infrastructure.logging.StructuredLogger
+import uk.me.michaellloydlee.recruiter.infrastructure.notification.WebhookHttpClient
+import uk.me.michaellloydlee.recruiter.infrastructure.notification.WebhookNotifier
 import uk.me.michaellloydlee.recruiter.infrastructure.requirements.RequirementsFile
 import uk.me.michaellloydlee.recruiter.infrastructure.run.FileLastRunStore
 import uk.me.michaellloydlee.recruiter.infrastructure.screening.RulesFile
 import uk.me.michaellloydlee.recruiter.infrastructure.screening.ScreeningRules
+import java.net.URI
+import java.net.URISyntaxException
 import java.nio.file.Files
 import java.nio.file.Path
 import java.time.Clock
@@ -62,6 +66,13 @@ import java.time.Instant
  * screens that message as if it were pending and it does not move the moment
  * of the last successful run.
  *
+ * The `--notification-webhook` option names the webhook the run calls at the
+ * end with the mails that need the job seeker: one call with a JSON body with
+ * the mails that are worth a follow up or that need more information. A
+ * webhook that cannot be called is a warning in the log, it does not fail the
+ * run. Without the option no notification is sent and the run behaves as it
+ * does without it.
+ *
  * The `--rules` option points at the file with the rules of the screening.
  * The file holds the words a recruiter mail talks about, the senders of a
  * recruiter and the senders and phrases of the job boards, a field that is
@@ -79,12 +90,16 @@ import java.time.Instant
  * @param defaultRulesFile the file the run reads the rules of the screening
  *   from when `--rules` is not given, a missing file keeps the rules of the
  *   code.
+ * @param webhookClientFactory creates the client of the webhook, it does not
+ *   follow redirects: a redirect of the webhook has to surface as the answer
+ *   it is, not as a followed `GET` without the body.
  */
 class ProcessInboxCommand(
     private val logger: StructuredLogger,
     private val httpClientFactory: () -> HttpClient = { GmailHttpClientFactory.create() },
     private val clock: Clock = Clock.systemUTC(),
     private val defaultRulesFile: Path = Path.of(DEFAULT_RULES_FILE),
+    private val webhookClientFactory: () -> HttpClient = WebhookHttpClient::create,
 ) : SuspendingCliktCommand(name = COMMAND_NAME) {
     private val credentialsFile: String by
         option(
@@ -217,6 +232,15 @@ class ProcessInboxCommand(
             help = "How long the writing of a draft may take, in milliseconds",
         ).long().default(OllamaChatClient.DEFAULT_TIMEOUT_MILLIS)
 
+    private val notificationWebhook: String? by
+        option(
+            "--notification-webhook",
+            help =
+                "The URL of the webhook the run calls at the end with the mails that need the job seeker, " +
+                    "a JSON body with the mails that are worth a follow up or that need more information. " +
+                    "Without it no notification is sent",
+        )
+
     override suspend fun run() {
         logger.info(
             event = "$COMMAND_NAME.started",
@@ -228,58 +252,95 @@ class ProcessInboxCommand(
         val credentials = credentials()
         val requirements = requirements()
         val screeningRules = screeningRules()
-        httpClientFactory().use { client ->
-            val gmail =
-                GmailServices.create(
-                    credentials = credentials,
-                    tokenStore = FileOAuth2TokenStore(Path.of(tokenFile)),
-                    httpClient = client,
-                )
-            val summary =
-                try {
-                    // One counter for the models of the run: the run says what
-                    // the calls to the models took.
-                    val usage = ModelUsageCounter()
-                    ProcessInboxService(
-                        messages = gmail.messages,
-                        screening =
-                            ScreeningService(
-                                heuristics = screeningRules.recruiter,
-                                jobListings = screeningRules.jobListings,
-                                verifier = verifier(client, usage),
-                                stateManager = gmail.stateManager,
-                            ),
-                        evaluation =
-                            EvaluationService(
-                                evaluator = evaluator(client, usage),
-                                attachments = AttachmentTextReader(gmail.messages, logger),
-                                stateManager = gmail.stateManager,
-                            ),
-                        drafts = drafts(client, gmail.drafts, usage),
-                        requirements = requirements,
-                        stateManager = gmail.stateManager,
-                        usageCounter = usage,
-                        clock = clock,
-                        logger = logger,
-                    ).run(target)
-                } catch (error: GmailApiException) {
-                    throw CommandFailedException(error.message.orEmpty(), error)
-                } catch (error: OllamaException) {
-                    throw CommandFailedException(error.message.orEmpty(), error)
-                }
-            // The run succeeded: the next run looks back to this moment, the
-            // mail that was screened out is not looked at again. A run of a
-            // single message does not move that moment: it looked at one mail
-            // only, the mail of the window is still waiting.
-            if (target is RunTarget.Window) {
-                lastRunStore().save(startedAt)
+        withWebhook { notifier ->
+            httpClientFactory().use { client ->
+                val gmail =
+                    GmailServices.create(credentials, FileOAuth2TokenStore(Path.of(tokenFile)), client)
+                val summary =
+                    try {
+                        // One counter for the models of the run.
+                        val usage = ModelUsageCounter()
+                        ProcessInboxService(
+                            messages = gmail.messages,
+                            screening =
+                                ScreeningService(
+                                    heuristics = screeningRules.recruiter,
+                                    jobListings = screeningRules.jobListings,
+                                    verifier = verifier(client, usage),
+                                    stateManager = gmail.stateManager,
+                                ),
+                            evaluation =
+                                EvaluationService(
+                                    evaluator = evaluator(client, usage),
+                                    attachments = AttachmentTextReader(gmail.messages, logger),
+                                    stateManager = gmail.stateManager,
+                                ),
+                            drafts = drafts(client, gmail.drafts, usage),
+                            requirements = requirements,
+                            stateManager = gmail.stateManager,
+                            notifier = notifier,
+                            usageCounter = usage,
+                            clock = clock,
+                            logger = logger,
+                        ).run(target)
+                    } catch (error: GmailApiException) {
+                        throw CommandFailedException(error.message.orEmpty(), error)
+                    } catch (error: OllamaException) {
+                        throw CommandFailedException(error.message.orEmpty(), error)
+                    }
+                rememberTheRun(target, startedAt, summary)
             }
-            logger.info(
-                event = "$COMMAND_NAME.completed",
-                message = "Inbox triage run completed",
-                attributes = summary.attributes(startedAt),
-            )
         }
+    }
+
+    /**
+     * Runs the block of the run with the notifier of the run.
+     *
+     * The webhook gets a client of its own: it must not be redirected and it
+     * carries nothing the Gmail client carries. The URL is checked before any
+     * work is done, so a bad webhook fails the run before a mail is labelled.
+     * The client is closed when the block is done.
+     *
+     * @param block the run itself, it receives the notifier, or `null` when
+     *   no webhook is configured.
+     */
+    private suspend fun withWebhook(block: suspend (WebhookNotifier?) -> Unit) {
+        val url = notificationWebhook?.let { webhookUrl(it) }
+        val client = url?.let { webhookClientFactory() }
+        try {
+            val notifier = if (url != null && client != null) WebhookNotifier(httpClient = client, url = url) else null
+            block(notifier)
+        } finally {
+            client?.close()
+        }
+    }
+
+    /**
+     * The end of a run: the moment of the run is remembered and the log says
+     * what the run did.
+     *
+     * The next run looks back to the moment of this run: the mail that was
+     * screened out is not looked at again. A run of a single message does not
+     * move that moment: it looked at one mail only, the mail of the window is
+     * still waiting.
+     *
+     * @param target what the run looked at.
+     * @param startedAt the moment the run started.
+     * @param summary what the run did.
+     */
+    private suspend fun rememberTheRun(
+        target: RunTarget,
+        startedAt: Instant,
+        summary: ProcessInboxSummary,
+    ) {
+        if (target is RunTarget.Window) {
+            lastRunStore().save(startedAt)
+        }
+        logger.info(
+            event = "$COMMAND_NAME.completed",
+            message = "Inbox triage run completed",
+            attributes = summary.attributes(startedAt),
+        )
     }
 
     /**
@@ -480,6 +541,25 @@ class ProcessInboxCommand(
                 }
             }
         }
+
+    /**
+     * The URL of the webhook, it has to parse as an absolute http or https
+     * URL with a host. The path and the query are the webhook's own, they are
+     * passed on unchanged.
+     */
+    private fun webhookUrl(value: String): String {
+        val uri =
+            try {
+                URI(value)
+            } catch (error: URISyntaxException) {
+                throw CommandFailedException("The webhook '$value' is not a URL: ${error.reason}", error)
+            }
+        val scheme = uri.scheme?.lowercase()
+        if ((scheme != "http" && scheme != "https") || uri.host.isNullOrBlank()) {
+            throw CommandFailedException("The webhook '$value' needs a scheme like http:// or https://")
+        }
+        return value
+    }
 
     /**
      * The evaluator of the job descriptions, the decision model of Ollama or a

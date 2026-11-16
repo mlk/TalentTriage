@@ -8,6 +8,7 @@ import uk.me.michaellloydlee.recruiter.infrastructure.browser.BrowserOutcome
 import uk.me.michaellloydlee.recruiter.infrastructure.browser.openInBrowser
 import uk.me.michaellloydlee.recruiter.infrastructure.gmail.GmailHttpClientFactory
 import uk.me.michaellloydlee.recruiter.infrastructure.logging.StructuredLogger
+import uk.me.michaellloydlee.recruiter.infrastructure.notification.WebhookHttpClient
 import java.time.Clock
 
 /**
@@ -24,6 +25,8 @@ import java.time.Clock
  *   the web search of Ollama.
  * @param openBrowser opens the authorisation page of Google in the browser of
  *   the machine.
+ * @param webhookClientFactory creates the client of the webhook the run
+ *   calls at the end, it does not follow redirects.
  */
 class TriageCli(
     logger: StructuredLogger,
@@ -31,12 +34,13 @@ class TriageCli(
     clock: Clock = Clock.systemUTC(),
     environment: Map<String, String> = System.getenv(),
     openBrowser: suspend (String) -> BrowserOutcome = { url -> openInBrowser(url) },
+    webhookClientFactory: () -> HttpClient = WebhookHttpClient::create,
 ) : SuspendingCliktCommand(name = COMMAND_NAME) {
     init {
         subcommands(
             AuthenticateCommand(logger, httpClientFactory, openBrowser),
             PendingCommand(logger, httpClientFactory, clock),
-            ProcessInboxCommand(logger, httpClientFactory, clock),
+            ProcessInboxCommand(logger, httpClientFactory, clock, webhookClientFactory = webhookClientFactory),
             RequirementsCommand(logger, httpClientFactory, environment),
         )
     }

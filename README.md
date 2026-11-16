@@ -272,6 +272,7 @@ need a paid plan or usage credits. A local model works as well: `nimble`, `tev1`
 | `process-inbox` | `--job-description-evaluation-endpoint` | The endpoint of the model that evaluates the job descriptions | `http://localhost:11434` |
 | `process-inbox` | `--job-description-evaluation-timeout` | How long the evaluation of a job description may take, in milliseconds | `600000` |
 | `process-inbox` | `--draft-model`, `-d` | The chat model that writes the draft that asks the recruiter for the missing information | `minimax-m3.1-flash:cloud` |
+| `process-inbox` | `--notification-webhook` | The URL of the webhook that is called at the end of the run with the mails that need the job seeker | — |
 | `process-inbox` | `--draft-endpoint` | The endpoint of the model that writes the drafts | `http://localhost:11434` |
 | `process-inbox` | `--draft-timeout` | How long the writing of a draft may take, in milliseconds | `120000` |
 | `requirements` | `CV` | The CV of the job seeker, a PDF or a Word document | — |
@@ -374,6 +375,8 @@ message:
 | `process-inbox.attachment_failed` | INFO | an attachment could not be read (`id`, `file`, `reason`) |
 | `process-inbox.draft_written` | INFO | a draft was written (`id`, `draft`, `reason`) |
 | `process-inbox.draft_failed` | WARN | no draft could be written (`id`, `reason`) |
+| `process-inbox.notification_sent` | INFO | the webhook was called with the mails that need the job seeker (`mails`) |
+| `process-inbox.notification_failed` | WARN | the webhook could not be called (`reason`, `mails`, `ids`) |
 | `process-inbox.window_fallback` | WARN | the moment of the last run is not in the past (`last_run`) |
 | `process-inbox.completed` | INFO | the run is done, the attributes are the counters of the run and what the calls to the models took, the id of the message instead of the window for a run of one message |
 | `pending.listed` / `pending.message` | INFO | the messages that were not processed yet |
@@ -389,6 +392,34 @@ message:
 > **Note:** on JDK 24 and newer, Clikt's terminal detection prints a `native-access` warning
 > to standard error. Standard output stays clean JSON; add `--enable-native-access=ALL-UNNAMED`
 > to the JVM arguments to silence it.
+
+### The notification of the run
+
+The run can tell the job seeker that a mail needs him: `--notification-webhook <url>` calls the
+webhook at the end of the run with a JSON body with the mails that need him, the ones that are
+worth a follow up and the ones that need more information:
+
+```json
+{
+  "mails": [
+    { "id": "18f2c1a4b3d5e6f7", "sender": "recruiter@example.com", "subject": "Your CV", "state": "WORTH_FOLLOW_UP" }
+  ]
+}
+```
+
+One call per run carries every mail of the run that needs the job seeker, each of them exactly
+once. The mails that do not need him - a mail that was screened out, a job listing, a mail that was
+trashed - are not in the body, and when no mail needs him the webhook is not called at all. Every
+mail the webhook sees is a mail the run labels: the next run does not look at it again, so it is
+notified once. A run of a single message (`--id`) looks at the mail again on purpose and notifies it
+again.
+
+A run that fails partway still calls the webhook with the mails it labeled before the failure —
+they are labelled already and no later run looks at them again.
+
+A webhook that cannot be called, or that answers with an error, is a warning in the log
+(`process-inbox.notification_failed`); the run goes on and the exit code is not affected. Without
+the option no notification is sent and the run behaves as it does without it.
 
 ### Processing a message again
 
@@ -822,6 +853,7 @@ src/main/kotlin/uk/me/michaellloydlee/recruiter/
     │                  # the local service that catches the authorisation
     ├── llm/           # Ollama chat client, decision client and web search
     ├── logging/       # Structured (JSON lines) logger
+    ├── notification/  # The webhook the run calls to tell the job seeker a mail needs him
     ├── parser/        # Text extraction of the attached documents (PDFBox)
     ├── requirements/  # The file of the requirements of the job seeker
     ├── run/           # The moment of the last successful run
