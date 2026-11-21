@@ -79,7 +79,7 @@ class OllamaWebSearchClientTest {
 
             val error = assertFailsWith<OllamaException> { client(engine).search("average salary") }
 
-            assertTrue(error.body.contains("not the JSON the client reads"))
+            assertTrue(error.message!!.contains("not the JSON the client reads"))
             assertTrue(error.body.contains("<!DOCTYPE html>"))
         }
 

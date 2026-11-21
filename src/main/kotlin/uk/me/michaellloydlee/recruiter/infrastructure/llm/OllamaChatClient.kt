@@ -35,7 +35,7 @@ class OllamaChatClient(
     private val baseUrl: String = DEFAULT_BASE_URL,
     private val timeoutMillis: Long = DEFAULT_TIMEOUT_MILLIS,
     private val usage: ModelUsageCounter = ModelUsageCounter(),
-    private val json: Json = Json { ignoreUnknownKeys = true },
+    private val json: Json = MODEL_JSON,
 ) {
     init {
         require(httpClient.pluginOrNull(HttpTimeout) != null) {

@@ -44,8 +44,21 @@ internal suspend fun <T> decodeJsonBody(
 }
 
 /**
+ * The parser of the answers of the models of Ollama.
+ *
+ * One instance for both clients: the flags that govern parsing have a single
+ * source of truth, and they match what the CLI wires into the
+ * `ContentNegotiation` plugin of the HTTP client.
+ */
+internal val MODEL_JSON: Json =
+    Json {
+        ignoreUnknownKeys = true
+    }
+
+/**
  * Whether the content type of an answer carries a JSON document. A missing
- * content type is decoded: whether it is JSON is decided by the parser.
+ * content type is treated as JSON: whether the body is JSON is decided by the
+ * parser.
  */
 internal fun ContentType?.isJson(): Boolean =
     this == null ||

@@ -134,7 +134,7 @@ class OllamaDecisionClientTest {
 
             val error = assertFailsWith<OllamaException> { client(engine).decide(request()) }
 
-            assertTrue(error.body.contains("This message looks like it is from a recruiter!"))
+            assertTrue(error.message!!.contains("This message looks like it is from a recruiter!"))
         }
 
     @Test
@@ -151,7 +151,7 @@ class OllamaDecisionClientTest {
 
             val error = assertFailsWith<OllamaException> { client(engine).decide(request()) }
 
-            assertTrue(error.body.contains("not the JSON the client reads"))
+            assertTrue(error.message!!.contains("not the JSON the client reads"))
             assertTrue(error.body.contains("""{"model":"clef:cloud","answers":{"""))
         }
 
