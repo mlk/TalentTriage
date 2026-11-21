@@ -1,8 +1,6 @@
 package uk.me.michaellloydlee.recruiter.infrastructure.llm
 
 import io.ktor.client.HttpClient
-import io.ktor.client.call.NoTransformationFoundException
-import io.ktor.client.call.body
 import io.ktor.client.plugins.HttpTimeout
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.client.plugins.expectSuccess
@@ -14,6 +12,9 @@ import io.ktor.client.statement.bodyAsText
 import io.ktor.http.ContentType
 import io.ktor.http.contentType
 import io.ktor.http.isSuccess
+import kotlinx.serialization.SerializationException
+import kotlinx.serialization.json.Json
+import uk.me.michaellloydlee.recruiter.infrastructure.isJson
 
 /**
  * The client of the chat endpoint of an Ollama model.
@@ -29,20 +30,21 @@ import io.ktor.http.isSuccess
  * @param timeoutMillis how long a call may take, in milliseconds.
  * @param usage counts what the answers took, the counter is shared by the
  *   clients of a run.
+ * @param json the parser of the answers of the API.
  */
 class OllamaChatClient(
     private val httpClient: HttpClient,
     private val baseUrl: String = DEFAULT_BASE_URL,
     private val timeoutMillis: Long = DEFAULT_TIMEOUT_MILLIS,
     private val usage: ModelUsageCounter = ModelUsageCounter(),
+    private val json: Json = Json { ignoreUnknownKeys = true },
 ) {
     init {
         require(httpClient.pluginOrNull(HttpTimeout) != null) {
             "The HttpTimeout plugin has to be installed on the client, otherwise the timeout is ignored"
         }
         require(httpClient.pluginOrNull(ContentNegotiation) != null) {
-            "The ContentNegotiation plugin has to be installed on the client, " +
-                "it writes the request and reads the answer"
+            "The ContentNegotiation plugin has to be installed on the client, it writes the request"
         }
     }
 
@@ -69,18 +71,8 @@ class OllamaChatClient(
         if (!response.status.isSuccess()) {
             throw OllamaException(response.status.value, response.bodyAsText())
         }
-        val answer: OllamaChatResponse =
-            try {
-                response.body()
-            } catch (error: NoTransformationFoundException) {
-                // The API streamed the answer although the request asked for the
-                // whole one, the client cannot read a stream.
-                throw OllamaException(
-                    response.status.value,
-                    "The API answered with ${response.contentType()}, the client reads a single JSON object",
-                    error,
-                )
-            }
+        val body = response.bodyAsText()
+        val answer = decode(body, response.contentType(), response.status.value)
         // The answer knows what it took: the tokens of the prompt and the
         // tokens of the answer of the model.
         usage.record(
@@ -91,6 +83,34 @@ class OllamaChatClient(
             ),
         )
         return answer
+    }
+
+    /**
+     * The answer of the API.
+     *
+     * The API answers with a single JSON object. An answer that is not JSON -
+     * a model that answers with prose, a streamed answer, a broken JSON - is
+     * not readable by the client and becomes an [OllamaException] that names
+     * the answer.
+     */
+    private fun decode(
+        body: String,
+        contentType: ContentType?,
+        status: Int,
+    ): OllamaChatResponse {
+        if (!contentType.isJson()) {
+            // The API streamed the answer although the request asked for the
+            // whole one, the client cannot read a stream.
+            throw OllamaException(
+                status,
+                "The API answered with $contentType, the client reads a single JSON object",
+            )
+        }
+        return try {
+            json.decodeFromString(OllamaChatResponse.serializer(), body)
+        } catch (error: SerializationException) {
+            throw OllamaException.unreadableBody(status, body, error)
+        }
     }
 
     private val chatUrl: String

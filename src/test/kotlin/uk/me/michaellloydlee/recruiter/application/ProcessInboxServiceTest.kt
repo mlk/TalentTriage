@@ -197,6 +197,34 @@ class ProcessInboxServiceTest {
         }
 
     @Test
+    fun continuesWithTheNextMailWhenTheModelAnswersWithProse() =
+        runTest {
+            val gmail = gmailEngine()
+            val model = modelEngine(firstAnswer = "Sure! This looks like a great opportunity.")
+
+            val summary = service(gmail, model).run(WINDOW)
+
+            assertEquals(2, summary.screened)
+            assertEquals(1, summary.unknown)
+            assertEquals(1, summary.recruiters)
+            assertEquals(1, summary.worthFollowUp)
+        }
+
+    @Test
+    fun continuesWithTheNextMailWhenTheModelAnswersWithABrokenJson() =
+        runTest {
+            val gmail = gmailEngine()
+            val model = modelEngine(firstAnswer = """{"model":"clef:cloud","answers":{""")
+
+            val summary = service(gmail, model).run(WINDOW)
+
+            assertEquals(2, summary.screened)
+            assertEquals(1, summary.unknown)
+            assertEquals(1, summary.recruiters)
+            assertEquals(1, summary.worthFollowUp)
+        }
+
+    @Test
     fun leavesTheMailItCouldNotDecideWithoutALabel() =
         runTest {
             val gmail = gmailEngine()

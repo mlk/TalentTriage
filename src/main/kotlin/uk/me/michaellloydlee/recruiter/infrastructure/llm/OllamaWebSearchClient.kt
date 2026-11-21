@@ -57,6 +57,8 @@ class OllamaWebSearchClient(
      * @param maxResults how many pages the search returns.
      * @return the pages of the search, the failure when the search was not
      *   possible.
+     * @throws OllamaException when the answer of the search is not the JSON
+     *   the client reads.
      */
     suspend fun search(
         query: String,
@@ -80,7 +82,7 @@ class OllamaWebSearchClient(
                     "The web search of Ollama answered with ${response.status.value}: ${response.bodyAsText()}",
                 )
             } else {
-                pages(response.bodyAsText())
+                WebSearchOutcome.Found(pages(response.bodyAsText(), response.status.value))
             }
         } catch (error: IOException) {
             WebSearchOutcome.Failed("The web search of Ollama could not be reached: ${error.message}")
@@ -95,14 +97,19 @@ class OllamaWebSearchClient(
      * content type of the answer does not decide whether the pages are read.
      *
      * @param body the body of the answer.
-     * @return the pages of the search, the failure when the answer is not
-     *   JSON.
+     * @param status the status code of the answer.
+     * @return the pages of the search.
+     * @throws OllamaException when the answer is not the JSON the client
+     *   reads.
      */
-    private fun pages(body: String): WebSearchOutcome =
+    private fun pages(
+        body: String,
+        status: Int,
+    ): List<OllamaWebSearchResult> =
         try {
-            WebSearchOutcome.Found(json.decodeFromString<OllamaWebSearchResponse>(body).results)
+            json.decodeFromString<OllamaWebSearchResponse>(body).results
         } catch (error: SerializationException) {
-            WebSearchOutcome.Failed("The web search of Ollama answered with a body that is not JSON: ${error.message}")
+            throw OllamaException.unreadableBody(status, body, error)
         }
 
     private val searchUrl: String
