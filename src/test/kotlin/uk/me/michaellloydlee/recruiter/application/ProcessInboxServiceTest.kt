@@ -241,6 +241,7 @@ class ProcessInboxServiceTest {
             assertEquals(1, summary.worthFollowUp)
             assertEquals(1, summary.failed)
             assertTrue(log.toString().contains("process-inbox.failed"))
+            assertTrue(log.toString().contains("IllegalStateException"))
             assertTrue(log.toString().contains("The model engine blew up"))
         }
 

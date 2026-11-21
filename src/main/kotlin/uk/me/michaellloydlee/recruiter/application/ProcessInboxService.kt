@@ -131,12 +131,10 @@ class ProcessInboxService(
             counters.failed++
             logger.error(
                 event = EVENT_FAILED,
-                message = "A mail could not be processed, the run goes on with the next one",
-                attributes =
-                    mapOf(
-                        "id" to message.id,
-                        "error" to "${error.javaClass.simpleName}: ${error.message}",
-                    ),
+                // The stack trace goes into the message, the convention of
+                // the run: a failure nobody expected is located from the log.
+                message = error.stackTraceToString(),
+                attributes = mapOf("id" to message.id),
             )
         }
     }
