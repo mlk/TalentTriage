@@ -140,9 +140,10 @@ internal fun gmailEngine(
  * The model answers the recruiter question and the four criteria of the
  * evaluation.
  *
- * `firstAnswer` is served to the first model call of the run instead of the
- * usual answer, a test that needs a model which answers with something that is
- * not the JSON the client reads uses it.
+ * `firstAnswer` is served to the first decision-model call of the run instead
+ * of the usual answer, `firstChatAnswer` to the first chat-model call, a test
+ * that needs a model which answers with something that is not the JSON the
+ * client reads uses them.
  */
 internal fun modelEngine(
     officeDays: String = "matches",
@@ -151,12 +152,16 @@ internal fun modelEngine(
     jdMatches: String = "matches",
     confidenceOfTheProfile: Double = 0.9,
     firstAnswer: String? = null,
+    firstChatAnswer: String? = null,
 ): MockEngine {
     var served = 0
+    var chatServed = 0
     return MockEngine { request ->
         if (request.url.encodedPath.endsWith("/api/chat")) {
+            chatServed++
+            val broken = firstChatAnswer
             respond(
-                content = CHAT_ANSWER,
+                content = if (broken != null && chatServed == 1) broken else CHAT_ANSWER,
                 status = if (chatAnswers) HttpStatusCode.OK else HttpStatusCode.NotFound,
                 headers = headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString()),
             )

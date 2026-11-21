@@ -107,6 +107,7 @@ class GmailApiClientTest {
 
             assertEquals(200, error.statusCode)
             assertTrue(error.body.contains("this is not json"))
+            assertTrue(error.message!!.contains("not the JSON the client reads"))
             assertTrue(error.cause is SerializationException)
         }
 

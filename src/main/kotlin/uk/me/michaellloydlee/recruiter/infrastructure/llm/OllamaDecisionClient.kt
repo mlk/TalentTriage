@@ -12,9 +12,7 @@ import io.ktor.client.statement.bodyAsText
 import io.ktor.http.ContentType
 import io.ktor.http.contentType
 import io.ktor.http.isSuccess
-import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
-import uk.me.michaellloydlee.recruiter.infrastructure.isJson
 
 /**
  * The client of the decision API of Ollama (`POST /v1/systemone`).
@@ -68,8 +66,7 @@ class OllamaDecisionClient(
         if (!response.status.isSuccess()) {
             throw OllamaException(response.status.value, response.bodyAsText())
         }
-        val body = response.bodyAsText()
-        val answer = decode(body, response.contentType(), response.status.value)
+        val answer = decodeJsonBody(json, OllamaDecisionResponse.serializer(), response)
         // The answer knows what it took: the tokens of the input and the
         // tokens the model generated.
         usage.record(
@@ -80,31 +77,6 @@ class OllamaDecisionClient(
             ),
         )
         return answer
-    }
-
-    /**
-     * The answer of the API.
-     *
-     * The API answers with a single JSON object. An answer that is not JSON -
-     * a model that answers with prose, a broken JSON - is not readable by the
-     * client and becomes an [OllamaException] that names the answer.
-     */
-    private fun decode(
-        body: String,
-        contentType: ContentType?,
-        status: Int,
-    ): OllamaDecisionResponse {
-        if (!contentType.isJson()) {
-            throw OllamaException(
-                status,
-                "The API answered with $contentType, the client reads a single JSON object",
-            )
-        }
-        return try {
-            json.decodeFromString(OllamaDecisionResponse.serializer(), body)
-        } catch (error: SerializationException) {
-            throw OllamaException.unreadableBody(status, body, error)
-        }
     }
 
     private val decideUrl: String

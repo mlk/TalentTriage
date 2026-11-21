@@ -225,6 +225,23 @@ class ProcessInboxServiceTest {
         }
 
     @Test
+    fun continuesWithTheNextDraftWhenTheChatModelAnswersWithProse() =
+        runTest {
+            val gmail = gmailEngine()
+            // The mails need a draft (the office days are unclear), the first
+            // call to the chat model answers with prose.
+            val model = modelEngine(officeDays = "unclear", firstChatAnswer = "Sure! What would you like to know?")
+            val log = StringBuilder()
+
+            val summary = service(gmail, model, log).run(WINDOW)
+
+            assertEquals(2, summary.screened)
+            assertEquals(2, summary.needsMoreInformation)
+            assertEquals(1, summary.drafts)
+            assertTrue(log.toString().contains("process-inbox.draft_failed"))
+        }
+
+    @Test
     fun leavesTheMailItCouldNotDecideWithoutALabel() =
         runTest {
             val gmail = gmailEngine()

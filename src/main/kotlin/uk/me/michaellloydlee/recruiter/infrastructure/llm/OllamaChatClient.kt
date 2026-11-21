@@ -12,9 +12,7 @@ import io.ktor.client.statement.bodyAsText
 import io.ktor.http.ContentType
 import io.ktor.http.contentType
 import io.ktor.http.isSuccess
-import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
-import uk.me.michaellloydlee.recruiter.infrastructure.isJson
 
 /**
  * The client of the chat endpoint of an Ollama model.
@@ -71,8 +69,7 @@ class OllamaChatClient(
         if (!response.status.isSuccess()) {
             throw OllamaException(response.status.value, response.bodyAsText())
         }
-        val body = response.bodyAsText()
-        val answer = decode(body, response.contentType(), response.status.value)
+        val answer = decodeJsonBody(json, OllamaChatResponse.serializer(), response)
         // The answer knows what it took: the tokens of the prompt and the
         // tokens of the answer of the model.
         usage.record(
@@ -83,34 +80,6 @@ class OllamaChatClient(
             ),
         )
         return answer
-    }
-
-    /**
-     * The answer of the API.
-     *
-     * The API answers with a single JSON object. An answer that is not JSON -
-     * a model that answers with prose, a streamed answer, a broken JSON - is
-     * not readable by the client and becomes an [OllamaException] that names
-     * the answer.
-     */
-    private fun decode(
-        body: String,
-        contentType: ContentType?,
-        status: Int,
-    ): OllamaChatResponse {
-        if (!contentType.isJson()) {
-            // The API streamed the answer although the request asked for the
-            // whole one, the client cannot read a stream.
-            throw OllamaException(
-                status,
-                "The API answered with $contentType, the client reads a single JSON object",
-            )
-        }
-        return try {
-            json.decodeFromString(OllamaChatResponse.serializer(), body)
-        } catch (error: SerializationException) {
-            throw OllamaException.unreadableBody(status, body, error)
-        }
     }
 
     private val chatUrl: String

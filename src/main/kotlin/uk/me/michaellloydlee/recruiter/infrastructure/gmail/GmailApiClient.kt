@@ -90,8 +90,14 @@ class GmailApiClient(
             json.decodeFromString(deserializer, body)
         } catch (error: SerializationException) {
             // The answer of the API is not the JSON the client reads, the
-            // exception names the answer.
-            throw GmailApiException(authenticated.status.value, bodySnippet(body), error)
+            // status did not fail, the decode did, the exception says so.
+            val snippet = bodySnippet(body)
+            throw GmailApiException(
+                authenticated.status.value,
+                snippet,
+                error,
+                "The Gmail API answered with a body that is not the JSON the client reads: $snippet",
+            )
         }
     }
 
