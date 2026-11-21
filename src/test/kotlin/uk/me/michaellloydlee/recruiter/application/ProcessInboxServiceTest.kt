@@ -225,6 +225,59 @@ class ProcessInboxServiceTest {
         }
 
     @Test
+    fun goesOnWithTheNextMailWhenTheEvaluationOfAMailThrows() =
+        runTest {
+            val gmail = gmailEngine()
+            // The decision calls in order: the screening of the first mail,
+            // the evaluation of the first mail (it blows up), the screening
+            // of the second mail, its evaluation.
+            val model = modelEngine(failOnDecisionCall = 2)
+            val log = StringBuilder()
+
+            val summary = service(gmail, model, log).run(WINDOW)
+
+            assertEquals(2, summary.screened)
+            assertEquals(2, summary.recruiters)
+            assertEquals(1, summary.worthFollowUp)
+            assertEquals(1, summary.failed)
+            assertTrue(log.toString().contains("process-inbox.failed"))
+            assertTrue(log.toString().contains("The model engine blew up"))
+        }
+
+    @Test
+    fun theMailThatFailedKeepsNoStateLabel() =
+        runTest {
+            val gmail = gmailEngine()
+            val model = modelEngine(failOnDecisionCall = 2)
+
+            service(gmail, model).run(WINDOW)
+
+            val modifies = gmail.requestHistory.filter { it.url.encodedPath.endsWith("/modify") }
+            assertEquals(1, modifies.size)
+            assertTrue(
+                modifies
+                    .single()
+                    .url.encodedPath
+                    .contains("/messages/second/modify"),
+            )
+        }
+
+    @Test
+    fun countsAMailThatFailedBeforeTheScreeningAsFailedAndNotScreened() =
+        runTest {
+            val gmail = gmailEngine()
+            // The first decision call is the screening of the first mail.
+            val model = modelEngine(failOnDecisionCall = 1)
+
+            val summary = service(gmail, model).run(WINDOW)
+
+            assertEquals(1, summary.screened)
+            assertEquals(1, summary.failed)
+            assertEquals(1, summary.recruiters)
+            assertEquals(1, summary.worthFollowUp)
+        }
+
+    @Test
     fun continuesWithTheNextDraftWhenTheChatModelAnswersWithProse() =
         runTest {
             val gmail = gmailEngine()

@@ -143,7 +143,9 @@ internal fun gmailEngine(
  * `firstAnswer` is served to the first decision-model call of the run instead
  * of the usual answer, `firstChatAnswer` to the first chat-model call, a test
  * that needs a model which answers with something that is not the JSON the
- * client reads uses them.
+ * client reads uses them. `failOnDecisionCall` is the number of a decision call
+ * that throws instead of answering, a test that needs a mail whose processing
+ * dies uses it.
  */
 internal fun modelEngine(
     officeDays: String = "matches",
@@ -153,6 +155,7 @@ internal fun modelEngine(
     confidenceOfTheProfile: Double = 0.9,
     firstAnswer: String? = null,
     firstChatAnswer: String? = null,
+    failOnDecisionCall: Int? = null,
 ): MockEngine {
     var served = 0
     var chatServed = 0
@@ -167,6 +170,9 @@ internal fun modelEngine(
             )
         } else {
             served++
+            if (failOnDecisionCall == served) {
+                error("The model engine blew up")
+            }
             val broken = firstAnswer
             if (broken != null && served == 1) {
                 respond(

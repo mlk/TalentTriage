@@ -9,10 +9,8 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
-import uk.me.michaellloydlee.recruiter.infrastructure.gmail.GmailApiException
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 
 class ProcessInboxServiceNotificationTest {
@@ -125,16 +123,16 @@ class ProcessInboxServiceNotificationTest {
         }
 
     @Test
-    fun notifiesAboutTheMailsScreenedBeforeAFailureAbortedTheRun() =
+    fun notifiesAboutTheMailsThatNeedTheJobSeekerWhenAMailFails() =
         runTest {
             val gmail = gmailEngine(failModifyFor = "second")
             val model = modelEngine()
             val webhook = webhookEngine()
 
-            assertFailsWith<GmailApiException> {
-                service(gmail, model, notifier = webhookNotifier(webhook)).run(WINDOW)
-            }
+            val summary = service(gmail, model, notifier = webhookNotifier(webhook)).run(WINDOW)
 
+            assertEquals(1, summary.failed)
+            assertEquals(1, summary.worthFollowUp)
             assertEquals(1, webhook.requestHistory.size)
             val body = Json.parseToJsonElement((webhook.requestHistory.single().body as TextContent).text).jsonObject
             val mails = body["mails"]!!.jsonArray

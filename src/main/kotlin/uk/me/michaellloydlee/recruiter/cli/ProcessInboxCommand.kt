@@ -322,7 +322,9 @@ class ProcessInboxCommand(
      * The next run looks back to the moment of this run: the mail that was
      * screened out is not looked at again. A run of a single message does not
      * move that moment: it looked at one mail only, the mail of the window is
-     * still waiting.
+     * still waiting. A run that left failed mails behind does not move the
+     * moment either: the failed mails keep no state label and the window is
+     * looked at again.
      *
      * @param target what the run looked at.
      * @param startedAt the moment the run started.
@@ -333,8 +335,16 @@ class ProcessInboxCommand(
         startedAt: Instant,
         summary: ProcessInboxSummary,
     ) {
-        if (target is RunTarget.Window) {
+        if (target is RunTarget.Window && summary.failed == 0) {
             lastRunStore().save(startedAt)
+        } else if (target is RunTarget.Window) {
+            // A mail failed, the moment of the run is not remembered, the
+            // window is looked at again and the mail is tried again.
+            logger.warn(
+                event = "$COMMAND_NAME.window_not_remembered",
+                message = "The run left ${summary.failed} mail(s) that failed, the window is looked at again",
+                attributes = mapOf("failed" to summary.failed.toString()),
+            )
         }
         logger.info(
             event = "$COMMAND_NAME.completed",
@@ -520,6 +530,7 @@ class ProcessInboxCommand(
             put("screened", screened.toString())
             put("recruiters", recruiters.toString())
             put("filtered_out", filteredOut.toString())
+            put("failed", failed.toString())
             put("job_listings", jobListings.toString())
             put("worth_follow_up", worthFollowUp.toString())
             put("needs_more_information", needsMoreInformation.toString())
