@@ -16,6 +16,7 @@ import io.ktor.http.isSuccess
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
+import uk.me.michaellloydlee.recruiter.infrastructure.bodySnippet
 import java.io.IOException
 
 /**
@@ -56,7 +57,8 @@ class OllamaWebSearchClient(
      * @param query what is searched for.
      * @param maxResults how many pages the search returns.
      * @return the pages of the search, the failure when the search was not
-     *   possible.
+     *   possible. Every failure of the search is a failure of the outcome:
+     *   the caller decides what it does without the pages.
      */
     suspend fun search(
         query: String,
@@ -96,13 +98,16 @@ class OllamaWebSearchClient(
      *
      * @param body the body of the answer.
      * @return the pages of the search, the failure when the answer is not
-     *   JSON.
+     *   the JSON the client reads, the name of the answer included.
      */
     private fun pages(body: String): WebSearchOutcome =
         try {
             WebSearchOutcome.Found(json.decodeFromString<OllamaWebSearchResponse>(body).results)
         } catch (error: SerializationException) {
-            WebSearchOutcome.Failed("The web search of Ollama answered with a body that is not JSON: ${error.message}")
+            WebSearchOutcome.Failed(
+                "The web search of Ollama answered with a body that is not the JSON the client reads: " +
+                    "${bodySnippet(body)} (${error.message})",
+            )
         }
 
     private val searchUrl: String

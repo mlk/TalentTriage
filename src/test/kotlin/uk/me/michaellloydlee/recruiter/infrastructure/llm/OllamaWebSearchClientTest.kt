@@ -65,7 +65,7 @@ class OllamaWebSearchClientTest {
         }
 
     @Test
-    fun failsWhenTheAnswerIsNotJson() =
+    fun failsWithAReasonThatNamesTheAnswerWhenTheAnswerIsNotJson() =
         runTest {
             val engine =
                 MockEngine {
@@ -79,7 +79,8 @@ class OllamaWebSearchClientTest {
             val outcome = client(engine).search("average salary")
 
             val failure = assertIs<WebSearchOutcome.Failed>(outcome)
-            assertTrue(failure.reason.contains("not JSON"))
+            assertTrue(failure.reason.contains("not the JSON the client reads"))
+            assertTrue(failure.reason.contains("<!DOCTYPE html>"))
         }
 
     @Test
