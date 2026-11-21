@@ -13,6 +13,7 @@ import uk.me.michaellloydlee.recruiter.domain.gmail.EmailMessage
 import uk.me.michaellloydlee.recruiter.domain.gmail.RunTarget
 import uk.me.michaellloydlee.recruiter.domain.requirements.JobRequirements
 import uk.me.michaellloydlee.recruiter.domain.screening.ScreeningDecision
+import uk.me.michaellloydlee.recruiter.infrastructure.gmail.GmailAuthenticationException
 import uk.me.michaellloydlee.recruiter.infrastructure.gmail.GmailLabelStateManager
 import uk.me.michaellloydlee.recruiter.infrastructure.gmail.GmailMessagesApi
 import uk.me.michaellloydlee.recruiter.infrastructure.llm.ModelUsageCounter
@@ -38,7 +39,8 @@ import java.time.Duration
  *
  * A mail that fails ends no run: the failure is caught, the mail is logged
  * and counted as `failed`, and the run goes on with the next mail. A failed
- * mail keeps no state label, so the next run looks at it again.
+ * mail carries no state label - whatever the pipeline applied this run is
+ * removed - so the next run looks at it again.
  *
  * @param messages the message endpoints of the Gmail API.
  * @param screening the screening of the messages.
@@ -109,13 +111,14 @@ class ProcessInboxService(
     }
 
     /**
-     * Screens one mail, a failure of the mail does not leave the mail half
-     * processed for anyone.
+     * Screens one mail, its failure never ends the run.
      *
      * The catch is broad on purpose: a mail can fail anywhere - the Gmail
      * API, the model, a document parser - and one broken mail must not end
      * the run. A mail that fails keeps no state label, so the next run looks
-     * at it again. A cancellation is not a failure and is rethrown.
+     * at it again. A cancellation is not a failure and is rethrown, so is a
+     * broken token: it fails every mail the same way and the entry point
+     * turns it into the exit code of the run.
      */
     @Suppress("TooGenericExceptionCaught")
     private suspend fun screenSafely(
@@ -127,6 +130,11 @@ class ProcessInboxService(
             screen(message, counters, needsAttention)
         } catch (error: CancellationException) {
             throw error
+        } catch (error: GmailAuthenticationException) {
+            // A broken token fails every mail the same way, it is not a
+            // failure of one mail: let the entry point turn it into the
+            // exit code of a failed run.
+            throw error
         } catch (error: Exception) {
             counters.failed++
             logger.error(
@@ -134,6 +142,32 @@ class ProcessInboxService(
                 // The stack trace goes into the message, the convention of
                 // the run: a failure nobody expected is located from the log.
                 message = error.stackTraceToString(),
+                attributes = mapOf("id" to message.id),
+            )
+            unlabel(message)
+        }
+    }
+
+    /**
+     * Puts a mail that failed back into the inbox.
+     *
+     * The pipeline may have labelled the mail before it failed, a label it
+     * keeps would hide it from the next run. Clearing the state is
+     * best-effort: a failure to clear is logged and the run goes on, the mail
+     * stays out of the inbox.
+     */
+    @Suppress("TooGenericExceptionCaught")
+    private suspend fun unlabel(message: EmailMessage) {
+        try {
+            stateManager.clearStates(message.id)
+        } catch (error: CancellationException) {
+            throw error
+        } catch (error: Exception) {
+            logger.error(
+                event = EVENT_FAILED,
+                message =
+                    "The mail that failed keeps its state label, the next run does not look at it: " +
+                        error.stackTraceToString(),
                 attributes = mapOf("id" to message.id),
             )
         }

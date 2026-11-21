@@ -75,6 +75,29 @@ class GmailLabelStateManager(
     }
 
     /**
+     * Removes every state label of the message and puts it back in the inbox.
+     *
+     * Unlike [clear] this does not look at the labels the message carried when
+     * it was fetched, it removes the state the pipeline may have given it in
+     * this run. Removing a label the message does not carry is a no-op: a
+     * mail that failed keeps no state label and the next run looks at it
+     * again.
+     *
+     * @param messageId the id of the message whose state is removed.
+     */
+    suspend fun clearStates(messageId: String) {
+        val state = stateLabelIds().values.toList()
+        if (state.isEmpty()) {
+            return
+        }
+        messages.modifyLabels(
+            messageId,
+            add = listOf(INBOX_LABEL_ID),
+            remove = state,
+        )
+    }
+
+    /**
      * The ids of the state labels, the missing ones are created.
      */
     private suspend fun stateLabelIds(): Map<RecruiterLabel, String> {

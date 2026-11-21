@@ -253,14 +253,35 @@ class ProcessInboxServiceTest {
 
             service(gmail, model).run(WINDOW)
 
+            // The mail that failed is put back: the inbox label is re-added,
+            // every state label is removed. The other mail keeps its label.
             val modifies = gmail.requestHistory.filter { it.url.encodedPath.endsWith("/modify") }
-            assertEquals(1, modifies.size)
-            assertTrue(
-                modifies
-                    .single()
-                    .url.encodedPath
-                    .contains("/messages/second/modify"),
-            )
+            val first = modifies.filter { it.url.encodedPath.contains("/messages/first/") }
+            assertEquals(1, first.size)
+            val unlabel = (first.single().body as TextContent).text
+            assertTrue(unlabel.contains("INBOX"))
+            assertTrue(unlabel.contains("Label_needsmoreinformation"))
+            assertTrue(modifies.any { it.url.encodedPath.contains("/messages/second/") })
+        }
+
+    @Test
+    fun aMailThatFailedAfterTheLabelWasAppliedKeepsNoStateLabel() =
+        runTest {
+            val gmail = gmailEngine()
+            // The evaluation succeeds and the label is applied, the chat model
+            // that writes the draft blows up after the label was applied.
+            val model = modelEngine(officeDays = "unclear", failOnChatCall = 1)
+
+            val summary = service(gmail, model).run(WINDOW)
+
+            assertEquals(1, summary.failed)
+            val first = gmail.requestHistory.filter { it.url.encodedPath.contains("/messages/first/modify") }
+            assertEquals(2, first.size)
+            val apply = (first.first().body as TextContent).text
+            assertTrue(apply.contains("Label_needsmoreinformation"))
+            val unlabel = (first.last().body as TextContent).text
+            assertTrue(unlabel.contains("INBOX"))
+            assertTrue(unlabel.contains("Label_needsmoreinformation"))
         }
 
     @Test
