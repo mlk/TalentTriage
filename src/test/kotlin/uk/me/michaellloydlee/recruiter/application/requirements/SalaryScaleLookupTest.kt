@@ -74,6 +74,24 @@ class SalaryScaleLookupTest {
         }
 
     @Test
+    fun usesTheDefaultScaleWhenTheAnswerOfTheSearchIsNotJson() =
+        runTest {
+            val engine =
+                MockEngine {
+                    respond(
+                        content = "<!DOCTYPE html><html><body>Sign in</body></html>",
+                        status = HttpStatusCode.OK,
+                        headers = headersOf(HttpHeaders.ContentType, "text/html"),
+                    )
+                }
+
+            val outcome = lookup(engine).scale(PROFILE)
+
+            val fallback = assertIs<SalaryScaleOutcome.Default>(outcome)
+            assertTrue(fallback.reason.contains("not the JSON the client reads"))
+        }
+
+    @Test
     fun usesTheDefaultScaleWhenThePagesHoldNoPay() =
         runTest {
             val engine =

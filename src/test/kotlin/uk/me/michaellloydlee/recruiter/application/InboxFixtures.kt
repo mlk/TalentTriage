@@ -139,6 +139,10 @@ internal fun gmailEngine(
 /**
  * The model answers the recruiter question and the four criteria of the
  * evaluation.
+ *
+ * `firstAnswer` is served to the first model call of the run instead of the
+ * usual answer, a test that needs a model which answers with something that is
+ * not the JSON the client reads uses it.
  */
 internal fun modelEngine(
     officeDays: String = "matches",
@@ -146,8 +150,10 @@ internal fun modelEngine(
     chatAnswers: Boolean = true,
     jdMatches: String = "matches",
     confidenceOfTheProfile: Double = 0.9,
-): MockEngine =
-    MockEngine { request ->
+    firstAnswer: String? = null,
+): MockEngine {
+    var served = 0
+    return MockEngine { request ->
         if (request.url.encodedPath.endsWith("/api/chat")) {
             respond(
                 content = CHAT_ANSWER,
@@ -155,31 +161,42 @@ internal fun modelEngine(
                 headers = headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString()),
             )
         } else {
-            val questions = decisionQuestions((request.body as TextContent).text)
-            val answer =
-                if (questions.containsKey("recruiter")) {
-                    decisionResponse(questions) { "from a recruiter" to 0.9 }
-                } else if (answered) {
-                    decisionResponse(questions) { name ->
-                        val choice =
-                            when (name) {
-                                "jd_matches" -> jdMatches
-                                "office_days" -> officeDays
-                                else -> "does not match"
-                            }
-                        val confidence = if (name == "jd_matches") confidenceOfTheProfile else 0.9
-                        choice to confidence
+            served++
+            val broken = firstAnswer
+            if (broken != null && served == 1) {
+                respond(
+                    content = broken,
+                    status = HttpStatusCode.OK,
+                    headers = headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString()),
+                )
+            } else {
+                val questions = decisionQuestions((request.body as TextContent).text)
+                val answer =
+                    if (questions.containsKey("recruiter")) {
+                        decisionResponse(questions) { "from a recruiter" to 0.9 }
+                    } else if (answered) {
+                        decisionResponse(questions) { name ->
+                            val choice =
+                                when (name) {
+                                    "jd_matches" -> jdMatches
+                                    "office_days" -> officeDays
+                                    else -> "does not match"
+                                }
+                            val confidence = if (name == "jd_matches") confidenceOfTheProfile else 0.9
+                            choice to confidence
+                        }
+                    } else {
+                        DECISION_ANSWER
                     }
-                } else {
-                    DECISION_ANSWER
-                }
-            respond(
-                content = answer,
-                status = HttpStatusCode.OK,
-                headers = headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString()),
-            )
+                respond(
+                    content = answer,
+                    status = HttpStatusCode.OK,
+                    headers = headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString()),
+                )
+            }
         }
     }
+}
 
 internal fun webhookEngine(status: HttpStatusCode = HttpStatusCode.OK): MockEngine =
     MockEngine {

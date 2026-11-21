@@ -18,6 +18,7 @@ import kotlinx.serialization.json.jsonPrimitive
 import java.io.IOException
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
@@ -65,7 +66,7 @@ class OllamaWebSearchClientTest {
         }
 
     @Test
-    fun failsWhenTheAnswerIsNotJson() =
+    fun failsWithAnExceptionThatNamesTheAnswerWhenTheAnswerIsNotJson() =
         runTest {
             val engine =
                 MockEngine {
@@ -76,10 +77,10 @@ class OllamaWebSearchClientTest {
                     )
                 }
 
-            val outcome = client(engine).search("average salary")
+            val error = assertFailsWith<OllamaException> { client(engine).search("average salary") }
 
-            val failure = assertIs<WebSearchOutcome.Failed>(outcome)
-            assertTrue(failure.reason.contains("not JSON"))
+            assertTrue(error.body.contains("not the JSON the client reads"))
+            assertTrue(error.body.contains("<!DOCTYPE html>"))
         }
 
     @Test

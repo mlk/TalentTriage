@@ -9,6 +9,7 @@ import io.ktor.http.HttpStatusCode
 import io.ktor.http.headersOf
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.SerializationException
 import java.time.Clock
 import java.time.Instant
 import java.time.ZoneOffset
@@ -85,6 +86,28 @@ class GmailApiClientTest {
 
             assertEquals(404, error.statusCode)
             assertTrue(error.body.contains("not found"))
+        }
+
+    @Test
+    fun failsWithAnExceptionThatNamesTheAnswerWhenTheAnswerIsNotJson() =
+        runTest {
+            val engine =
+                MockEngine {
+                    respond(
+                        content = "this is not json",
+                        status = HttpStatusCode.OK,
+                        headers = jsonHeaders(),
+                    )
+                }
+
+            val error =
+                assertFailsWith<GmailApiException> {
+                    apiClient(engine).get("messages/message-id", TestMessage.serializer())
+                }
+
+            assertEquals(200, error.statusCode)
+            assertTrue(error.body.contains("this is not json"))
+            assertTrue(error.cause is SerializationException)
         }
 
     @Test

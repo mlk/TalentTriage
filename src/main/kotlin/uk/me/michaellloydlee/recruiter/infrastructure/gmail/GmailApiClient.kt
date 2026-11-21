@@ -15,7 +15,9 @@ import io.ktor.http.HttpStatusCode
 import io.ktor.http.contentType
 import io.ktor.http.isSuccess
 import kotlinx.serialization.DeserializationStrategy
+import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
+import uk.me.michaellloydlee.recruiter.infrastructure.bodySnippet
 
 /**
  * The client of the Gmail REST API.
@@ -84,7 +86,13 @@ class GmailApiClient(
         if (!authenticated.status.isSuccess()) {
             throw GmailApiException(authenticated.status.value, body)
         }
-        return json.decodeFromString(deserializer, body)
+        return try {
+            json.decodeFromString(deserializer, body)
+        } catch (error: SerializationException) {
+            // The answer of the API is not the JSON the client reads, the
+            // exception names the answer.
+            throw GmailApiException(authenticated.status.value, bodySnippet(body), error)
+        }
     }
 
     private suspend fun send(

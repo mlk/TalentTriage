@@ -3,6 +3,7 @@ package uk.me.michaellloydlee.recruiter.application.requirements
 import uk.me.michaellloydlee.recruiter.domain.requirements.PayBand
 import uk.me.michaellloydlee.recruiter.domain.requirements.PayRequirement
 import uk.me.michaellloydlee.recruiter.domain.requirements.PayScale
+import uk.me.michaellloydlee.recruiter.infrastructure.llm.OllamaException
 import uk.me.michaellloydlee.recruiter.infrastructure.llm.OllamaWebSearchClient
 import uk.me.michaellloydlee.recruiter.infrastructure.llm.OllamaWebSearchResult
 import uk.me.michaellloydlee.recruiter.infrastructure.llm.WebSearchOutcome
@@ -28,7 +29,7 @@ class SalaryScaleLookup(
      *   not be reached.
      */
     suspend fun scale(profile: CvProfile): SalaryScaleOutcome =
-        when (val outcome = search.search(query(profile))) {
+        when (val outcome = outcome(profile)) {
             is WebSearchOutcome.Failed -> {
                 SalaryScaleOutcome.Default(defaultScale(profile.region), outcome.reason)
             }
@@ -36,6 +37,23 @@ class SalaryScaleLookup(
             is WebSearchOutcome.Found -> {
                 scaleOf(profile.region, outcome.results)
             }
+        }
+
+    /**
+     * The outcome of the search.
+     *
+     * A search whose answer is not the JSON the client reads is not a failure
+     * of the generation: the default scale of the region is used and the
+     * reason goes into the outcome.
+     *
+     * @param profile the profile of the job seeker.
+     * @return the pages of the search, or the reason there are none.
+     */
+    private suspend fun outcome(profile: CvProfile): WebSearchOutcome =
+        try {
+            search.search(query(profile))
+        } catch (error: OllamaException) {
+            WebSearchOutcome.Failed(error.message ?: "The web search of Ollama failed")
         }
 
     /**

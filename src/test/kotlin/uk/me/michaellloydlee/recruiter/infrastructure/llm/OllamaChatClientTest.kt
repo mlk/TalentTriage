@@ -82,6 +82,41 @@ class OllamaChatClientTest {
         }
 
     @Test
+    fun failsWithAReadableErrorWhenTheApiAnswersWithProse() =
+        runTest {
+            val engine =
+                MockEngine {
+                    respond(
+                        content = "Sure! Here is the job description you asked for.",
+                        status = HttpStatusCode.OK,
+                        headers = jsonHeaders(),
+                    )
+                }
+
+            val error = assertFailsWith<OllamaException> { client(engine).chat(request()) }
+
+            assertTrue(error.body.contains("Sure! Here is the job description you asked for."))
+        }
+
+    @Test
+    fun failsWithAReadableErrorWhenTheApiAnswersWithABrokenJson() =
+        runTest {
+            val engine =
+                MockEngine {
+                    respond(
+                        content = """{"model":"llama3.2:3b","message":""",
+                        status = HttpStatusCode.OK,
+                        headers = jsonHeaders(),
+                    )
+                }
+
+            val error = assertFailsWith<OllamaException> { client(engine).chat(request()) }
+
+            assertTrue(error.body.contains("not the JSON the client reads"))
+            assertTrue(error.body.contains("""{"model":"llama3.2:3b","message":"""))
+        }
+
+    @Test
     fun sendsTheOptionsOfTheRequest() =
         runTest {
             val engine = engine()

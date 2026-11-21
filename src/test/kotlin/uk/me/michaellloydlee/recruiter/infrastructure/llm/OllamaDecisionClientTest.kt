@@ -120,6 +120,41 @@ class OllamaDecisionClientTest {
             assertTrue(error.body.contains("text/plain"))
         }
 
+    @Test
+    fun failsWithAReadableErrorWhenTheApiAnswersWithProse() =
+        runTest {
+            val engine =
+                MockEngine {
+                    respond(
+                        content = "This message looks like it is from a recruiter!",
+                        status = HttpStatusCode.OK,
+                        headers = headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString()),
+                    )
+                }
+
+            val error = assertFailsWith<OllamaException> { client(engine).decide(request()) }
+
+            assertTrue(error.body.contains("This message looks like it is from a recruiter!"))
+        }
+
+    @Test
+    fun failsWithAReadableErrorWhenTheApiAnswersWithABrokenJson() =
+        runTest {
+            val engine =
+                MockEngine {
+                    respond(
+                        content = """{"model":"clef:cloud","answers":{""",
+                        status = HttpStatusCode.OK,
+                        headers = headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString()),
+                    )
+                }
+
+            val error = assertFailsWith<OllamaException> { client(engine).decide(request()) }
+
+            assertTrue(error.body.contains("not the JSON the client reads"))
+            assertTrue(error.body.contains("""{"model":"clef:cloud","answers":{"""))
+        }
+
     private fun engine(): MockEngine =
         MockEngine {
             respond(
