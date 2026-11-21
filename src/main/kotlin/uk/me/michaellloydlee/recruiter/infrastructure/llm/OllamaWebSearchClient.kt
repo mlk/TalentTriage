@@ -16,6 +16,7 @@ import io.ktor.http.isSuccess
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
+import uk.me.michaellloydlee.recruiter.infrastructure.bodySnippet
 import java.io.IOException
 
 /**
@@ -56,9 +57,8 @@ class OllamaWebSearchClient(
      * @param query what is searched for.
      * @param maxResults how many pages the search returns.
      * @return the pages of the search, the failure when the search was not
-     *   possible.
-     * @throws OllamaException when the answer of the search is not the JSON
-     *   the client reads.
+     *   possible. Every failure of the search is a failure of the outcome:
+     *   the caller decides what it does without the pages.
      */
     suspend fun search(
         query: String,
@@ -82,7 +82,7 @@ class OllamaWebSearchClient(
                     "The web search of Ollama answered with ${response.status.value}: ${response.bodyAsText()}",
                 )
             } else {
-                WebSearchOutcome.Found(pages(response.bodyAsText(), response.status.value))
+                pages(response.bodyAsText())
             }
         } catch (error: IOException) {
             WebSearchOutcome.Failed("The web search of Ollama could not be reached: ${error.message}")
@@ -97,19 +97,17 @@ class OllamaWebSearchClient(
      * content type of the answer does not decide whether the pages are read.
      *
      * @param body the body of the answer.
-     * @param status the status code of the answer.
-     * @return the pages of the search.
-     * @throws OllamaException when the answer is not the JSON the client
-     *   reads.
+     * @return the pages of the search, the failure when the answer is not
+     *   the JSON the client reads, the name of the answer included.
      */
-    private fun pages(
-        body: String,
-        status: Int,
-    ): List<OllamaWebSearchResult> =
+    private fun pages(body: String): WebSearchOutcome =
         try {
-            json.decodeFromString<OllamaWebSearchResponse>(body).results
+            WebSearchOutcome.Found(json.decodeFromString<OllamaWebSearchResponse>(body).results)
         } catch (error: SerializationException) {
-            throw OllamaException.unreadableBody(status, body, error)
+            WebSearchOutcome.Failed(
+                "The web search of Ollama answered with a body that is not the JSON the client reads: " +
+                    "${bodySnippet(body)} (${error.message})",
+            )
         }
 
     private val searchUrl: String
