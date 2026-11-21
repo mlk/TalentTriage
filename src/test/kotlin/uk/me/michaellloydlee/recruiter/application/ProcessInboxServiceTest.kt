@@ -225,6 +225,81 @@ class ProcessInboxServiceTest {
         }
 
     @Test
+    fun goesOnWithTheNextMailWhenTheEvaluationOfAMailThrows() =
+        runTest {
+            val gmail = gmailEngine()
+            // The decision calls in order: the screening of the first mail,
+            // the evaluation of the first mail (it blows up), the screening
+            // of the second mail, its evaluation.
+            val model = modelEngine(failOnDecisionCall = 2)
+            val log = StringBuilder()
+
+            val summary = service(gmail, model, log).run(WINDOW)
+
+            assertEquals(2, summary.screened)
+            assertEquals(2, summary.recruiters)
+            assertEquals(1, summary.worthFollowUp)
+            assertEquals(1, summary.failed)
+            assertTrue(log.toString().contains("process-inbox.failed"))
+            assertTrue(log.toString().contains("IllegalStateException"))
+            assertTrue(log.toString().contains("The model engine blew up"))
+        }
+
+    @Test
+    fun theMailThatFailedKeepsNoStateLabel() =
+        runTest {
+            val gmail = gmailEngine()
+            val model = modelEngine(failOnDecisionCall = 2)
+
+            service(gmail, model).run(WINDOW)
+
+            // The mail that failed is put back: the inbox label is re-added,
+            // every state label is removed. The other mail keeps its label.
+            val modifies = gmail.requestHistory.filter { it.url.encodedPath.endsWith("/modify") }
+            val first = modifies.filter { it.url.encodedPath.contains("/messages/first/") }
+            assertEquals(1, first.size)
+            val unlabel = (first.single().body as TextContent).text
+            assertTrue(unlabel.contains("INBOX"))
+            assertTrue(unlabel.contains("Label_needsmoreinformation"))
+            assertTrue(modifies.any { it.url.encodedPath.contains("/messages/second/") })
+        }
+
+    @Test
+    fun aMailThatFailedAfterTheLabelWasAppliedKeepsNoStateLabel() =
+        runTest {
+            val gmail = gmailEngine()
+            // The evaluation succeeds and the label is applied, the chat model
+            // that writes the draft blows up after the label was applied.
+            val model = modelEngine(officeDays = "unclear", failOnChatCall = 1)
+
+            val summary = service(gmail, model).run(WINDOW)
+
+            assertEquals(1, summary.failed)
+            val first = gmail.requestHistory.filter { it.url.encodedPath.contains("/messages/first/modify") }
+            assertEquals(2, first.size)
+            val apply = (first.first().body as TextContent).text
+            assertTrue(apply.contains("Label_needsmoreinformation"))
+            val unlabel = (first.last().body as TextContent).text
+            assertTrue(unlabel.contains("INBOX"))
+            assertTrue(unlabel.contains("Label_needsmoreinformation"))
+        }
+
+    @Test
+    fun countsAMailThatFailedBeforeTheScreeningAsFailedAndNotScreened() =
+        runTest {
+            val gmail = gmailEngine()
+            // The first decision call is the screening of the first mail.
+            val model = modelEngine(failOnDecisionCall = 1)
+
+            val summary = service(gmail, model).run(WINDOW)
+
+            assertEquals(1, summary.screened)
+            assertEquals(1, summary.failed)
+            assertEquals(1, summary.recruiters)
+            assertEquals(1, summary.worthFollowUp)
+        }
+
+    @Test
     fun continuesWithTheNextDraftWhenTheChatModelAnswersWithProse() =
         runTest {
             val gmail = gmailEngine()

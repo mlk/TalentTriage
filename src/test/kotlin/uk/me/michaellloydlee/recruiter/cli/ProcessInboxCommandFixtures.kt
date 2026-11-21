@@ -48,12 +48,22 @@ internal fun engine(
     messageList: String = MESSAGE_LIST,
     listing: Boolean = false,
     recruiterAnswer: String = "from a recruiter",
+    failModifyFor: String? = null,
 ): MockEngine =
     MockEngine { request ->
         if (request.url.encodedPath == "/hook") {
             respond(
                 content = "",
                 status = webhookStatus,
+                headers = jsonHeaders(),
+            )
+        } else if (
+            failModifyFor != null &&
+            request.url.encodedPath.endsWith("/users/me/messages/$failModifyFor/modify")
+        ) {
+            respond(
+                content = "boom",
+                status = HttpStatusCode.InternalServerError,
                 headers = jsonHeaders(),
             )
         } else {

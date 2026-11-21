@@ -2,9 +2,12 @@ package uk.me.michaellloydlee.recruiter.application
 
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.mock.MockEngine
+import io.ktor.client.engine.mock.MockRequestHandleScope
 import io.ktor.client.engine.mock.respond
 import io.ktor.client.plugins.HttpTimeout
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
+import io.ktor.client.request.HttpRequestData
+import io.ktor.client.request.HttpResponseData
 import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
@@ -143,7 +146,9 @@ internal fun gmailEngine(
  * `firstAnswer` is served to the first decision-model call of the run instead
  * of the usual answer, `firstChatAnswer` to the first chat-model call, a test
  * that needs a model which answers with something that is not the JSON the
- * client reads uses them.
+ * client reads uses them. `failOnDecisionCall` and `failOnChatCall` are the
+ * numbers of a decision or chat call that throws instead of answering, a test
+ * that needs a mail whose processing dies uses them.
  */
 internal fun modelEngine(
     officeDays: String = "matches",
@@ -153,54 +158,99 @@ internal fun modelEngine(
     confidenceOfTheProfile: Double = 0.9,
     firstAnswer: String? = null,
     firstChatAnswer: String? = null,
+    failOnDecisionCall: Int? = null,
+    failOnChatCall: Int? = null,
 ): MockEngine {
     var served = 0
     var chatServed = 0
     return MockEngine { request ->
         if (request.url.encodedPath.endsWith("/api/chat")) {
             chatServed++
-            val broken = firstChatAnswer
-            respond(
-                content = if (broken != null && chatServed == 1) broken else CHAT_ANSWER,
-                status = if (chatAnswers) HttpStatusCode.OK else HttpStatusCode.NotFound,
-                headers = headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString()),
-            )
+            respondToChat(chatServed, chatAnswers, firstChatAnswer, failOnChatCall)
         } else {
             served++
-            val broken = firstAnswer
-            if (broken != null && served == 1) {
-                respond(
-                    content = broken,
-                    status = HttpStatusCode.OK,
-                    headers = headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString()),
-                )
-            } else {
-                val questions = decisionQuestions((request.body as TextContent).text)
-                val answer =
-                    if (questions.containsKey("recruiter")) {
-                        decisionResponse(questions) { "from a recruiter" to 0.9 }
-                    } else if (answered) {
-                        decisionResponse(questions) { name ->
-                            val choice =
-                                when (name) {
-                                    "jd_matches" -> jdMatches
-                                    "office_days" -> officeDays
-                                    else -> "does not match"
-                                }
-                            val confidence = if (name == "jd_matches") confidenceOfTheProfile else 0.9
-                            choice to confidence
-                        }
-                    } else {
-                        DECISION_ANSWER
-                    }
-                respond(
-                    content = answer,
-                    status = HttpStatusCode.OK,
-                    headers = headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString()),
-                )
-            }
+            respondToDecision(
+                request,
+                served,
+                DecisionFixture(
+                    answered,
+                    jdMatches,
+                    officeDays,
+                    confidenceOfTheProfile,
+                    firstAnswer,
+                    failOnDecisionCall,
+                ),
+            )
         }
     }
+}
+
+private suspend fun MockRequestHandleScope.respondToChat(
+    chatServed: Int,
+    chatAnswers: Boolean,
+    firstChatAnswer: String?,
+    failOnChatCall: Int?,
+): HttpResponseData =
+    respond(
+        content =
+            if (failOnChatCall == chatServed) {
+                error("The model engine blew up")
+            } else if (firstChatAnswer != null && chatServed == 1) {
+                firstChatAnswer
+            } else {
+                CHAT_ANSWER
+            },
+        status = if (chatAnswers) HttpStatusCode.OK else HttpStatusCode.NotFound,
+        headers = headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString()),
+    )
+
+private class DecisionFixture(
+    val answered: Boolean,
+    val jdMatches: String,
+    val officeDays: String,
+    val confidenceOfTheProfile: Double,
+    val firstAnswer: String?,
+    val failOnDecisionCall: Int?,
+)
+
+private suspend fun MockRequestHandleScope.respondToDecision(
+    request: HttpRequestData,
+    served: Int,
+    fixture: DecisionFixture,
+): HttpResponseData {
+    if (fixture.failOnDecisionCall == served) {
+        error("The model engine blew up")
+    }
+    if (fixture.firstAnswer != null && served == 1) {
+        return respond(
+            content = fixture.firstAnswer,
+            status = HttpStatusCode.OK,
+            headers = headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString()),
+        )
+    }
+    val questions = decisionQuestions((request.body as TextContent).text)
+    val answer =
+        if (questions.containsKey("recruiter")) {
+            decisionResponse(questions) { "from a recruiter" to 0.9 }
+        } else if (fixture.answered) {
+            decisionResponse(questions) { name ->
+                val choice =
+                    when (name) {
+                        "jd_matches" -> fixture.jdMatches
+                        "office_days" -> fixture.officeDays
+                        else -> "does not match"
+                    }
+                val confidence = if (name == "jd_matches") fixture.confidenceOfTheProfile else 0.9
+                choice to confidence
+            }
+        } else {
+            DECISION_ANSWER
+        }
+    return respond(
+        content = answer,
+        status = HttpStatusCode.OK,
+        headers = headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString()),
+    )
 }
 
 internal fun webhookEngine(status: HttpStatusCode = HttpStatusCode.OK): MockEngine =

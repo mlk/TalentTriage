@@ -1,5 +1,6 @@
 package uk.me.michaellloydlee.recruiter.application
 
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.withContext
 import uk.me.michaellloydlee.recruiter.application.draft.DraftOutcome
@@ -12,6 +13,7 @@ import uk.me.michaellloydlee.recruiter.domain.gmail.EmailMessage
 import uk.me.michaellloydlee.recruiter.domain.gmail.RunTarget
 import uk.me.michaellloydlee.recruiter.domain.requirements.JobRequirements
 import uk.me.michaellloydlee.recruiter.domain.screening.ScreeningDecision
+import uk.me.michaellloydlee.recruiter.infrastructure.gmail.GmailAuthenticationException
 import uk.me.michaellloydlee.recruiter.infrastructure.gmail.GmailLabelStateManager
 import uk.me.michaellloydlee.recruiter.infrastructure.gmail.GmailMessagesApi
 import uk.me.michaellloydlee.recruiter.infrastructure.llm.ModelUsageCounter
@@ -34,6 +36,11 @@ import java.time.Duration
  *
  * The run looks at what its target says: the messages of the inbox that
  * arrived after a moment, or one message the job seeker asks for by its id.
+ *
+ * A mail that fails ends no run: the failure is caught, the mail is logged
+ * and counted as `failed`, and the run goes on with the next mail. A failed
+ * mail carries no state label - whatever the pipeline applied this run is
+ * removed - so the next run looks at it again.
  *
  * @param messages the message endpoints of the Gmail API.
  * @param screening the screening of the messages.
@@ -76,7 +83,7 @@ class ProcessInboxService(
         // the mails that need the job seeker even when the run fails.
         try {
             pending.forEach { message ->
-                screen(message, counters, needsAttention)
+                screenSafely(message, counters, needsAttention)
             }
         } finally {
             // The call runs even when the run is cancelled: the mails are
@@ -88,7 +95,7 @@ class ProcessInboxService(
         }
         return ProcessInboxSummary(
             target = target,
-            screened = pending.size,
+            screened = counters.screened,
             recruiters = counters.recruiters,
             filteredOut = counters.filteredOut,
             unknown = counters.unknown,
@@ -97,9 +104,73 @@ class ProcessInboxService(
             needsMoreInformation = counters.needsMoreInformation,
             trashed = counters.trashed,
             drafts = counters.drafts,
+            failed = counters.failed,
             models = usageCounter.usage(),
             durationMillis = Duration.between(startedAt, clock.instant()).toMillis(),
         )
+    }
+
+    /**
+     * Screens one mail, its failure never ends the run.
+     *
+     * The catch is broad on purpose: a mail can fail anywhere - the Gmail
+     * API, the model, a document parser - and one broken mail must not end
+     * the run. A mail that fails keeps no state label, so the next run looks
+     * at it again. A cancellation is not a failure and is rethrown, so is a
+     * broken token: it fails every mail the same way and the entry point
+     * turns it into the exit code of the run.
+     */
+    @Suppress("TooGenericExceptionCaught")
+    private suspend fun screenSafely(
+        message: EmailMessage,
+        counters: Counters,
+        needsAttention: MutableList<NotificationMail>,
+    ) {
+        try {
+            screen(message, counters, needsAttention)
+        } catch (error: CancellationException) {
+            throw error
+        } catch (error: GmailAuthenticationException) {
+            // A broken token fails every mail the same way, it is not a
+            // failure of one mail: let the entry point turn it into the
+            // exit code of a failed run.
+            throw error
+        } catch (error: Exception) {
+            counters.failed++
+            logger.error(
+                event = EVENT_FAILED,
+                // The stack trace goes into the message, the convention of
+                // the run: a failure nobody expected is located from the log.
+                message = error.stackTraceToString(),
+                attributes = mapOf("id" to message.id),
+            )
+            unlabel(message)
+        }
+    }
+
+    /**
+     * Puts a mail that failed back into the inbox.
+     *
+     * The pipeline may have labelled the mail before it failed, a label it
+     * keeps would hide it from the next run. Clearing the state is
+     * best-effort: a failure to clear is logged and the run goes on, the mail
+     * stays out of the inbox.
+     */
+    @Suppress("TooGenericExceptionCaught")
+    private suspend fun unlabel(message: EmailMessage) {
+        try {
+            stateManager.clearStates(message.id)
+        } catch (error: CancellationException) {
+            throw error
+        } catch (error: Exception) {
+            logger.error(
+                event = EVENT_FAILED,
+                message =
+                    "The mail that failed keeps its state label, the next run does not look at it: " +
+                        error.stackTraceToString(),
+                attributes = mapOf("id" to message.id),
+            )
+        }
     }
 
     /**
@@ -132,6 +203,7 @@ class ProcessInboxService(
         needsAttention: MutableList<NotificationMail>,
     ) {
         val outcome = screening.screen(message)
+        counters.screened++
         logger.info(
             event = EVENT_SCREENED,
             message = "A message of the inbox was screened",
@@ -349,6 +421,7 @@ class ProcessInboxService(
      * The counters of a run.
      */
     private class Counters {
+        var screened: Int = 0
         var recruiters: Int = 0
         var filteredOut: Int = 0
         var unknown: Int = 0
@@ -357,9 +430,13 @@ class ProcessInboxService(
         var needsMoreInformation: Int = 0
         var trashed: Int = 0
         var drafts: Int = 0
+        var failed: Int = 0
     }
 
     companion object {
+        /** The event of the log of a mail that could not be processed. */
+        const val EVENT_FAILED: String = "process-inbox.failed"
+
         /** The event of the log of a screened message. */
         const val EVENT_SCREENED: String = "process-inbox.screened"
 

@@ -7,10 +7,12 @@ import uk.me.michaellloydlee.recruiter.infrastructure.llm.ModelUsage
  * What a run of the pipeline did.
  *
  * @property target what the run looked at.
- * @property screened how many messages were looked at.
+ * @property screened how many messages were screened, a mail that failed before the screening was decided is not counted.
  * @property recruiters how many of them are recruiter mails.
  * @property filteredOut how many of them were not recruiter mails. They are
  *   reported, they are not labelled.
+ * @property failed how many of them could not be processed. The run went on
+ *   with the next mail, a failed mail keeps no state label.
  * @property jobListings how many of them were job listings, a listing is not
  *   one job and is not evaluated.
  * @property unknown how many of them the screening could not decide, they stay
@@ -37,6 +39,7 @@ data class ProcessInboxSummary(
     val needsMoreInformation: Int = 0,
     val trashed: Int = 0,
     val drafts: Int = 0,
+    val failed: Int = 0,
     val models: ModelUsage = ModelUsage.EMPTY,
     val durationMillis: Long = 0,
 )

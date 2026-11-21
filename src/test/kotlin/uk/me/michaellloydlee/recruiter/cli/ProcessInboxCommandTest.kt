@@ -76,6 +76,31 @@ class ProcessInboxCommandTest {
         }
 
     @Test
+    fun aRunWithAFailedMailDoesNotRememberTheMomentOfTheRun() =
+        runTest {
+            val sink = StringBuilder()
+            val token = tokenFile(root)
+            // The label of the first mail cannot be applied, the mail is left
+            // without a state label, the failure is counted in the log.
+            val engine = engine(messageList = MESSAGE_LIST_TWO, failModifyFor = "first")
+
+            val result =
+                cli(sink, Clock.fixed(NOW, ZoneOffset.UTC)) { mockClient(engine) }
+                    .test(
+                        "process-inbox --credentials ${credentialsFile(root)} " +
+                            "--token $token --requirements ${requirementsFile(root)} --rules ${defaultRulesFile(root)}",
+                    )
+
+            assertEquals(0, result.statusCode)
+            val completed = records(sink).last()
+            assertEquals("2", completed.attributes["screened"])
+            assertEquals("1", completed.attributes["failed"])
+            assertEquals("1", completed.attributes["worth_follow_up"])
+            assertNull(FileLastRunStore.nextTo(token).load())
+            assertTrue(records(sink).any { it.event == "process-inbox.window_not_remembered" })
+        }
+
+    @Test
     fun failsWhenTheRequirementsAreMissing() =
         runTest {
             val sink = StringBuilder()
